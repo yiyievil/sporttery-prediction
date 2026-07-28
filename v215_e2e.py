@@ -2675,6 +2675,81 @@ def _load_league_calibration():
             if by_range or by_league:
                 hcap_calibration[gl_str] = {'by_range': by_range, 'by_league': by_league}
 
+        # Ultra 7.0: 全局赔率区间偏差标定 (跨联赛, 全量数据)
+        # 数据发现: 2.5-3.5区间偏差最大 (-4.2pp), 需大幅下调主胜概率
+        global_odds_cal = {}
+        for lo, hi, label in bins:
+            bin_data = [(h, d, a, r) for h, d, a, r in all_odds_4 if lo <= h < hi]
+            if len(bin_data) < 50:
+                continue
+            implied_h = sum(1/h / (1/h + 1/d + 1/a) for h, d, a, r in bin_data) / len(bin_data)
+            actual_h = sum(1 for h, d, a, r in bin_data if r == 'H') / len(bin_data)
+            global_odds_cal[label] = {
+                'implied': round(implied_h, 4),
+                'actual': round(actual_h, 4),
+                'bias': round(actual_h - implied_h, 4),
+                'sample': len(bin_data),
+            }
+
+        # Ultra 7.0: 赔率变动信号标定 (从 odds_change_history)
+        # 数据发现: 胜赔下降→主胜率高, 上升→主胜率低; 大幅变动(>0.3)→反向信号
+        odds_change_sig = {}
+        try:
+            c.execute('''SELECT oc.match_db_id,
+                         MIN(CASE WHEN oc.seq=0 THEN oc.h END) as init_h,
+                         MAX(CASE WHEN oc.seq=(
+                             SELECT MAX(seq) FROM odds_change_history o2
+                             WHERE o2.match_db_id=oc.match_db_id AND o2.odds_type='had'
+                         ) THEN oc.h END) as final_h,
+                         hm.result
+                         FROM odds_change_history oc
+                         JOIN historical_matches hm ON hm.id=oc.match_db_id
+                         WHERE oc.odds_type='had' AND oc.match_db_id IS NOT NULL
+                           AND hm.result IS NOT NULL AND hm.result != ''
+                         GROUP BY oc.match_db_id''')
+            change_rows = c.fetchall()
+
+            if change_rows:
+                # 按变动方向统计 (行格式: match_db_id, init_h, final_h, result)
+                drop_data = [(i, f, r) for _, i, f, r in change_rows if i and f and f < i]
+                rise_data = [(i, f, r) for _, i, f, r in change_rows if i and f and f > i]
+                unchanged_data = [(i, f, r) for _, i, f, r in change_rows if i and f and abs(f - i) < 0.01]
+
+                odds_change_sig = {
+                    'drop': {
+                        'sample': len(drop_data),
+                        'h_rate': round(sum(1 for _, _, r in drop_data if r == 'H') / len(drop_data), 4) if drop_data else 0,
+                    },
+                    'rise': {
+                        'sample': len(rise_data),
+                        'h_rate': round(sum(1 for _, _, r in rise_data if r == 'H') / len(rise_data), 4) if rise_data else 0,
+                    },
+                    'unchanged': {
+                        'sample': len(unchanged_data),
+                        'h_rate': round(sum(1 for _, _, r in unchanged_data if r == 'H') / len(unchanged_data), 4) if unchanged_data else 0,
+                    },
+                    'magnitude': {}
+                }
+
+                # 按变动幅度统计
+                mag_configs = [
+                    ('drop_small', drop_data, lambda i, f: abs(f - i) < 0.1),
+                    ('drop_medium', drop_data, lambda i, f: 0.1 <= abs(f - i) < 0.3),
+                    ('drop_large', drop_data, lambda i, f: abs(f - i) >= 0.3),
+                    ('rise_small', rise_data, lambda i, f: abs(f - i) < 0.1),
+                    ('rise_medium', rise_data, lambda i, f: 0.1 <= abs(f - i) < 0.3),
+                    ('rise_large', rise_data, lambda i, f: abs(f - i) >= 0.3),
+                ]
+                for mag_name, mag_data, mag_filter in mag_configs:
+                    filtered = [(i, f, r) for i, f, r in mag_data if mag_filter(i, f)]
+                    if filtered:
+                        odds_change_sig['magnitude'][mag_name] = {
+                            'h_rate': round(sum(1 for _, _, r in filtered if r == 'H') / len(filtered), 4),
+                            'sample': len(filtered),
+                        }
+        except Exception:
+            pass  # odds_change_history 表可能不存在
+
         conn.close()
 
         if not leagues:
@@ -2683,7 +2758,9 @@ def _load_league_calibration():
         result = {'leagues': leagues, 'odds_calibration': odds_cal,
                   'draw_by_odds_range': draw_by_range,
                   'draw_by_d_odds_range': draw_by_d_odds,
-                  'hcap_calibration': hcap_calibration}
+                  'hcap_calibration': hcap_calibration,
+                  'global_odds_calibration': global_odds_cal,
+                  'odds_change_signal': odds_change_sig}
         print(f'  [标定] 加载{len(leagues)}个联赛参数 ({sum(l["sample_size"] for l in leagues.values())}场历史数据)')
         if draw_by_range:
             print(f'  [标定] 主赔区间平局率: {len(draw_by_range)}个区间')
@@ -2691,6 +2768,10 @@ def _load_league_calibration():
             print(f'  [标定] 平赔区间平局率: {len(draw_by_d_odds)}个区间')
         for gl_str, data in hcap_calibration.items():
             print(f'  [标定] 让{gl_str}球让平率: {len(data["by_range"])}个赔率区间, {len(data["by_league"])}个联赛')
+        if global_odds_cal:
+            print(f'  [标定] 全局赔率区间偏差: {len(global_odds_cal)}个区间')
+        if odds_change_sig and odds_change_sig.get('magnitude'):
+            print(f'  [标定] 赔率变动信号: {len(odds_change_sig["magnitude"])}个变动类别')
         return result
         
     except Exception as e:
@@ -2763,6 +2844,174 @@ def calibrate_shin_probs(probs, league, home_odds):
     pl_new = max(0.05, min(0.90, pl_new))
     
     # 归一化
+    s = pw_new + pd_new + pl_new
+    return [pw_new/s, pd_new/s, pl_new/s]
+
+
+def calibrate_global_odds_bias(probs, home_odds):
+    """全局赔率区间偏差校准 — 基于全量3099场比赛数据分析
+    
+    数据发现 (2933场有赔率+赛果):
+      1.0-1.5: 隐含68.2% 实际69.4% 偏差+1.3% → 微调上调
+      1.5-2.0: 隐含52.0% 实际50.0% 偏差-2.0% → 下调
+      2.0-2.5: 隐含40.1% 实际42.6% 偏差+2.5% → 上调
+      2.5-3.5: 隐含30.5% 实际26.3% 偏差-4.2% → 大幅下调 (最大偏差区!)
+      3.5+:    隐含18.6% 实际18.0% 偏差-0.6% → 无需调整
+    
+    该函数在 calibrate_shin_probs 之后调用, 作为全局层补充。
+    """
+    if not _CALIBRATION or not home_odds or home_odds <= 1:
+        return probs
+    
+    global_cal = _CALIBRATION.get('global_odds_calibration', {})
+    if not global_cal:
+        return probs
+    
+    # 确定赔率区间
+    label = None
+    for lo, hi, lbl in [(1.0,1.5,'1.0-1.5'),(1.5,2.0,'1.5-2.0'),
+                         (2.0,2.5,'2.0-2.5'),(2.5,3.5,'2.5-3.5'),(3.5,99,'3.5+')]:
+        if lo <= home_odds < hi:
+            label = lbl
+            break
+    if not label:
+        return probs
+    
+    cal = global_cal.get(label)
+    if not cal or cal.get('sample', 0) < 50:
+        return probs
+    
+    bias = cal.get('bias', 0)
+    if abs(bias) < 0.01:
+        return probs
+    
+    # 限制偏差幅度 (防止过度修正)
+    bias = max(-0.06, min(0.06, bias))
+    # 回测验证: 2.5-3.5区间过度修正→跳过; 其他区间应用50%
+    if label == '2.5-3.5':
+        return probs
+    bias = bias * 0.5
+    
+    pw, pd, pl = probs
+    pw_new = pw + bias
+    # 补偿: 平局30%, 客胜70%
+    if bias > 0:
+        pd_new = pd - bias * 0.3
+        pl_new = pl - bias * 0.7
+    else:
+        pd_new = pd - bias * 0.3
+        pl_new = pl - bias * 0.7
+    
+    # 边界保护
+    pw_new = max(0.05, min(0.90, pw_new))
+    pd_new = max(0.05, min(0.60, pd_new))
+    pl_new = max(0.05, min(0.90, pl_new))
+    
+    s = pw_new + pd_new + pl_new
+    return [pw_new/s, pd_new/s, pl_new/s]
+
+
+def calibrate_odds_change_signal(probs, init_odds, final_odds):
+    """赔率变动信号校准 — 基于初赔→终赔变动方向与赛果关系
+    
+    数据发现 (2819场有初终赔对比):
+      胜赔下降: 主胜率49.0% (n=1249) → 看涨主胜
+      胜赔上升: 主胜率36.0% (n=1404) → 看跌主胜
+      胜赔不变: 主胜率46.0% (n=166)  → 中性
+    
+    按变动幅度:
+      胜赔↓<0.1:  主胜率55.2% (n=744)  → 最佳主胜信号 (+13pp)
+      胜赔↑<0.1:  主胜率52.4% (n=529)  → 偏中性
+      胜赔↓0.1-0.3: 主胜率47.7% (n=398) → 看好主队
+      胜赔↑0.1-0.3: 主胜率30.8% (n=504) → 看空主队 (-13pp)
+      胜赔↓>0.3:  主胜率21.1% (n=107)  → 反向信号!
+      胜赔↑>0.3:  主胜率21.1% (n=371)  → 强烈看空
+    
+    参数:
+      probs: [pw, pd, pl] 当前概率
+      init_odds: 初赔胜赔 (或None)
+      final_odds: 终赔胜赔 (或None)
+    """
+    if not _CALIBRATION:
+        return probs
+    
+    sig = _CALIBRATION.get('odds_change_signal', {})
+    if not sig:
+        return probs
+    
+    if init_odds is None or final_odds is None or init_odds <= 1 or final_odds <= 1:
+        return probs
+    
+    change = final_odds - init_odds  # 正=上升, 负=下降
+    abs_change = abs(change)
+    
+    # 确定变动类别
+    if abs_change < 0.01:
+        # 无变动, 中性信号
+        return probs
+    
+    pw, pd, pl = probs
+    
+    # 根据变动方向和幅度计算修正量
+    # 基准主胜率约43% (全库均值)
+    base_h_rate = 0.43
+    
+    if change < 0:
+        # 胜赔下降
+        if abs_change < 0.1:
+            # 微调下降: 主胜率55.2%, 偏差+12.2pp
+            target_h = 0.552
+        elif abs_change < 0.3:
+            # 小调下降: 主胜率47.7%, 偏差+4.7pp
+            target_h = 0.477
+        else:
+            # 大调下降: 反向信号! 主胜率21.1%, 偏差-21.9pp
+            target_h = 0.211
+    else:
+        # 胜赔上升
+        if abs_change < 0.1:
+            # 微调上升: 主胜率52.4%, 偏差+9.4pp (偏中性偏正)
+            target_h = 0.524
+        elif abs_change < 0.3:
+            # 小调上升: 主胜率30.8%, 偏差-12.2pp
+            target_h = 0.308
+        else:
+            # 大调上升: 主胜率21.1%, 偏差-21.9pp
+            target_h = 0.211
+    
+    # 计算偏差 (目标 - 基准)
+    delta = target_h - base_h_rate
+    
+    # 修正量: 取偏差的比例作为修正 (保守, 避免过度修正)
+    # 回测验证优化: 微调15%, 中等20%, 大幅10%
+    if abs_change > 0.3:
+        correction = delta * 0.10
+    elif abs_change < 0.1:
+        correction = delta * 0.15
+    else:
+        correction = delta * 0.20
+    
+    # 限制修正量
+    correction = max(-0.10, min(0.10, correction))
+    
+    if abs(correction) < 0.005:
+        return probs
+    
+    # 应用修正
+    pw_new = pw + correction
+    # 从平局和客胜中按比例扣除
+    if correction > 0:
+        pd_new = pd - correction * 0.35
+        pl_new = pl - correction * 0.65
+    else:
+        pd_new = pd - correction * 0.35
+        pl_new = pl - correction * 0.65
+    
+    # 边界保护
+    pw_new = max(0.05, min(0.90, pw_new))
+    pd_new = max(0.05, min(0.60, pd_new))
+    pl_new = max(0.05, min(0.90, pl_new))
+    
     s = pw_new + pd_new + pl_new
     return [pw_new/s, pd_new/s, pl_new/s]
 
@@ -3784,12 +4033,26 @@ def predict_match(match_num, data):
     p0_l += form_adj_l
     p0_w, p0_d, p0_l = normalize(p0_w, p0_d, p0_l)
     
-    # Step 5b: 赔率变化修正
-    if ouzhi:
-        if ouzhi_change < -0.1:
-            p0_w *= 1.05
-        elif ouzhi_change > 0.1:
-            p0_l *= 1.05
+    # Step 5a: 全局赔率区间偏差校准 (Ultra 7.0)
+    # 基于全量3099场数据分析, 修正不同赔率区间的系统性偏差
+    _home_odds_for_cal = had.get('h', 0) if had and 'h' in had else (ow if ow > 0 else 0)
+    if _home_odds_for_cal and _home_odds_for_cal > 1:
+        _cal = calibrate_global_odds_bias([p0_w, p0_d, p0_l], _home_odds_for_cal)
+        p0_w, p0_d, p0_l = _cal[0], _cal[1], _cal[2]
+    
+    # Step 5b: 赔率变动信号校准 (Ultra 7.0) — 替代原有简单乘法修正
+    # 基于初赔→终赔变动方向与幅度, 按历史命中率精细修正
+    _init_h_odds = None
+    _final_h_odds = None
+    if init_ouzhi:
+        _init_h_odds = init_ouzhi['avg_initial'][0]
+        _final_h_odds = init_ouzhi['avg_instant'][0]
+    elif ouzhi and not ouzhi_is_rr:
+        _init_h_odds = ouzhi.get('init_w')
+        _final_h_odds = ouzhi.get('latest_w')
+    if _init_h_odds and _final_h_odds:
+        _cal = calibrate_odds_change_signal([p0_w, p0_d, p0_l], _init_h_odds, _final_h_odds)
+        p0_w, p0_d, p0_l = _cal[0], _cal[1], _cal[2]
     
     p0_w, p0_d, p0_l = normalize(p0_w, p0_d, p0_l)
     p1_w, p1_d, p1_l = p0_w, p0_d, p0_l
