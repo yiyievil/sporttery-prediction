@@ -90,6 +90,18 @@ def parse_update_input(input_str):
     """
     input_str = input_str.strip()
 
+    # 格式0 (Ultra 7.3): 竞彩编号日期 '260728 201,202' → ('2026-07-28', ['201','202'])
+    m0 = re.match(r'^(\d{6})\s+(.+)$', input_str)
+    if m0:
+        code = m0.group(1)
+        try:
+            d = datetime(2000 + int(code[:2]), int(code[2:4]), int(code[4:6]))
+            nums = re.findall(r'\d{3}', m0.group(2))
+            if nums:
+                return d.strftime('%Y-%m-%d'), nums
+        except ValueError:
+            pass  # 非法日期落到其他格式
+
     # 格式3: 直接周X编号 → 提取编号, 推算本周日期
     if re.match(r'周[一二三四五六日]\d{3}', input_str):
         pairs = re.findall(r'周([一二三四五六日])(\d{3})', input_str)

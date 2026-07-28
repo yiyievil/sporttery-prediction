@@ -20,7 +20,7 @@ Ultra 5.0 升级 (数学算法全面优化, EV不变, 命中率优先):
   9. Logit变换校准: 边界稳定, 对称性好
   10. 对数空间集成融合: 几何加权保持概率锐度
 """
-import math, json, re, time, os
+import math, json, re, time, os, sys
 from datetime import datetime, timedelta
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -101,6 +101,54 @@ except ImportError:
 TARGET_DATE = None   # ← 不限日期(避免跨天分类问题)
 TARGET_WEEKDAY = "周三"  # ← 指定周几过滤(如"周四"), None=不过滤
 MATCH_NUMBERS = ["001","002"]  # ← 场次编号(后3位)
+
+# ===== 编号日期输入 (Ultra 7.3) =====
+# 竞彩官网(sporttery.cn/jc/jsq/zqspf)编号日期格式: 260728 = 2026-07-28
+# 命令行: python v215_e2e.py 260728 001,002
+#     或: python v215_e2e.py 260728001,260728002
+# 收到编号日期后自动换算周几并开始预测, 无需手动改配置
+_WEEKDAY_CN = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+
+def parse_code_date(code):
+    """编号日期 '260728' → (date对象, '周二'); 非法输入返回 (None, None)"""
+    m = re.match(r'^(\d{2})(\d{2})(\d{2})$', str(code).strip())
+    if not m:
+        return None, None
+    try:
+        d = datetime(2000 + int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
+    except ValueError:
+        return None, None
+    return d, _WEEKDAY_CN[d.weekday()]
+
+def apply_cli_match_input():
+    """命令行编号日期输入 → 覆盖 TARGET_WEEKDAY / MATCH_NUMBERS (无参数时用顶部配置)"""
+    global TARGET_WEEKDAY, MATCH_NUMBERS
+    args = [a for a in sys.argv[1:] if a.strip()]
+    if not args:
+        return
+    text = ' '.join(args).replace('，', ',').strip()
+    # 形式1: 完整编号 260728001,260728002 (同日多场)
+    full = re.findall(r'(\d{6})(\d{3})', text)
+    if full and len(full) >= 1 and len({f[0] for f in full}) == 1 and \
+       ''.join(f[0] + f[1] for f in full) == text.replace(',', '').replace(' ', ''):
+        d, wd = parse_code_date(full[0][0])
+        if wd:
+            TARGET_WEEKDAY = wd
+            MATCH_NUMBERS = [f[1] for f in full]
+            print(f"  [输入] 编号日期 {full[0][0]} → {wd}, 场次 {MATCH_NUMBERS}")
+            return
+    # 形式2: 编号日期+场次 260728 001,002
+    m = re.match(r'^(\d{6})\s+([0-9,\s]+)$', text)
+    if m:
+        d, wd = parse_code_date(m.group(1))
+        nums = [x[-3:] for x in re.split(r'[,\s]+', m.group(2).strip()) if x]
+        if wd and nums:
+            TARGET_WEEKDAY = wd
+            MATCH_NUMBERS = nums
+            print(f"  [输入] 编号日期 {m.group(1)} → {wd}, 场次 {MATCH_NUMBERS}")
+            return
+    print(f"  [输入] ⚠️ 无法解析 '{text}', 回退文件顶部配置 "
+          f"(正确格式: 260728 001,002 或 260728001,260728002)")
 
 # ===== 推荐模式配置 (Pro 3.9/Ultra 1.0) =====
 # mode='prob':  命中率优先(默认), 纯概率排序, EV仅作参考
@@ -4766,6 +4814,9 @@ def fetch_nowscore_for_matches(matches):
 def main():
     t0 = time.time()
     monitor = []  # [(phase, elapsed, data_size, detail)]
+
+    # Ultra 7.3: 命令行编号日期输入 (如 260728 001,002) 优先于顶部配置
+    apply_cli_match_input()
     
     # ===== Phase 1: Sporttery API (核心 — 体彩场次+赔率基准+固定奖金) =====
     t1 = time.time()
