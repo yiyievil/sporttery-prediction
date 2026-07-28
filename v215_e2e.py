@@ -126,7 +126,7 @@ def apply_cli_match_input():
     args = [a for a in sys.argv[1:] if a.strip()]
     if not args:
         return
-    text = ' '.join(args).replace('，', ',').strip()
+    text = ' '.join(args).replace('，', ',').replace('、', ',').strip()
     # 形式1: 完整编号 260728001,260728002 (同日多场)
     full = re.findall(r'(\d{6})(\d{3})', text)
     if full and len(full) >= 1 and len({f[0] for f in full}) == 1 and \
