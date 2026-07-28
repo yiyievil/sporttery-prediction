@@ -1,0 +1,272 @@
+{
+  "memories": [
+    {
+      "id": "_19fa3c42047",
+      "text": "[ERR-20260727-001] post_fusion_draw_calibration 未被调用\n- **症状**: 平局概率系统性低估, HAD方向偏向胜/负\n- **根因**: 函数定义了但在 predict_match 流程中未调用\n- **修复**: 在高级标定之后、确定HAD方向之前插入调用\n- **预防**: 新增校准函数后, 必须在 predict_match 中确认调用链",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.9,
+      "scope": "global",
+      "tags": [
+        "ERR-20260727-001"
+      ],
+      "timestamp": 1785158967367,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 1,
+      "last_accessed": "2026-07-27 13:30:18"
+    },
+    {
+      "id": "_19fa3c42047",
+      "text": "[ERR-20260727-002] goalLine 正则仅匹配整数盘口\n- **症状**: -1.5, +0.5 等常见小数盘口无法解析, goal_line 默认为 0\n- **根因**: 正则 `r'\\(([+\\-]\\d)\\)'` 仅匹配单位数整数\n- **修复**: 改为 `r'\\(([+\\-]\\d+(?:\\.\\d)?)\\)'` 支持小数\n- **预防**: 正则模式需覆盖所有合法输入格式, 用测试用例验证",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.9,
+      "scope": "global",
+      "tags": [
+        "ERR-20260727-002"
+      ],
+      "timestamp": 1785158967367,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 1,
+      "last_accessed": "2026-07-27 13:30:18"
+    },
+    {
+      "id": "_19fa3c42047",
+      "text": "[ERR-20260727-003] 半全场比分回退错误\n- **症状**: 全场比分(sectionsNo999)缺失时, 误用半场比分(sectionsNo1)作为全场\n- **根因**: 回退逻辑 `full_score or half_score` 导致半场比分被当作全场\n- **修复**: sectionsNo999 缺失时尝试 matchScore 字段, 不回退到半场\n- **预防**: 数据回退必须语义匹配, 不能跨语义域回退",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.9,
+      "scope": "global",
+      "tags": [
+        "ERR-20260727-003"
+      ],
+      "timestamp": 1785158967367,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 1,
+      "last_accessed": "2026-07-27 13:30:18"
+    },
+    {
+      "id": "_19fa3c42048",
+      "text": "[ERR-20260727-004] nowscore JSON 缓存永不过期\n- **症状**: 即时赔率缓存陈旧, 更新流程使用过期数据\n- **根因**: JSON 缓存无 TTL, 只有 HTML 缓存有 30 分钟过期\n- **修复**: 添加 JSON_CACHE_TTL = 1800 (30分钟), 过期后跳过缓存继续获取\n- **预防**: 所有缓存必须有 TTL, 即时数据 TTL 要短",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.9,
+      "scope": "global",
+      "tags": [
+        "ERR-20260727-004"
+      ],
+      "timestamp": 1785158967368,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 2,
+      "last_accessed": "2026-07-27 13:46:07"
+    },
+    {
+      "id": "_19fa3c42048",
+      "text": "[ERR-20260727-005] matchNumStr 跨周覆盖\n- **症状**: 验证脚本用上周比赛结果覆盖本周同编号比赛\n- **根因**: `all_results[key] = m` 无条件覆盖, 不同周同 matchNumStr 冲突\n- **修复**: 比较 matchDate, 保留最新日期的比赛\n- **预防**: 任何以编号为 key 的去重, 都需要考虑时间维度",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.9,
+      "scope": "global",
+      "tags": [
+        "ERR-20260727-005"
+      ],
+      "timestamp": 1785158967368,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 1,
+      "last_accessed": "2026-07-27 13:30:18"
+    },
+    {
+      "id": "_19fa3c42049",
+      "text": "[ERR-20260727-006] sporttery_bonus 更新时丢失\n- **症状**: 增量更新后 EV 价值分析失效, 固定奖金数据丢失\n- **根因**: fetch_current_odds_only 虽然浅拷贝了 match_info, 但更新流程未重新获取固定奖金\n- **修复**: 更新流程中并行获取 fetch_sporttery_fixed_bonus, 缓存保存时写入 sporttery_bonus\n- **预防**: 增量更新时, 所有影响预测结果的字段都必须刷新或从缓存保留",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.9,
+      "scope": "global",
+      "tags": [
+        "ERR-20260727-006"
+      ],
+      "timestamp": 1785158967369,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 3,
+      "last_accessed": "2026-07-27 13:46:07"
+    },
+    {
+      "id": "_19fa3c42049",
+      "text": "[ERR-20260727-007] 缓存合并方向错误\n- **症状**: nowscore 降级路径中, 旧缓存数据覆盖了新获取的数据\n- **根因**: `ns_data.setdefault('shuju', {}).update(cached_shuju)` — 缓存覆盖了新数据\n- **修复**: `merged = dict(cached_shuju); merged.update(new_data)` — 新数据优先\n- **预防**: 合并方向永远是新数据优先, 旧缓存仅填补空缺",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.9,
+      "scope": "global",
+      "tags": [
+        "ERR-20260727-007"
+      ],
+      "timestamp": 1785158967369,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 3,
+      "last_accessed": "2026-07-27 13:46:07"
+    },
+    {
+      "id": "_19fa3c4204a",
+      "text": "[ERR-20260727-008] 联赛名匹配后缀问题\n- **症状**: 标定数据用 '挪超', 引擎传入 '挪超_2026', 匹配失败\n- **根因**: 标定 JSON 存储无赛季后缀, 引擎传入带赛季后缀\n- **修复**: 用正则 `re.sub(r'_\\d{4}$', '', league_name)` 去除赛季后缀再匹配\n- **预防**: 跨模块数据交换时, key 格式必须统一或做归一化",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.9,
+      "scope": "global",
+      "tags": [
+        "ERR-20260727-008"
+      ],
+      "timestamp": 1785158967370,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 1,
+      "last_accessed": "2026-07-27 13:30:18"
+    },
+    {
+      "id": "_19fa3c4204b",
+      "text": "[ERR-20260727-009] +1盘口 key 格式错误\n- **症状**: +1 让球盘口标定数据无法找到\n- **根因**: key 格式为 '1' 而非 '+1', 正数盘口缺少 '+' 前缀\n- **修复**: 正数盘口显式添加 '+' 前缀\n- **预防**: 盘口 key 格式: 负数 '-1', 正数 '+1', 零 '0'",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.9,
+      "scope": "global",
+      "tags": [
+        "ERR-20260727-009"
+      ],
+      "timestamp": 1785158967371,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 1,
+      "last_accessed": "2026-07-27 13:30:18"
+    },
+    {
+      "id": "_19fa3c4204b",
+      "text": "[LRN-20260725-001] nowscore 端点迁移\n- **学习**: www.nowscore.com 主域名已失效, 迁移到 live.nowscore.com 子域名\n- **端点**: 盘口 `live.nowscore.com/odds/3in1Odds.aspx`, 赛程 `live.nowscore.com/data/bf1.js`\n- **注意**: data/sc1.js 被代理阻止, bf1.js 可直连",
+      "category": "reflection",
+      "category_cn": "反思",
+      "importance": 0.8,
+      "scope": "global",
+      "tags": [
+        "LRN-20260725-001"
+      ],
+      "timestamp": 1785158967371,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 1,
+      "last_accessed": "2026-07-27 13:30:18"
+    },
+    {
+      "id": "_19fa3c4204c",
+      "text": "[LRN-20260725-002] 体彩周几基于开盘日\n- **学习**: matchNumStr (如 \"周三201\") 的周几 = 体彩开盘日(businessDate), 不是比赛日(matchDate)\n- **影响**: 预测文件查找不能按比赛日推算周几, 必须从文件内容匹配\n- **修复**: find_prediction_file 不做周几精确过滤, 按编号后3位匹配",
+      "category": "reflection",
+      "category_cn": "反思",
+      "importance": 0.8,
+      "scope": "global",
+      "tags": [
+        "LRN-20260725-002"
+      ],
+      "timestamp": 1785158967372,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 1,
+      "last_accessed": "2026-07-27 13:30:18"
+    },
+    {
+      "id": "_19fa3c4204c",
+      "text": "[LRN-20260726-001] 让平率标定方法论\n- **学习**: -1盘口让平命中率(赛果恰好赢1球)随赔率变化, 可按赔率区间统计校准\n- **数据**: 1441场历史数据, 8联赛, 6个赔率区间\n- **效果**: HHAD让平方向预测准确率提升",
+      "category": "reflection",
+      "category_cn": "反思",
+      "importance": 0.8,
+      "scope": "global",
+      "tags": [
+        "LRN-20260726-001"
+      ],
+      "timestamp": 1785158967372,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 1,
+      "last_accessed": "2026-07-27 13:30:18"
+    },
+    {
+      "id": "_19fa3c4204d",
+      "text": "[LRN-20260726-002] 双向让平校准\n- **学习**: 让平率校准需双向 — 既有系统性高估(低赔率区), 也有系统性低估(高赔率区)\n- **应用**: -1/-2/+1/+2 四个盘口分别校准, 各自独立的方向和幅度",
+      "category": "reflection",
+      "category_cn": "反思",
+      "importance": 0.8,
+      "scope": "global",
+      "tags": [
+        "LRN-20260726-002"
+      ],
+      "timestamp": 1785158967373,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 1,
+      "last_accessed": "2026-07-27 13:30:18"
+    },
+    {
+      "id": "_19fa3c4204e",
+      "text": "[LRN-20260727-001] 数据源降级标记\n- **学习**: 每个数据源切换点必须记录 data_source 和 fallback_reason\n- **原因**: 用户需要知道某场预测用了什么数据, 降级原因影响置信度判断\n- **实现**: meta 中保存 data_source + fallback_reason, 摘要中显示",
+      "category": "reflection",
+      "category_cn": "反思",
+      "importance": 0.8,
+      "scope": "global",
+      "tags": [
+        "LRN-20260727-001"
+      ],
+      "timestamp": 1785158967374,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 1,
+      "last_accessed": "2026-07-27 13:30:18"
+    },
+    {
+      "id": "_19fa3c4204e",
+      "text": "[LRN-20260727-002] 场次级缓存时间戳\n- **学习**: 缓存新鲜度检查不能依赖全局 saved_at, 因为不同场次获取时间可能差几小时\n- **修复**: 每场缓存写入 cached_at 时间戳, 独立判断新鲜度",
+      "category": "reflection",
+      "category_cn": "反思",
+      "importance": 0.8,
+      "scope": "global",
+      "tags": [
+        "LRN-20260727-002"
+      ],
+      "timestamp": 1785158967374,
+      "created_at": "2026-07-27 13:29:27",
+      "access_count": 1,
+      "last_accessed": "2026-07-27 13:30:18"
+    },
+    {
+      "id": "_19fa3c4e726",
+      "text": "[DEC-001] Sporttery 是唯一预测目标\n- **触发**: 用户明确要求 \"所有预测围绕体彩\"\n- **原则**: sporttery.cn 决定预测范围(场次)、预测基准(HAD/HHAD赔率)、价值锚点(固定奖金SP)\n- **行动**: nowscore/500.com/leisu 全部为辅助, 无体彩开盘的比赛不进入预测流程\n- **违反后果**: 预测了体彩没有开盘的比赛, 用户无法投注",
+      "category": "decision",
+      "category_cn": "决策",
+      "importance": 0.95,
+      "scope": "global",
+      "tags": [
+        "DEC-001"
+      ],
+      "timestamp": 1785159018278,
+      "created_at": "2026-07-27 13:30:18",
+      "access_count": 0
+    },
+    {
+      "id": "_19fa3c4e727",
+      "text": "[DEC-002] SWOT + 历史标定 在七步预测引擎之前\n- **触发**: 用户纠正 \"swot 和历史标定都在七步预测引擎之前\"\n- **原则**: 先用历史数据标定联赛参数(主场优势/平局率/让平率), 再进入七步预测\n- **行动**: v215_e2e.py 启动时先加载 league_calibration.json + 高级标定6模块, 再执行 predict_match",
+      "category": "decision",
+      "category_cn": "决策",
+      "importance": 0.95,
+      "scope": "global",
+      "tags": [
+        "DEC-002"
+      ],
+      "timestamp": 1785159018279,
+      "created_at": "2026-07-27 13:30:18",
+      "access_count": 0
+    },
+    {
+      "id": "_19fa3c4e727",
+      "text": "[DEC-003] 数据源优先级 sporttery > nowscore > 500.com\n- **触发**: 用户明确架构图\n- **原则**: nowscore 成功的场次不再请求 500.com; nowscore 失败才降级 500.com; 双失败用 sporttery 保底\n- **行动**: fetch_nowscore_for_matches 返回 failed_keys, 仅对 failed_keys 请求 500.com",
+      "category": "decision",
+      "category_cn": "决策",
+      "importance": 0.95,
+      "scope": "global",
+      "tags": [
+        "DEC-003"
+      ],
+      "timestamp": 1785159018279,
+      "created_at": "2026-07-27 13:30:18",
+      "access_count": 0
+    }
+  ],
+  "version": "1.0"
+}

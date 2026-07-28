@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+nowscore_cache/
+node_modules/
+*.log
+.DS_Store

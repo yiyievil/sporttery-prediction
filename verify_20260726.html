@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>赛果验证报告 Ultra 6.1 — 2026-07-26</title>
+<style>
+
+:root {
+  --bg: #0f1117; --bg2: #1a1d27; --bg3: #252937;
+  --ink: #e8eaed; --muted: #8b92a5; --rule: #2d3142;
+  --accent: #00d4aa; --green: #4ade80; --red: #f87171; --yellow: #ffd93d;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: -apple-system, "Segoe UI", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.7; font-size: 15px;
+}
+.container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+.hero { text-align: center; padding: 3rem 1rem 2rem; border-bottom: 1px solid var(--rule); margin-bottom: 2.5rem; }
+.hero h1 { font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; }
+.hero .subtitle { color: var(--muted); font-size: 0.95rem; }
+.hero .badge {
+  display: inline-block; padding: 0.3rem 1rem;
+  background: rgba(0,212,170,0.12); border: 1px solid rgba(0,212,170,0.3);
+  border-radius: 100px; color: var(--accent); font-size: 0.85rem; font-weight: 600; margin-top: 0.75rem;
+}
+.section { margin-bottom: 2.5rem; }
+.section h2 {
+  font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;
+  padding-bottom: 0.5rem; border-bottom: 1px solid var(--rule);
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.section h2 .num { color: var(--accent); font-family: "SF Mono", monospace; font-size: 0.9rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th {
+  text-align: left; padding: 0.6rem 0.75rem; color: var(--muted);
+  font-weight: 600; font-size: 0.82rem; text-transform: uppercase;
+  letter-spacing: 0.03em; border-bottom: 1px solid var(--rule);
+}
+td { padding: 0.7rem 0.75rem; border-bottom: 1px solid var(--rule); }
+tr:hover td { background: rgba(255,255,255,0.02); }
+.score { font-family: "SF Mono", monospace; font-weight: 700; font-size: 1rem; }
+.hit { color: var(--green); font-weight: 700; }
+.miss { color: var(--red); font-weight: 700; }
+.tag {
+  display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px;
+  font-size: 0.78rem; font-weight: 600;
+}
+.tag-blue { background: rgba(0,212,170,0.12); color: var(--accent); }
+.stat-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem; margin-bottom: 1.5rem;
+}
+.stat-card {
+  background: var(--bg2); border: 1px solid var(--rule); border-radius: 12px;
+  padding: 1.2rem 1.25rem; text-align: center;
+}
+.stat-card .value { font-size: 2rem; font-weight: 800; font-family: "SF Mono", monospace; margin-bottom: 0.25rem; }
+.stat-card .label { color: var(--muted); font-size: 0.82rem; }
+.stat-card.green .value { color: var(--green); }
+.stat-card.red .value { color: var(--red); }
+.stat-card.accent .value { color: var(--accent); }
+.stat-card.yellow .value { color: var(--yellow); }
+.callout {
+  background: rgba(0,212,170,0.06); border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0; padding: 1rem 1.25rem; margin: 1rem 0; font-size: 0.9rem;
+}
+.callout.warning { background: rgba(255,217,61,0.06); border-left-color: var(--yellow); }
+.callout strong { color: var(--ink); }
+.lessons { counter-reset: lesson; }
+.lessons li {
+  list-style: none; position: relative; padding-left: 2.5rem;
+  margin-bottom: 0.75rem; font-size: 0.9rem;
+}
+.lessons li::before {
+  counter-increment: lesson; content: counter(lesson);
+  position: absolute; left: 0; top: 0; width: 1.8rem; height: 1.8rem;
+  background: var(--bg3); border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; font-size: 0.78rem;
+  font-weight: 700; color: var(--accent); font-family: "SF Mono", monospace;
+}
+.match-card {
+  background: var(--bg2); border: 1px solid var(--rule); border-radius: 12px;
+  padding: 1.5rem; margin-bottom: 1.2rem;
+}
+.match-card .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.match-card .match-id { font-family: "SF Mono", monospace; color: var(--accent); font-weight: 700; font-size: 0.85rem; }
+.match-card .league { color: var(--muted); font-size: 0.85rem; }
+.match-card .teams { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+.match-card .score-row {
+  font-size: 1.3rem; font-weight: 800; font-family: "SF Mono", monospace;
+  color: var(--yellow); margin-bottom: 0.5rem;
+}
+.detail-table { font-size: 0.85rem; }
+.detail-table th { font-size: 0.78rem; }
+.detail-table td { padding: 0.5rem 0.75rem; }
+footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); text-align: center; color: var(--muted); font-size: 0.82rem; }
+@media (max-width: 600px) { .stat-grid { grid-template-columns: 1fr 1fr; } .container { padding: 1rem; } .hero h1 { font-size: 1.4rem; } }
+
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="hero">
+  <h1>赛果验证报告 Ultra 6.1</h1>
+  <div class="subtitle">2026-07-26 | Ultra 6.1 策略验证 | 贝叶斯更新 · 校准分析 · 混淆矩阵 · CUSUM漂移检测</div>
+  <div class="badge">HAD命中率 4/11 = 36%</div>
+</div>
+
+<div class="section">
+  <h2><span class="num">01</span> 命中率总览</h2>
+  <div class="stat-grid">
+    <div class="stat-card green">
+      <div class="value">4/11</div>
+      <div class="label">HAD命中</div>
+    </div>
+    <div class="stat-card red">
+      <div class="value">3/11</div>
+      <div class="label">HHAD命中</div>
+    </div>
+    <div class="stat-card accent">
+      <div class="value">36%</div>
+      <div class="label">HAD命中率</div>
+    </div>
+    <div class="stat-card red">
+      <div class="value">27%</div>
+      <div class="label">HHAD命中率</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="value">2/11</div>
+      <div class="label">比分命中(Top3)</div>
+    </div>
+    <div class="stat-card green">
+      <div class="value">4/11</div>
+      <div class="label">半全场命中</div>
+    </div>
+    <div class="stat-card green">
+      <div class="value">5/11</div>
+      <div class="label">总进球命中</div>
+    </div>
+    <div class="stat-card red">
+      <div class="value">-38.5%</div>
+      <div class="label">累计ROI(固定1单位)</div>
+    </div>
+    <div class="stat-card accent">
+      <div class="value">0.2594</div>
+      <div class="label">Brier分数 (一般)</div>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>场次</th><th>对阵</th><th>比分</th>
+        <th>实际HAD</th><th>预测HAD</th><th>验证</th>
+        <th>实际HHAD</th><th>预测HHAD</th><th>验证</th>
+        <th>实际总进球</th><th>预测总进球</th><th>验证</th>
+        <th>实际半全场</th><th>预测半全场</th><th>验证</th>
+        <th>可预测性</th><th>主推</th>
+      </tr>
+    </thead>
+    <tbody>
+      
+        <tr>
+          <td><span class="tag tag-blue">周日201</span></td>
+          <td>首尔FC vs 蔚山现代</td>
+          <td class="score">1-3</td>
+          <td>负</td>
+          <td class="miss">胜</td>
+          <td class="miss">未中</td>
+          <td>让负</td>
+          <td class="miss">让胜</td>
+          <td class="miss">未中</td>
+          <td>4球</td>
+          <td class="miss">2球(23.1%)</td>
+          <td class="miss">未中</td>
+          <td>负负</td>
+          <td class="miss">胜胜</td>
+          <td class="miss">未中</td>
+          <td>63</td>
+          <td class="miss">HAD胜 未中</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-blue">周日202</span></td>
+          <td>仁川联 vs 富川FC</td>
+          <td class="score">1-1</td>
+          <td>平</td>
+          <td class="miss">胜</td>
+          <td class="miss">未中</td>
+          <td>让负</td>
+          <td class="miss">让胜</td>
+          <td class="miss">未中</td>
+          <td>2球</td>
+          <td class="hit">2球(22.9%)</td>
+          <td class="hit">命中</td>
+          <td>负平</td>
+          <td class="miss">胜胜</td>
+          <td class="miss">未中</td>
+          <td>66</td>
+          <td class="miss">HAD胜 未中</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-blue">周日210</span></td>
+          <td>赫尔辛基 vs TPS图尔</td>
+          <td class="score">1-0</td>
+          <td>胜</td>
+          <td class="hit">胜</td>
+          <td class="hit">命中</td>
+          <td>让平</td>
+          <td class="miss">让胜</td>
+          <td class="miss">未中</td>
+          <td>1球</td>
+          <td class="miss">2球(21.9%)</td>
+          <td class="miss">未中</td>
+          <td>胜胜</td>
+          <td class="hit">胜胜</td>
+          <td class="hit">命中</td>
+          <td>70</td>
+          <td class="hit">HAD胜 命中</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-blue">周日211</span></td>
+          <td>盖斯 vs 哈尔姆斯</td>
+          <td class="score">1-1</td>
+          <td>平</td>
+          <td class="miss">胜</td>
+          <td class="miss">未中</td>
+          <td>让负</td>
+          <td class="miss">让胜</td>
+          <td class="miss">未中</td>
+          <td>2球</td>
+          <td class="hit">2球(22.2%)</td>
+          <td class="hit">命中</td>
+          <td>平平</td>
+          <td class="miss">胜胜</td>
+          <td class="miss">未中</td>
+          <td>66</td>
+          <td class="miss">HAD胜 未中</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-blue">周日212</span></td>
+          <td>马尔默 vs 埃夫斯堡</td>
+          <td class="score">1-2</td>
+          <td>负</td>
+          <td class="miss">胜</td>
+          <td class="miss">未中</td>
+          <td>让负</td>
+          <td class="miss">让胜</td>
+          <td class="miss">未中</td>
+          <td>3球</td>
+          <td class="miss">2球(23.2%)</td>
+          <td class="miss">未中</td>
+          <td>负负</td>
+          <td class="miss">胜胜</td>
+          <td class="miss">未中</td>
+          <td>48</td>
+          <td class="miss">HHAD让胜 未中</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-blue">周日213</span></td>
+          <td>萨普斯堡 vs 汉坎</td>
+          <td class="score">1-0</td>
+          <td>胜</td>
+          <td class="hit">胜</td>
+          <td class="hit">命中</td>
+          <td>让平</td>
+          <td class="miss">让胜</td>
+          <td class="miss">未中</td>
+          <td>1球</td>
+          <td class="miss">2球(22.9%)</td>
+          <td class="miss">未中</td>
+          <td>胜胜</td>
+          <td class="hit">胜胜</td>
+          <td class="hit">命中</td>
+          <td>67</td>
+          <td class="hit">HAD胜 命中</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-blue">周日214</span></td>
+          <td>奥斯KFUM vs 莫尔德</td>
+          <td class="score">2-4</td>
+          <td>负</td>
+          <td class="miss">平</td>
+          <td class="miss">未中</td>
+          <td>让负</td>
+          <td class="hit">让负</td>
+          <td class="hit">命中</td>
+          <td>6球</td>
+          <td class="miss">2球(23.1%)</td>
+          <td class="miss">未中</td>
+          <td>平负</td>
+          <td class="miss">平平</td>
+          <td class="miss">未中</td>
+          <td>27</td>
+          <td class="hit">HHAD让负 命中</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-blue">周日215</span></td>
+          <td>桑纳菲 vs 博德闪耀</td>
+          <td class="score">0-3</td>
+          <td>负</td>
+          <td class="hit">负</td>
+          <td class="hit">命中</td>
+          <td>让负</td>
+          <td class="hit">让负</td>
+          <td class="hit">命中</td>
+          <td>3球</td>
+          <td class="miss">2球(23.0%)</td>
+          <td class="miss">未中</td>
+          <td>负负</td>
+          <td class="hit">负负</td>
+          <td class="hit">命中</td>
+          <td>60</td>
+          <td class="hit">HHAD让负 命中</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-blue">周日216</span></td>
+          <td>奥勒松 vs 维京</td>
+          <td class="score">1-1</td>
+          <td>平</td>
+          <td class="miss">负</td>
+          <td class="miss">未中</td>
+          <td>让胜</td>
+          <td class="miss">让负</td>
+          <td class="miss">未中</td>
+          <td>2球</td>
+          <td class="hit">2球(23.1%)</td>
+          <td class="hit">命中</td>
+          <td>负平</td>
+          <td class="miss">负负</td>
+          <td class="miss">未中</td>
+          <td>53</td>
+          <td class="miss">HHAD让负 未中</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-blue">周日217</span></td>
+          <td>弗拉门戈 vs 圣保罗</td>
+          <td class="score">1-1</td>
+          <td>平</td>
+          <td class="miss">胜</td>
+          <td class="miss">未中</td>
+          <td>让负</td>
+          <td class="miss">让胜</td>
+          <td class="miss">未中</td>
+          <td>2球</td>
+          <td class="hit">2球(23.1%)</td>
+          <td class="hit">命中</td>
+          <td>平平</td>
+          <td class="miss">胜胜</td>
+          <td class="miss">未中</td>
+          <td>65</td>
+          <td class="miss">HAD胜 未中</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-blue">周日218</span></td>
+          <td>格雷米奥 vs 弗鲁米嫩</td>
+          <td class="score">1-1</td>
+          <td>平</td>
+          <td class="hit">平</td>
+          <td class="hit">命中</td>
+          <td>让胜</td>
+          <td class="hit">让胜</td>
+          <td class="hit">命中</td>
+          <td>2球</td>
+          <td class="hit">2球(23.5%)</td>
+          <td class="hit">命中</td>
+          <td>平平</td>
+          <td class="hit">平平</td>
+          <td class="hit">命中</td>
+          <td>26</td>
+          <td class="hit">HHAD让胜 命中</td>
+        </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="section">
+  <h2><span class="num">02</span> 逐场详细分析</h2>
+  
+  <div class="match-card">
+    <div class="header">
+      <span class="match-id">周日201 首尔FC vs 蔚山现代</span>
+      <span class="league">韩职 | 来源: pred_20260726_周日.json</span>
+    </div>
+    <div class="teams">首尔FC 1-3 蔚山现代</div>
+    <div class="score-row">1 : 3</div>
+    <table class="detail-table">
+      <thead>
+        <tr><th>预测项</th><th>预测</th><th>概率</th><th>赔率</th><th>实际</th><th>结果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HAD</td>
+          <td>胜</td>
+          <td>57%/24%/19%</td>
+          <td>1.65</td>
+          <td>负</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>HHAD(让1球)</td>
+          <td>让胜</td>
+          <td>50%/26%/24%</td>
+          <td>1.65</td>
+          <td>让负</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>比分Top3</td>
+          <td colspan="3">1-0:15.1 2-0:14.6 0-0:9.1</td>
+          <td>1-3</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>盘口</td>
+          <td colspan="2">2.5</td>
+          <td>总进球: 4</td>
+          <td colspan="2">半场: 0-2</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="match-card">
+    <div class="header">
+      <span class="match-id">周日202 仁川联 vs 富川FC</span>
+      <span class="league">韩职 | 来源: pred_20260726_周日.json</span>
+    </div>
+    <div class="teams">仁川联 1-1 富川FC</div>
+    <div class="score-row">1 : 1</div>
+    <table class="detail-table">
+      <thead>
+        <tr><th>预测项</th><th>预测</th><th>概率</th><th>赔率</th><th>实际</th><th>结果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HAD</td>
+          <td>胜</td>
+          <td>65%/22%/13%</td>
+          <td>1.48</td>
+          <td>平</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>HHAD(让1球)</td>
+          <td>让胜</td>
+          <td>57%/26%/18%</td>
+          <td>1.48</td>
+          <td>让负</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>比分Top3</td>
+          <td colspan="3">2-0:17.5 1-0:16.6 0-0:9.0</td>
+          <td>1-1</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>盘口</td>
+          <td colspan="2">2.5</td>
+          <td>总进球: 2</td>
+          <td colspan="2">半场: 0-1</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="match-card">
+    <div class="header">
+      <span class="match-id">周日210 赫尔辛基 vs TPS图尔</span>
+      <span class="league">芬超 | 来源: pred_20260726_周日.json</span>
+    </div>
+    <div class="teams">赫尔辛基 1-0 TPS图尔</div>
+    <div class="score-row">1 : 0</div>
+    <table class="detail-table">
+      <thead>
+        <tr><th>预测项</th><th>预测</th><th>概率</th><th>赔率</th><th>实际</th><th>结果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HAD</td>
+          <td>胜</td>
+          <td>76%/19%/5%</td>
+          <td>1.24</td>
+          <td>胜</td>
+          <td class="hit">命中</td>
+        </tr>
+        <tr>
+          <td>HHAD(让1球)</td>
+          <td>让胜</td>
+          <td>66%/20%/14%</td>
+          <td>1.24</td>
+          <td>让平</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>比分Top3</td>
+          <td colspan="3">3-0:14.5 4-0:9.7 5-0:5.6</td>
+          <td>1-0</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>盘口</td>
+          <td colspan="2">2.5</td>
+          <td>总进球: 1</td>
+          <td colspan="2">半场: 1-0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="match-card">
+    <div class="header">
+      <span class="match-id">周日211 盖斯 vs 哈尔姆斯</span>
+      <span class="league">瑞超 | 来源: pred_20260726_周日.json</span>
+    </div>
+    <div class="teams">盖斯 1-1 哈尔姆斯</div>
+    <div class="score-row">1 : 1</div>
+    <table class="detail-table">
+      <thead>
+        <tr><th>预测项</th><th>预测</th><th>概率</th><th>赔率</th><th>实际</th><th>结果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HAD</td>
+          <td>胜</td>
+          <td>65%/20%/15%</td>
+          <td>1.34</td>
+          <td>平</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>HHAD(让1球)</td>
+          <td>让胜</td>
+          <td>62%/22%/16%</td>
+          <td>1.34</td>
+          <td>让负</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>比分Top3</td>
+          <td colspan="3">3-0:14.4 4-0:9.4 5-0:5.3</td>
+          <td>1-1</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>盘口</td>
+          <td colspan="2">2.5</td>
+          <td>总进球: 2</td>
+          <td colspan="2">半场: 0-0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="match-card">
+    <div class="header">
+      <span class="match-id">周日212 马尔默 vs 埃夫斯堡</span>
+      <span class="league">瑞超 | 来源: pred_20260726_周日.json</span>
+    </div>
+    <div class="teams">马尔默 1-2 埃夫斯堡</div>
+    <div class="score-row">1 : 2</div>
+    <table class="detail-table">
+      <thead>
+        <tr><th>预测项</th><th>预测</th><th>概率</th><th>赔率</th><th>实际</th><th>结果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HAD</td>
+          <td>胜</td>
+          <td>45%/26%/29%</td>
+          <td>1.84</td>
+          <td>负</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>HHAD(让1球)</td>
+          <td>让胜</td>
+          <td>46%/26%/29%</td>
+          <td>1.84</td>
+          <td>让负</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>比分Top3</td>
+          <td colspan="3">1-0:14.5 2-0:13.4 0-0:9.2</td>
+          <td>1-2</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>盘口</td>
+          <td colspan="2">2.5</td>
+          <td>总进球: 3</td>
+          <td colspan="2">半场: 1-2</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="match-card">
+    <div class="header">
+      <span class="match-id">周日213 萨普斯堡 vs 汉坎</span>
+      <span class="league">挪超 | 来源: pred_20260726_周日.json</span>
+    </div>
+    <div class="teams">萨普斯堡 1-0 汉坎</div>
+    <div class="score-row">1 : 0</div>
+    <table class="detail-table">
+      <thead>
+        <tr><th>预测项</th><th>预测</th><th>概率</th><th>赔率</th><th>实际</th><th>结果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HAD</td>
+          <td>胜</td>
+          <td>70%/20%/10%</td>
+          <td>1.47</td>
+          <td>胜</td>
+          <td class="hit">命中</td>
+        </tr>
+        <tr>
+          <td>HHAD(让1球)</td>
+          <td>让胜</td>
+          <td>58%/22%/20%</td>
+          <td>1.47</td>
+          <td>让平</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>比分Top3</td>
+          <td colspan="3">2-0:17.8 1-0:16.8 0-0:9.0</td>
+          <td>1-0</td>
+          <td class="hit">命中</td>
+        </tr>
+        <tr>
+          <td>盘口</td>
+          <td colspan="2">2.5</td>
+          <td>总进球: 1</td>
+          <td colspan="2">半场: 1-0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="match-card">
+    <div class="header">
+      <span class="match-id">周日214 奥斯KFUM vs 莫尔德</span>
+      <span class="league">挪超 | 来源: pred_20260726_周日.json</span>
+    </div>
+    <div class="teams">奥斯KFUM 2-4 莫尔德</div>
+    <div class="score-row">2 : 4</div>
+    <table class="detail-table">
+      <thead>
+        <tr><th>预测项</th><th>预测</th><th>概率</th><th>赔率</th><th>实际</th><th>结果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HAD</td>
+          <td>平</td>
+          <td>30%/35%/35%</td>
+          <td>3.3</td>
+          <td>负</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>HHAD(让1球)</td>
+          <td>让负</td>
+          <td>31%/27%/42%</td>
+          <td>1.96</td>
+          <td>让负</td>
+          <td class="hit">命中</td>
+        </tr>
+        <tr>
+          <td>比分Top3</td>
+          <td colspan="3">0-1:15.0 0-2:14.3 0-0:9.1</td>
+          <td>2-4</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>盘口</td>
+          <td colspan="2">2.5</td>
+          <td>总进球: 6</td>
+          <td colspan="2">半场: 1-1</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="match-card">
+    <div class="header">
+      <span class="match-id">周日215 桑纳菲 vs 博德闪耀</span>
+      <span class="league">挪超 | 来源: pred_20260726_周日.json</span>
+    </div>
+    <div class="teams">桑纳菲 0-3 博德闪耀</div>
+    <div class="score-row">0 : 3</div>
+    <table class="detail-table">
+      <thead>
+        <tr><th>预测项</th><th>预测</th><th>概率</th><th>赔率</th><th>实际</th><th>结果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HAD</td>
+          <td>负</td>
+          <td>12%/25%/63%</td>
+          <td>1.19</td>
+          <td>负</td>
+          <td class="hit">命中</td>
+        </tr>
+        <tr>
+          <td>HHAD(让1球)</td>
+          <td>让负</td>
+          <td>17%/20%/63%</td>
+          <td>1.19</td>
+          <td>让负</td>
+          <td class="hit">命中</td>
+        </tr>
+        <tr>
+          <td>比分Top3</td>
+          <td colspan="3">0-2:16.7 0-1:16.2 0-0:9.0</td>
+          <td>0-3</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>盘口</td>
+          <td colspan="2">2.5</td>
+          <td>总进球: 3</td>
+          <td colspan="2">半场: 0-1</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="match-card">
+    <div class="header">
+      <span class="match-id">周日216 奥勒松 vs 维京</span>
+      <span class="league">挪超 | 来源: pred_20260726_周日.json</span>
+    </div>
+    <div class="teams">奥勒松 1-1 维京</div>
+    <div class="score-row">1 : 1</div>
+    <table class="detail-table">
+      <thead>
+        <tr><th>预测项</th><th>预测</th><th>概率</th><th>赔率</th><th>实际</th><th>结果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HAD</td>
+          <td>负</td>
+          <td>19%/26%/54%</td>
+          <td>1.33</td>
+          <td>平</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>HHAD(让1球)</td>
+          <td>让负</td>
+          <td>23%/22%/55%</td>
+          <td>1.33</td>
+          <td>让胜</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>比分Top3</td>
+          <td colspan="3">0-1:15.1 0-2:14.6 0-0:9.1</td>
+          <td>1-1</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>盘口</td>
+          <td colspan="2">2.5</td>
+          <td>总进球: 2</td>
+          <td colspan="2">半场: 0-1</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="match-card">
+    <div class="header">
+      <span class="match-id">周日217 弗拉门戈 vs 圣保罗</span>
+      <span class="league">巴甲 | 来源: pred_20260726_周日.json</span>
+    </div>
+    <div class="teams">弗拉门戈 1-1 圣保罗</div>
+    <div class="score-row">1 : 1</div>
+    <table class="detail-table">
+      <thead>
+        <tr><th>预测项</th><th>预测</th><th>概率</th><th>赔率</th><th>实际</th><th>结果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HAD</td>
+          <td>胜</td>
+          <td>60%/22%/17%</td>
+          <td>1.32</td>
+          <td>平</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>HHAD(让1球)</td>
+          <td>让胜</td>
+          <td>60%/23%/17%</td>
+          <td>1.32</td>
+          <td>让负</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>比分Top3</td>
+          <td colspan="3">1-0:15.1 2-0:14.5 0-0:9.1</td>
+          <td>1-1</td>
+          <td class="miss">未中</td>
+        </tr>
+        <tr>
+          <td>盘口</td>
+          <td colspan="2">2.5</td>
+          <td>总进球: 2</td>
+          <td colspan="2">半场: 0-0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="match-card">
+    <div class="header">
+      <span class="match-id">周日218 格雷米奥 vs 弗鲁米嫩</span>
+      <span class="league">巴甲 | 来源: pred_20260726_周日.json</span>
+    </div>
+    <div class="teams">格雷米奥 1-1 弗鲁米嫩</div>
+    <div class="score-row">1 : 1</div>
+    <table class="detail-table">
+      <thead>
+        <tr><th>预测项</th><th>预测</th><th>概率</th><th>赔率</th><th>实际</th><th>结果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HAD</td>
+          <td>平</td>
+          <td>31%/35%/35%</td>
+          <td>2.87</td>
+          <td>平</td>
+          <td class="hit">命中</td>
+        </tr>
+        <tr>
+          <td>HHAD(让1球)</td>
+          <td>让胜</td>
+          <td>40%/29%/31%</td>
+          <td>2.79</td>
+          <td>让胜</td>
+          <td class="hit">命中</td>
+        </tr>
+        <tr>
+          <td>比分Top3</td>
+          <td colspan="3">0-1:11.9 1-1:11.6 0-0:9.7</td>
+          <td>1-1</td>
+          <td class="hit">命中</td>
+        </tr>
+        <tr>
+          <td>盘口</td>
+          <td colspan="2">2.5</td>
+          <td>总进球: 2</td>
+          <td colspan="2">半场: 0-0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <h2><span class="num">03</span> 置信度校准 & Brier分数</h2>
+  <div class="callout">
+    <strong>Brier分数: 0.2594 (一般)</strong> — 衡量概率预测准确性, 越低越好(0=完美, 0.33≈随机基准)。
+  </div>
+  <div class="callout warning">
+    <strong>校准摘要:</strong> ★★★★+ 3/9=33.3%(未达标)；★~★★ 1/2=50.0%(未达标)
+  </div>
+  <table>
+    <thead><tr><th>置信度</th><th>场次</th><th>命中</th><th>命中率</th><th>预期</th><th>状态</th></tr></thead>
+    <tbody><tr><td>★★★★+</td><td>9</td><td>3</td><td>33.3%</td><td>>=60%</td><td class="miss">未达标</td></tr><tr><td>★~★★</td><td>2</td><td>1</td><td>50.0%</td><td><50%</td><td class="miss">未达标</td></tr></tbody>
+  </table>
+</div>
+
+<div class="section">
+  <h2><span class="num">04</span> Kelly投注验证</h2>
+  <div class="stat-grid">
+    <div class="stat-card accent"><div class="value">3.2</div><div class="label">总投注(%)</div></div>
+    <div class="stat-card red"><div class="value">-1.3</div><div class="label">总收益(%)</div></div>
+    <div class="stat-card red"><div class="value">-40.6%</div><div class="label">Kelly ROI</div></div>
+  </div>
+  <table>
+    <thead><tr><th>场次</th><th>投注(%)</th><th>赔率</th><th>结果</th><th>收益(%)</th></tr></thead>
+    <tbody><tr><td><span class="tag tag-blue">周日213</span></td><td>1.3</td><td>1.47</td><td class="hit">命中</td><td class="hit">0.6</td></tr><tr><td><span class="tag tag-blue">周日214</span></td><td>1.9</td><td>3.3</td><td class="miss">未中</td><td class="miss">-1.9</td></tr></tbody>
+  </table>
+</div>
+
+<div class="section">
+  <h2><span class="num">04</span> Ultra 6.1 高级验证模型</h2>
+<div class="callout">
+<strong>贝叶斯命中率:</strong> 后验命中率38.5% (95%CI: 13%-64%), 低可靠(贝叶斯收缩显著)<br>
+&nbsp;&nbsp;后验均值=38.5%, 95%CI=[13%-64%], 收缩因子=0.058
+<br><strong>Bootstrap CI:</strong> 命中率36.4% (95%CI: 9%-64%), 低精度(样本量不足)
+</div>
+<div class="callout warning"><strong>统计显著性:</strong> 不显著(p=0.415), 命中率36%可能为随机波动</div>
+<div class="callout"><strong>RPS分数:</strong> 0.1972 | <strong>Log Loss:</strong> 1.0978 | 良好</div>
+<div class="callout warning"><strong>校准分析:</strong> 校准需校准(ECE=0.259), 高估概率(激进), 样本11场</div>
+<table><thead><tr><th>概率区间</th><th>样本数</th><th>预测概率</th><th>实际命中率</th><th>偏差</th></tr></thead><tbody>
+<tr><td>20%-40%</td><td>2</td><td>35%</td><td>50%</td><td style="color:red">+15%</td></tr>
+<tr><td>40%-60%</td><td>3</td><td>52%</td><td>0%</td><td style="color:red">-52%</td></tr>
+<tr><td>60%-80%</td><td>6</td><td>66%</td><td>50%</td><td style="color:red">-16%</td></tr>
+</tbody></table>
+<div class="callout"><strong>混淆矩阵:</strong> 整体准确率36.4%, 最弱方向'平'(F1=0.29), 主要误判: 预测'胜'实际'平'(3次)</div>
+<table><thead><tr><th>预测\实际</th>
+<th>胜</th>
+<th>平</th>
+<th>负</th>
+<th>精确率</th><th>召回率</th><th>F1</th></tr></thead><tbody>
+<tr><td><strong>胜</strong></td>
+<td class="hit">2</td>
+<td class="">3</td>
+<td class="">2</td>
+<td>29%</td><td>100%</td><td>44%</td></tr>
+<tr><td><strong>平</strong></td>
+<td class="">0</td>
+<td class="hit">1</td>
+<td class="">1</td>
+<td>50%</td><td>20%</td><td>29%</td></tr>
+<tr><td><strong>负</strong></td>
+<td class="">0</td>
+<td class="">1</td>
+<td class="hit">1</td>
+<td>50%</td><td>25%</td><td>33%</td></tr>
+</tbody></table>
+<div class="callout"><strong>因子分析:</strong> 伪R²=-0.004, 最重要因子: 难度(正影响(提高命中率)), 模型解释力弱(各因子影响不显著)</div>
+<table><thead><tr><th>因子</th><th>标准化系数</th><th>影响方向</th></tr></thead><tbody>
+<tr><td>难度</td><td>0.1524</td><td>正影响(提高命中率)</td></tr>
+<tr><td>赔率</td><td>0.1139</td><td>正影响(提高命中率)</td></tr>
+<tr><td>模型一致性</td><td>0.0819</td><td>正影响(提高命中率)</td></tr>
+<tr><td>置信度</td><td>0.0329</td><td>正影响(提高命中率)</td></tr>
+</tbody></table>
+<div class="callout"><strong>CUSUM漂移检测:</strong> 数据不足(需≥3批验证)</div>
+</div>
+<div class="section">
+  <h2><span class="num">05</span> 回归分析与教训</h2>
+  <div class="callout warning">
+    <strong>验证日期: 2026-07-26</strong><br>
+    共验证 11 场比赛, HAD命中率 36%, HHAD命中率 27%, 比分命中率 18%, 半全场命中率 36%。
+  </div>
+  <ol class="lessons">
+    <li><strong>整体命中率: HAD 36% (4/11), HHAD 27% (3/11)</strong>。比分Top3命中率 2/11。</li><li><strong>低赔率(≤1.80)主胜/客胜: 3/8 = 38%</strong>。低赔率方向在本次验证中存在风险。</li><li><strong>高赔率(>2.50)方向: 1/2 = 50%</strong>。高赔率方向有价值。</li><li><strong>HAD与HHAD同时命中: 2/11</strong>，同时未中: 6/11。当HAD和HHAD方向一致时置信度更高。</li><li><strong>HHAD让胜方向: 1/8 = 12%</strong>。</li><li><strong>HHAD让负方向: 2/3 = 67%</strong>。</li><li><strong>总进球分析: 场均2.5球, 大2.5球 4场, 小2.5球 7场</strong>。</li><li><strong>高置信度(★★★★+)预测: 3/9 = 33%</strong>。高置信度预测需进一步验证。</li><li><strong>主推命中率: 5/11 = 45%</strong>。主推方向需优化。</li>
+  </ol>
+</div>
+
+<footer>
+  赛果验证报告 Ultra 6.1 | 贝叶斯更新 · 校准分析 · 混淆矩阵 · CUSUM漂移检测 | 2026-07-27 22:22:19
+</footer>
+
+
+<div class="section">
+  <h2><span class="num">06</span> 回归分析与历史数据库</h2>
+  
+<div class="callout">
+  <strong>历史累计统计 (1场, 有预测11场)</strong><br>
+  HAD累计命中率: 4/11 = 36.4%<br>
+  HHAD累计命中率: 3/11 = 27.3%<br>
+  比分Top3累计命中率: 2/11 = 18.2%<br>
+  半全场累计命中率: 4/11 = 36.4%<br>
+  总进球数累计命中率: 5/11 = 45.5%<br>
+  场均进球: 2.5 | 大2.5球: 4场 | 小2.5球: 7场
+</div><h3>HAD方向历史统计</h3><table class="detail-table"><tr><th>方向</th><th>场次</th><th>命中</th><th>命中率</th></tr><tr><td>平</td><td>2</td><td>1</td><td>50%</td></tr><tr><td>胜</td><td>7</td><td>2</td><td>29%</td></tr><tr><td>负</td><td>2</td><td>1</td><td>50%</td></tr></table><h3>HHAD方向历史统计</h3><table class="detail-table"><tr><th>方向</th><th>场次</th><th>命中</th><th>命中率</th></tr><tr><td>让胜</td><td>8</td><td>1</td><td>12%</td></tr><tr><td>让负</td><td>3</td><td>2</td><td>67%</td></tr></table><h3>最近验证记录</h3><table class="detail-table"><tr><th>日期</th><th>场次</th><th>有预测</th><th>HAD命中</th><th>HHAD命中</th><th>比分命中</th><th>HAD率</th></tr><tr><td>2026-07-26</td><td>11</td><td>11</td><td>4</td><td>3</td><td>2</td><td>36%</td></tr></table>
+</div>
+
+</div>
+</body>
+</html>
