@@ -273,6 +273,25 @@ TEAM_NAME_ALIASES = {
     '科罗拉多': ['科罗拉多', 'Colorado Rapids'],
     '温哥华': ['温哥华', 'Vancouver Whitecaps'],
     '明尼苏达': ['明尼苏达', 'Minnesota United'],
+    # ===== 欧冠/欧联资格赛球队 (sporttery名 vs nowscore名) =====
+    '库奥皮奥': ['库奥皮奥', '古比斯', 'KuPS', 'KuPs', 'Kuopio'],
+    '格风暴': ['格风暴', '格拉茨风暴', '格拉茨', 'Sturm Graz'],
+    '萨格勒布迪纳摩': ['萨格勒布迪纳摩', '萨格勒布', '戴拿模', 'Dinamo Zagreb'],
+    '林肯红魔': ['林肯红魔', '林肯', 'Lincoln Red Imps'],
+    '图恩': ['图恩', '杜安', 'Thun'],
+    '采列': ['采列', 'Celje'],
+    '埃格纳蒂亚': ['埃格纳蒂亚', 'Egnatia'],
+    '沙姆洛克': ['沙姆洛克', '沙姆洛克流浪', 'Shamrock Rovers'],
+    '阿拉特亚美尼亚': ['阿拉特亚美尼亚', 'Alashkert'],
+    '博德闪耀': ['博德闪耀', 'Bodø/Glimt', '波杜基林特'],
+    '加拉塔萨': ['加拉塔萨', '加拉塔萨雷', 'Galatasaray'],
+    '埃因霍温': ['埃因霍温', 'PSV', '飞燕诺'],
+    '布鲁日': ['布鲁日', 'Club Brugge'],
+    '圣吉联合': ['圣吉联合', '圣吉尔联合', 'Union SG'],
+    '贝蒂斯': ['贝蒂斯', '皇家贝蒂斯', 'Betis'],
+    '博莱斯拉': ['博莱斯拉', 'Boleslav'],
+    '西班牙人': ['西班牙人', 'Espanyol'],
+    '比利亚雷': ['比利亚雷', '比利亚雷亚尔', '维拉利尔'],
 }
 
 
@@ -565,6 +584,43 @@ def parse_schedule(sc1_text):
     return matches
 
 
+def _clean_team_name(name):
+    """去除HTML标签和常见后缀，返回干净队名"""
+    import re as _re
+    clean = _re.sub(r'<[^>]+>', '', str(name)).strip()
+    # 去除 "(中)" 等中立场标记
+    clean = _re.sub(r'\(.*?\)', '', clean).strip()
+    return clean
+
+
+def _name_similarity(a, b):
+    """计算两个队名的字符级相似度 (0~1)
+    
+    用于别名表无法覆盖时的模糊匹配兜底。
+    基于共有字符占比，对中文队名效果较好。
+    """
+    a = _clean_team_name(a)
+    b = _clean_team_name(b)
+    if not a or not b:
+        return 0.0
+    # 完全匹配
+    if a == b:
+        return 1.0
+    # 子串包含
+    if a in b or b in a:
+        return 0.9
+    # 字符级Jaccard相似度 (对中文队名有效)
+    set_a = set(a)
+    set_b = set(b)
+    intersection = set_a & set_b
+    union = set_a | set_b
+    jaccard = len(intersection) / len(union) if union else 0.0
+    # 要求至少2个字符共有，避免单字巧合
+    if len(intersection) < 2:
+        return 0.0
+    return jaccard
+
+
 def find_match_by_teams(matches, home_name, away_name):
     """通过球队名匹配nowscore比赛
     
@@ -574,13 +630,19 @@ def find_match_by_teams(matches, home_name, away_name):
         away_name: sporttery客队名
     
     返回: matchID字符串, 或None
+    
+    匹配策略 (三级):
+        1. 别名表精确匹配 (子串包含)
+        2. 英文名匹配 (别名表中的英文别名 vs nowscore home_en/away_en)
+        3. 模糊匹配兜底 (字符相似度 >= 0.6)
     """
     home_aliases = TEAM_NAME_ALIASES.get(home_name, [home_name])
     away_aliases = TEAM_NAME_ALIASES.get(away_name, [away_name])
     
+    # Level 1: 别名子串匹配 (原逻辑)
     for match in matches:
-        ns_home = match['home']
-        ns_away = match['away']
+        ns_home = _clean_team_name(match['home'])
+        ns_away = _clean_team_name(match['away'])
         
         # 检查主队名匹配
         home_match = any(alias in ns_home or ns_home in alias for alias in home_aliases)
@@ -594,6 +656,54 @@ def find_match_by_teams(matches, home_name, away_name):
         away_rev = any(alias in ns_home or ns_home in alias for alias in away_aliases)
         if home_rev and away_rev:
             return match['mid']
+    
+    # Level 2: 英文名匹配 (别名表中的英文 vs nowscore home_en/away_en)
+    home_en_aliases = [a for a in home_aliases if re.match(r'^[A-Za-z]', a)]
+    away_en_aliases = [a for a in away_aliases if re.match(r'^[A-Za-z]', a)]
+    if home_en_aliases or away_en_aliases:
+        for match in matches:
+            ns_home_en = match.get('home_en', '')
+            ns_away_en = match.get('away_en', '')
+            home_en_match = any(en.lower() in ns_home_en.lower() or ns_home_en.lower() in en.lower()
+                                for en in home_en_aliases) if home_en_aliases else False
+            away_en_match = any(en.lower() in ns_away_en.lower() or ns_away_en.lower() in en.lower()
+                                for en in away_en_aliases) if away_en_aliases else False
+            if home_en_match and away_en_match:
+                return match['mid']
+            # 反转
+            home_en_rev = any(en.lower() in ns_away_en.lower() or ns_away_en.lower() in en.lower()
+                              for en in home_en_aliases) if home_en_aliases else False
+            away_en_rev = any(en.lower() in ns_home_en.lower() or ns_home_en.lower() in en.lower()
+                              for en in away_en_aliases) if away_en_aliases else False
+            if home_en_rev and away_en_rev:
+                return match['mid']
+    
+    # Level 3: 模糊匹配兜底 (字符相似度)
+    # 当别名表未覆盖时，用字符级相似度作为最后手段
+    best_score = 0.0
+    best_mid = None
+    SIM_THRESHOLD = 0.6  # 相似度阈值: 60%共有字符
+    for match in matches:
+        ns_home = _clean_team_name(match['home'])
+        ns_away = _clean_team_name(match['away'])
+        
+        # 正向: home vs ns_home, away vs ns_away
+        h_sim = _name_similarity(home_name, ns_home)
+        a_sim = _name_similarity(away_name, ns_away)
+        score_fwd = min(h_sim, a_sim)
+        
+        # 反向: home vs ns_away, away vs ns_home
+        h_sim_rev = _name_similarity(home_name, ns_away)
+        a_sim_rev = _name_similarity(away_name, ns_home)
+        score_rev = min(h_sim_rev, a_sim_rev)
+        
+        score = max(score_fwd, score_rev)
+        if score > best_score:
+            best_score = score
+            best_mid = match['mid']
+    
+    if best_score >= SIM_THRESHOLD and best_mid:
+        return best_mid
     
     return None
 
