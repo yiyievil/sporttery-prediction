@@ -262,6 +262,15 @@ python v215_verify.py "2026-07-26 201,202,203,204"
 - 赔率变动 rise_medium/rise_large 修正回测为负收益
 - advanced_calibration.json 仍基于1452场, 建议按全量库重算
 
+### 7.5 Ultra 7.2 数据源策略锁定 (2026-07-28 下午, 所有者指令)
+
+- 🔒 **锁定层级 (禁止更改)**: sporttery实时数据=绝对核心 → nowscore=主力辅助(不得随意禁用) → 500.com=仅nowscore失败的降级 → sporttery保底
+- `v215_e2e.py`: 新增 `DATA_SOURCE_POLICY` 常量 + `_check_data_source_policy()` 运行时自检 (500.com场次必须有fallback_reason凭证); nowscore导入失败自动重试一次并显著告警
+- `v215_update.py`: fid=0 路径由"500优先"修正为"nowscore优先, 失败才500"
+- `swot_auto.py`: 人工情报 (source以manual开头, 如首回合赛果修正) 不被自动获取覆盖
+- AGENT.md 同步写入锁定策略
+- `inject_first_leg.py`: 首回合赛果情报注入工具 (两回合淘汰赛次回合必用)
+
 ---
 
 *文档更新 — 2026-07-28*

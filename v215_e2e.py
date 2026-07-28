@@ -29,18 +29,78 @@ import sqlite3
 
 # nowscore 辅助数据源 (为体彩预测提供统计增强; 500.com为降级备用)
 # 架构: Sporttery(体彩)是核心预测目标, nowscore/500.com均服务于体彩预测
+
+# ============================================================
+# 🔒 数据源优先级策略 (锁定 — 禁止修改)
+# ============================================================
+# 所有者指令 (2026-07-28): 以下层级为系统硬性约束, 任何改动
+# (代码/逻辑/配置) 都不得违反, 如需变更必须由所有者明确批准:
+#
+#   1. sporttery(体彩)实时数据 = 绝对核心, 不可替换不可绕过
+#      - 预测范围由体彩在售场次决定, 无体彩开盘不预测
+#      - HAD/HHAD赔率 + 固定奖金 = 预测基准, 每次预测/更新必须实时抓取
+#   2. nowscore = 主力辅助数据源, 不得随意禁用
+#      - 统计增强(三合一盘口/近况/交锋/积分)默认必须尝试 nowscore
+#   3. 500.com = 降级备用, 仅在 nowscore 实在抓不到时才允许使用
+#      - 每场 500.com 数据必须带有 fallback_reason 降级凭证
+#   4. sporttery(保底) = 最终兜底 (nowscore+500双失败时)
+#
+# 违反此策略的代码改动视为 bug。
+DATA_SOURCE_POLICY = {
+    'core': 'sporttery',          # 绝对核心, 不可更改
+    'primary_aux': 'nowscore',    # 主力辅助, 不得随意禁用
+    'fallback': '500.com',        # 仅 nowscore 失败时
+    'last_resort': 'sporttery(保底)',
+    'locked': True,               # 🔒 锁定标志
+}
+
+def _check_data_source_policy(all_data):
+    """数据源策略运行时自检 (锁定策略的强制验证)
+
+    规则: 凡 data_source='500.com' 的场次, 必须存在 fallback_reason
+    (证明 nowscore 已被尝试过且失败), 否则打印违规警告。
+    仅告警不中断 — 预测流程完整性优先。
+    """
+    violations = []
+    n_nowscore = n_500 = n_fallback = 0
+    for key, d in all_data.items():
+        ds = d.get('data_source', '') if isinstance(d, dict) else ''
+        if ds == 'nowscore' or ds.startswith('nowscore'):
+            n_nowscore += 1
+        elif ds == '500.com':
+            n_500 += 1
+            if not d.get('fallback_reason'):
+                violations.append(key)
+        elif '保底' in ds:
+            n_fallback += 1
+    print(f"  [策略自检🔒] sporttery核心 | nowscore {n_nowscore}场 | "
+          f"500.com降级 {n_500}场 | 保底 {n_fallback}场")
+    if violations:
+        print(f"  [策略自检🔒] ⚠️ 违规: {violations} 使用了500.com但无nowscore失败凭证!")
+    return violations
+
 try:
     from nowscore_fetch import fetch_nowscore_match_data
     NOWSCORE_AVAILABLE = True
 except ImportError:
-    NOWSCORE_AVAILABLE = False
+    # 🔒 策略要求 nowscore 不得随意禁用: 导入失败时按策略重试一次
+    # (可能是工作目录/sys.path 问题), 仍失败才降级并显著告警
+    try:
+        import sys as _sys
+        _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from nowscore_fetch import fetch_nowscore_match_data
+        NOWSCORE_AVAILABLE = True
+    except ImportError:
+        NOWSCORE_AVAILABLE = False
+        print("  ⚠️⚠️ [策略告警] nowscore_fetch 模块导入失败, 主力辅助数据源不可用!")
+        print("  ⚠️⚠️ 按锁定策略这将全部降级500.com, 请立即检查 nowscore_fetch.py 是否存在/可导入")
 
 # ============================================================
 # Phase 0: 用户输入
 # ============================================================
 TARGET_DATE = None   # ← 不限日期(避免跨天分类问题)
-TARGET_WEEKDAY = "周一"  # ← 指定周几过滤(如"周四"), None=不过滤
-MATCH_NUMBERS = ["201","202"]  # ← 场次编号(后3位)
+TARGET_WEEKDAY = "周三"  # ← 指定周几过滤(如"周四"), None=不过滤
+MATCH_NUMBERS = ["001","002"]  # ← 场次编号(后3位)
 
 # ===== 推荐模式配置 (Pro 3.9/Ultra 1.0) =====
 # mode='prob':  命中率优先(默认), 纯概率排序, EV仅作参考
@@ -4791,6 +4851,9 @@ def main():
             all_data[k] = matches[k]
         print(f"  [保底] {len(dropped)}场无外部数据, 用sporttery赔率基准预测: {dropped}")
         monitor.append(('Phase3-fallback', 0, 0, f"sporttery保底{len(dropped)}场: {dropped}"))
+
+    # 🔒 数据源策略自检 (锁定策略: sporttery核心/nowscore主力/500仅降级)
+    _check_data_source_policy(all_data)
     
     # ===== Phase 4: 七步预测 =====
     t4 = time.time()

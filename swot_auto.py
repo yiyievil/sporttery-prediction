@@ -279,7 +279,14 @@ def fetch_swot_auto(matches, all_data=None):
     for k, v in wrapper.items():
         if k not in ('refreshed_at', 'source', 'matches') and isinstance(v, dict) and 'home_strengths' in v:
             matches_map.setdefault(k, v)
-    matches_map.update(results)
+    # 🔒 人工情报 (source 以 manual 开头, 如首回合赛果修正) 优先级最高,
+    # 不被 leisu/stats 自动获取覆盖 (锁定规则)
+    for k, v in results.items():
+        existing = matches_map.get(k)
+        if isinstance(existing, dict) and str(existing.get('source', '')).startswith('manual'):
+            print(f"  [SWOT] 🔒 {k} 保留人工情报({existing.get('source')}), 跳过自动覆盖")
+            continue
+        matches_map[k] = v
     out = {
         'refreshed_at': time.strftime('%Y-%m-%d %H:%M:%S'),
         'source': 'swot_auto (leisu为主/stats备用)',

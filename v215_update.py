@@ -9,8 +9,14 @@
 
 设计理念:
   - 初盘和历史数据(近况/对赛/战绩)相对固定 → 从上次预测缓存中复用
-  - 即时赔率(体彩HAD/HHAD + 500.com欧指/大小球/初赔)会变化 → 每次更新时重新获取
+  - 即时赔率(体彩HAD/HHAD + 外部欧指/大小球/初赔)会变化 → 每次更新时重新获取
   - 只更新变化的数据，最大化节约token
+
+🔒 数据源策略 (锁定, 与 v215_e2e.py DATA_SOURCE_POLICY 一致, 禁止修改):
+  1. sporttery 实时数据 = 绝对核心 (HAD/HHAD/固定奖金, 每次更新必抓)
+  2. nowscore = 主力辅助数据源, fid=0 场次优先 nowscore 更新
+  3. 500.com = 降级备用, 仅 nowscore 实在抓不到时使用
+  (Ultra 7.2 起: fid=0 路径已由 500优先 修正为 nowscore优先)
 
 节约的HTTP请求:
   ❌ 跳过: fetch_500_fixture_ids (fid已知，~10KB)
@@ -497,53 +503,54 @@ def main():
 
         fid = meta[key].get('fid', 0)
         if not fid:
-            # fid=0: 尝试从fixture_map补全
+            # 🔒 数据源策略 (锁定): fid=0 场次必须优先尝试 nowscore (主力辅助),
+            # 实在抓不到才允许降级 500.com fixture_map 补全
+            old_m = meta[key]
+            match_info = sporttery_matches.get(key, {})
+            if not match_info:
+                match_info = {
+                    'home': old_m.get('home', ''),
+                    'away': old_m.get('away', ''),
+                    'league': old_m.get('league', ''),
+                    'match_date': old_m.get('match_date', ''),
+                    'match_time': old_m.get('match_time', ''),
+                    'weekday': old_m.get('weekday', ''),
+                    'HAD': {}, 'HHAD': {},
+                }
+            # P0-4: 从缓存保留 sporttery_bonus (固定奖金赔率)
+            cached_bonus = cache.get(key, {}).get('sporttery_bonus')
+            if cached_bonus and 'sporttery_bonus' not in match_info:
+                match_info['sporttery_bonus'] = cached_bonus
+            # --- 首选: nowscore 更新 ---
+            try:
+                import nowscore_fetch as nsf
+                ns_data = nsf.fetch_nowscore_match_data(match_info.get('home', ''), match_info.get('away', ''))
+                if ns_data:
+                    ns_data['HAD'] = match_info.get('HAD', {})
+                    ns_data['HHAD'] = match_info.get('HHAD', {})
+                    ns_data['fixture_id'] = 0
+                    # P0-4: 保留 sporttery_bonus
+                    if match_info.get('sporttery_bonus'):
+                        ns_data['sporttery_bonus'] = match_info['sporttery_bonus']
+                    # P1-2: 标记数据源 (策略首选路径)
+                    ns_data['data_source'] = 'nowscore'
+                    # P1-3: 缓存合并方向修正 — 新数据优先, 旧缓存仅填补空缺
+                    cached_shuju = cache.get(key, {}).get('shuju', {})
+                    if cached_shuju:
+                        merged = dict(cached_shuju)  # 以旧缓存为基础
+                        merged.update(ns_data.get('shuju', {}))  # 新数据覆盖旧数据
+                        ns_data['shuju'] = merged
+                    return key, ns_data, True
+                print(f"  [降级] {key} nowscore无数据 → 降级500.com fixture_map补全")
+            except Exception as e:
+                print(f"  [降级] {key} nowscore更新失败: {e} → 降级500.com fixture_map补全")
+            # --- 降级: 500.com fixture_map 补全 (仅nowscore失败后) ---
             fid = fixture_map.get(key, 0)
             if fid:
-                print(f"  [补全] {key} fid: 0 → {fid}")
+                print(f"  [补全] {key} fid: 0 → {fid} (nowscore失败后降级)")
                 meta[key]['fid'] = fid  # 更新meta供后续保存
+                meta[key]['fallback_reason'] = 'nowscore无数据/失败, 降级500.com'
             else:
-                # fixture_map也没有, 尝试用nowscore更新
-                print(f"  [降级] {key} fid=0且fixture_map无此场次, 尝试nowscore更新...")
-                old_m = meta[key]
-                match_info = sporttery_matches.get(key, {})
-                if not match_info:
-                    match_info = {
-                        'home': old_m.get('home', ''),
-                        'away': old_m.get('away', ''),
-                        'league': old_m.get('league', ''),
-                        'match_date': old_m.get('match_date', ''),
-                        'match_time': old_m.get('match_time', ''),
-                        'weekday': old_m.get('weekday', ''),
-                        'HAD': {}, 'HHAD': {},
-                    }
-                # P0-4: 从缓存保留 sporttery_bonus (固定奖金赔率)
-                cached_bonus = cache.get(key, {}).get('sporttery_bonus')
-                if cached_bonus and 'sporttery_bonus' not in match_info:
-                    match_info['sporttery_bonus'] = cached_bonus
-                # 用nowscore获取即时数据
-                try:
-                    import nowscore_fetch as nsf
-                    ns_data = nsf.fetch_nowscore_match_data(match_info.get('home', ''), match_info.get('away', ''))
-                    if ns_data:
-                        ns_data['HAD'] = match_info.get('HAD', {})
-                        ns_data['HHAD'] = match_info.get('HHAD', {})
-                        ns_data['fixture_id'] = 0
-                        # P0-4: 保留 sporttery_bonus
-                        if match_info.get('sporttery_bonus'):
-                            ns_data['sporttery_bonus'] = match_info['sporttery_bonus']
-                        # P1-2/P1-4: 标记数据源和降级原因
-                        ns_data['data_source'] = 'nowscore(降级-fid缺失)'
-                        ns_data['fallback_reason'] = 'fid=0, fixture_map无此场次, 降级nowscore'
-                        # P1-3: 缓存合并方向修正 — 新数据优先, 旧缓存仅填补空缺
-                        cached_shuju = cache.get(key, {}).get('shuju', {})
-                        if cached_shuju:
-                            merged = dict(cached_shuju)  # 以旧缓存为基础
-                            merged.update(ns_data.get('shuju', {}))  # 新数据覆盖旧数据
-                            ns_data['shuju'] = merged
-                        return key, ns_data, True
-                except Exception as e:
-                    print(f"  [降级] {key} nowscore更新失败: {e}")
                 return key, None
 
         # 从sporttery获取即时HAD/HHAD
