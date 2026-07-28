@@ -105,6 +105,17 @@
       "avg_goals": 2.8,
       "avg_home_goals": 1.0,
       "avg_away_goals": 1.8
+    },
+    "美职联": {
+      "h_rate": 0.4578,
+      "d_rate": 0.2169,
+      "a_rate": 0.3253,
+      "avg_goals": 3.2851,
+      "avg_home_goals": 1.7831,
+      "avg_away_goals": 1.502,
+      "home_adv": 1.09,
+      "avg_gd": 0.2811,
+      "sample_size": 249
     }
   },
   "description": "联赛标定参数: H/D/A率、均进球、主场优势 (含英超+三大杯赛)"
