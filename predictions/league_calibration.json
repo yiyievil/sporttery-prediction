@@ -1,0 +1,111 @@
+{
+  "generated_at": "2026-07-26 16:08:14",
+  "total_matches": 1452,
+  "leagues": {
+    "巴甲_2025": {
+      "h_rate": 52.6,
+      "d_rate": 26.3,
+      "a_rate": 21.1,
+      "avg_goals": 3.58,
+      "avg_home_goals": 2.21,
+      "avg_away_goals": 1.37
+    },
+    "巴甲_2026": {
+      "h_rate": 46.7,
+      "d_rate": 40.0,
+      "a_rate": 13.3,
+      "avg_goals": 2.47,
+      "avg_home_goals": 1.47,
+      "avg_away_goals": 1.0
+    },
+    "挪超_2025": {
+      "h_rate": 43.5,
+      "d_rate": 20.2,
+      "a_rate": 32.7,
+      "avg_goals": 3.13,
+      "avg_home_goals": 1.82,
+      "avg_away_goals": 1.31
+    },
+    "挪超_2026": {
+      "h_rate": 42.4,
+      "d_rate": 18.6,
+      "a_rate": 32.2,
+      "avg_goals": 2.97,
+      "avg_home_goals": 1.75,
+      "avg_away_goals": 1.22
+    },
+    "欧冠_2025-26": {
+      "h_rate": 45.6,
+      "d_rate": 18.1,
+      "a_rate": 29.9,
+      "avg_goals": 3.3,
+      "avg_home_goals": 1.95,
+      "avg_away_goals": 1.36
+    },
+    "欧协联_2025-26": {
+      "h_rate": 50.9,
+      "d_rate": 18.2,
+      "a_rate": 18.2,
+      "avg_goals": 2.45,
+      "avg_home_goals": 1.58,
+      "avg_away_goals": 0.87
+    },
+    "欧罗巴_2025-26": {
+      "h_rate": 49.4,
+      "d_rate": 18.2,
+      "a_rate": 31.2,
+      "avg_goals": 2.58,
+      "avg_home_goals": 1.49,
+      "avg_away_goals": 1.09
+    },
+    "瑞超_2025": {
+      "h_rate": 40.1,
+      "d_rate": 23.8,
+      "a_rate": 36.0,
+      "avg_goals": 2.76,
+      "avg_home_goals": 1.45,
+      "avg_away_goals": 1.31
+    },
+    "瑞超_2026": {
+      "h_rate": 43.2,
+      "d_rate": 24.7,
+      "a_rate": 30.9,
+      "avg_goals": 3.17,
+      "avg_home_goals": 1.84,
+      "avg_away_goals": 1.33
+    },
+    "芬超_2025": {
+      "h_rate": 41.0,
+      "d_rate": 24.4,
+      "a_rate": 32.1,
+      "avg_goals": 3.5,
+      "avg_home_goals": 1.81,
+      "avg_away_goals": 1.69
+    },
+    "芬超_2026": {
+      "h_rate": 55.0,
+      "d_rate": 25.0,
+      "a_rate": 20.0,
+      "avg_goals": 2.71,
+      "avg_home_goals": 1.64,
+      "avg_away_goals": 1.08
+    },
+    "英超_2025-26": {
+      "h_rate": 41.2,
+      "d_rate": 27.4,
+      "a_rate": 29.7,
+      "avg_goals": 2.79,
+      "avg_home_goals": 1.55,
+      "avg_away_goals": 1.24
+    },
+    "韩国杯_2025": {
+      "h_rate": 0.0,
+      "d_rate": 20.0,
+      "a_rate": 80.0,
+      "avg_goals": 2.8,
+      "avg_home_goals": 1.0,
+      "avg_away_goals": 1.8
+    }
+  },
+  "description": "联赛标定参数: H/D/A率、均进球、主场优势 (含英超+三大杯赛)"
+}
