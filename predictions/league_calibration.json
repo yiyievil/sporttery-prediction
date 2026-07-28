@@ -2,109 +2,27 @@
   "generated_at": "2026-07-26 16:08:14",
   "total_matches": 1452,
   "leagues": {
-    "巴甲_2025": {
-      "h_rate": 52.6,
-      "d_rate": 26.3,
-      "a_rate": 21.1,
-      "avg_goals": 3.58,
-      "avg_home_goals": 2.21,
-      "avg_away_goals": 1.37
+    "英超": {
+      "h_rate": 0.4188,
+      "d_rate": 0.2644,
+      "a_rate": 0.3168,
+      "avg_goals": 2.7827,
+      "avg_home_goals": 1.5131,
+      "avg_away_goals": 1.2696,
+      "home_adv": 1.092,
+      "avg_gd": 0.2435,
+      "sample_size": 382
     },
-    "巴甲_2026": {
-      "h_rate": 46.7,
-      "d_rate": 40.0,
-      "a_rate": 13.3,
-      "avg_goals": 2.47,
-      "avg_home_goals": 1.47,
-      "avg_away_goals": 1.0
-    },
-    "挪超_2025": {
-      "h_rate": 43.5,
-      "d_rate": 20.2,
-      "a_rate": 32.7,
-      "avg_goals": 3.13,
-      "avg_home_goals": 1.82,
-      "avg_away_goals": 1.31
-    },
-    "挪超_2026": {
-      "h_rate": 42.4,
-      "d_rate": 18.6,
-      "a_rate": 32.2,
-      "avg_goals": 2.97,
-      "avg_home_goals": 1.75,
-      "avg_away_goals": 1.22
-    },
-    "欧冠_2025-26": {
-      "h_rate": 45.6,
-      "d_rate": 18.1,
-      "a_rate": 29.9,
-      "avg_goals": 3.3,
-      "avg_home_goals": 1.95,
-      "avg_away_goals": 1.36
-    },
-    "欧协联_2025-26": {
-      "h_rate": 50.9,
-      "d_rate": 18.2,
-      "a_rate": 18.2,
-      "avg_goals": 2.45,
-      "avg_home_goals": 1.58,
-      "avg_away_goals": 0.87
-    },
-    "欧罗巴_2025-26": {
-      "h_rate": 49.4,
-      "d_rate": 18.2,
-      "a_rate": 31.2,
-      "avg_goals": 2.58,
-      "avg_home_goals": 1.49,
-      "avg_away_goals": 1.09
-    },
-    "瑞超_2025": {
-      "h_rate": 40.1,
-      "d_rate": 23.8,
-      "a_rate": 36.0,
-      "avg_goals": 2.76,
-      "avg_home_goals": 1.45,
-      "avg_away_goals": 1.31
-    },
-    "瑞超_2026": {
-      "h_rate": 43.2,
-      "d_rate": 24.7,
-      "a_rate": 30.9,
-      "avg_goals": 3.17,
-      "avg_home_goals": 1.84,
-      "avg_away_goals": 1.33
-    },
-    "芬超_2025": {
-      "h_rate": 41.0,
-      "d_rate": 24.4,
-      "a_rate": 32.1,
-      "avg_goals": 3.5,
-      "avg_home_goals": 1.81,
-      "avg_away_goals": 1.69
-    },
-    "芬超_2026": {
-      "h_rate": 55.0,
-      "d_rate": 25.0,
-      "a_rate": 20.0,
-      "avg_goals": 2.71,
-      "avg_home_goals": 1.64,
-      "avg_away_goals": 1.08
-    },
-    "英超_2025-26": {
-      "h_rate": 41.2,
-      "d_rate": 27.4,
-      "a_rate": 29.7,
-      "avg_goals": 2.79,
-      "avg_home_goals": 1.55,
-      "avg_away_goals": 1.24
-    },
-    "韩国杯_2025": {
-      "h_rate": 0.0,
-      "d_rate": 20.0,
-      "a_rate": 80.0,
-      "avg_goals": 2.8,
-      "avg_home_goals": 1.0,
-      "avg_away_goals": 1.8
+    "瑞超": {
+      "h_rate": 0.4141,
+      "d_rate": 0.2422,
+      "a_rate": 0.3438,
+      "avg_goals": 2.8984,
+      "avg_home_goals": 1.582,
+      "avg_away_goals": 1.3164,
+      "home_adv": 1.096,
+      "avg_gd": 0.2656,
+      "sample_size": 256
     },
     "美职联": {
       "h_rate": 0.4578,
@@ -116,7 +34,330 @@
       "home_adv": 1.09,
       "avg_gd": 0.2811,
       "sample_size": 249
+    },
+    "挪超": {
+      "h_rate": 0.4513,
+      "d_rate": 0.2035,
+      "a_rate": 0.3451,
+      "avg_goals": 3.0531,
+      "avg_home_goals": 1.7212,
+      "avg_away_goals": 1.3319,
+      "home_adv": 1.137,
+      "avg_gd": 0.3894,
+      "sample_size": 226
+    },
+    "欧冠": {
+      "h_rate": 0.493,
+      "d_rate": 0.1907,
+      "a_rate": 0.3163,
+      "avg_goals": 3.2372,
+      "avg_home_goals": 1.8837,
+      "avg_away_goals": 1.3535,
+      "home_adv": 1.18,
+      "avg_gd": 0.5302,
+      "sample_size": 215
+    },
+    "欧罗巴": {
+      "h_rate": 0.5028,
+      "d_rate": 0.1823,
+      "a_rate": 0.3149,
+      "avg_goals": 2.5801,
+      "avg_home_goals": 1.4751,
+      "avg_away_goals": 1.105,
+      "home_adv": 1.155,
+      "avg_gd": 0.3702,
+      "sample_size": 181
+    },
+    "芬超": {
+      "h_rate": 0.4872,
+      "d_rate": 0.25,
+      "a_rate": 0.2628,
+      "avg_goals": 3.1218,
+      "avg_home_goals": 1.7308,
+      "avg_away_goals": 1.391,
+      "home_adv": 1.115,
+      "avg_gd": 0.3397,
+      "sample_size": 156
+    },
+    "意甲": {
+      "h_rate": 0.3923,
+      "d_rate": 0.2077,
+      "a_rate": 0.4,
+      "avg_goals": 2.4231,
+      "avg_home_goals": 1.2308,
+      "avg_away_goals": 1.1923,
+      "home_adv": 1.05,
+      "avg_gd": 0.0385,
+      "sample_size": 130
+    },
+    "西甲": {
+      "h_rate": 0.4492,
+      "d_rate": 0.3136,
+      "a_rate": 0.2373,
+      "avg_goals": 2.6864,
+      "avg_home_goals": 1.5678,
+      "avg_away_goals": 1.1186,
+      "home_adv": 1.184,
+      "avg_gd": 0.4492,
+      "sample_size": 118
+    },
+    "德甲": {
+      "h_rate": 0.3478,
+      "d_rate": 0.2717,
+      "a_rate": 0.3804,
+      "avg_goals": 3.1739,
+      "avg_home_goals": 1.6087,
+      "avg_away_goals": 1.5652,
+      "home_adv": 1.05,
+      "avg_gd": 0.0435,
+      "sample_size": 92
+    },
+    "韩职": {
+      "h_rate": 0.3373,
+      "d_rate": 0.3012,
+      "a_rate": 0.3614,
+      "avg_goals": 2.6024,
+      "avg_home_goals": 1.2771,
+      "avg_away_goals": 1.3253,
+      "home_adv": 1.05,
+      "avg_gd": -0.0482,
+      "sample_size": 83
+    },
+    "法甲": {
+      "h_rate": 0.44,
+      "d_rate": 0.2667,
+      "a_rate": 0.2933,
+      "avg_goals": 2.5333,
+      "avg_home_goals": 1.36,
+      "avg_away_goals": 1.1733,
+      "home_adv": 1.077,
+      "avg_gd": 0.1867,
+      "sample_size": 75
+    },
+    "英冠": {
+      "h_rate": 0.4306,
+      "d_rate": 0.2917,
+      "a_rate": 0.2778,
+      "avg_goals": 2.7778,
+      "avg_home_goals": 1.5139,
+      "avg_away_goals": 1.2639,
+      "home_adv": 1.094,
+      "avg_gd": 0.25,
+      "sample_size": 72
+    },
+    "日职": {
+      "h_rate": 0.4714,
+      "d_rate": 0.2571,
+      "a_rate": 0.2714,
+      "avg_goals": 2.3571,
+      "avg_home_goals": 1.4,
+      "avg_away_goals": 0.9571,
+      "home_adv": 1.209,
+      "avg_gd": 0.4429,
+      "sample_size": 70
+    },
+    "葡超": {
+      "h_rate": 0.3704,
+      "d_rate": 0.3333,
+      "a_rate": 0.2963,
+      "avg_goals": 2.9074,
+      "avg_home_goals": 1.4815,
+      "avg_away_goals": 1.4259,
+      "home_adv": 1.05,
+      "avg_gd": 0.0556,
+      "sample_size": 54
+    },
+    "荷甲": {
+      "h_rate": 0.3846,
+      "d_rate": 0.2692,
+      "a_rate": 0.3462,
+      "avg_goals": 3.0962,
+      "avg_home_goals": 1.5,
+      "avg_away_goals": 1.5962,
+      "home_adv": 1.05,
+      "avg_gd": -0.0962,
+      "sample_size": 52
+    },
+    "德乙": {
+      "h_rate": 0.3725,
+      "d_rate": 0.2941,
+      "a_rate": 0.3333,
+      "avg_goals": 3.0,
+      "avg_home_goals": 1.4902,
+      "avg_away_goals": 1.5098,
+      "home_adv": 1.05,
+      "avg_gd": -0.0196,
+      "sample_size": 51
+    },
+    "欧协联": {
+      "h_rate": 0.5686,
+      "d_rate": 0.1961,
+      "a_rate": 0.2353,
+      "avg_goals": 2.5686,
+      "avg_home_goals": 1.5686,
+      "avg_away_goals": 1.0,
+      "home_adv": 1.252,
+      "avg_gd": 0.5686,
+      "sample_size": 51
+    },
+    "国际赛": {
+      "h_rate": 0.4681,
+      "d_rate": 0.3191,
+      "a_rate": 0.2128,
+      "avg_goals": 2.4894,
+      "avg_home_goals": 1.5106,
+      "avg_away_goals": 0.9787,
+      "home_adv": 1.242,
+      "avg_gd": 0.5319,
+      "sample_size": 47
+    },
+    "世界杯": {
+      "h_rate": 0.3846,
+      "d_rate": 0.359,
+      "a_rate": 0.2564,
+      "avg_goals": 2.6923,
+      "avg_home_goals": 1.4359,
+      "avg_away_goals": 1.2564,
+      "home_adv": 1.069,
+      "avg_gd": 0.1795,
+      "sample_size": 39
+    },
+    "澳超": {
+      "h_rate": 0.3421,
+      "d_rate": 0.3684,
+      "a_rate": 0.2895,
+      "avg_goals": 2.8421,
+      "avg_home_goals": 1.5,
+      "avg_away_goals": 1.3421,
+      "home_adv": 1.057,
+      "avg_gd": 0.1579,
+      "sample_size": 38
+    },
+    "巴甲": {
+      "h_rate": 0.4595,
+      "d_rate": 0.3784,
+      "a_rate": 0.1622,
+      "avg_goals": 3.0541,
+      "avg_home_goals": 1.8378,
+      "avg_away_goals": 1.2162,
+      "home_adv": 1.229,
+      "avg_gd": 0.6216,
+      "sample_size": 37
     }
   },
-  "description": "联赛标定参数: H/D/A率、均进球、主场优势 (含英超+三大杯赛)"
+  "description": "联赛标定参数: H/D/A率、均进球、主场优势 (含英超+三大杯赛)",
+  "global_odds_calibration": {
+    "1.0-1.5": {
+      "implied": 0.6816,
+      "actual": 0.6944,
+      "bias": 0.0128,
+      "sample": 648
+    },
+    "1.5-2.0": {
+      "implied": 0.5203,
+      "actual": 0.5,
+      "bias": -0.0203,
+      "sample": 768
+    },
+    "2.0-2.5": {
+      "implied": 0.4011,
+      "actual": 0.4257,
+      "bias": 0.0247,
+      "sample": 505
+    },
+    "2.5-3.5": {
+      "implied": 0.3054,
+      "actual": 0.2633,
+      "bias": -0.0422,
+      "sample": 528
+    },
+    "3.5+": {
+      "implied": 0.186,
+      "actual": 0.1798,
+      "bias": -0.0063,
+      "sample": 484
+    }
+  },
+  "draw_calibration": {
+    "2.5-3.0": {
+      "implied": 0.3109,
+      "actual": 0.3664,
+      "bias": 0.0555,
+      "sample": 262
+    },
+    "3.0-3.3": {
+      "implied": 0.2817,
+      "actual": 0.2681,
+      "bias": -0.0136,
+      "sample": 552
+    },
+    "3.3-3.5": {
+      "implied": 0.2619,
+      "actual": 0.2902,
+      "bias": 0.0283,
+      "sample": 441
+    },
+    "3.5-4.0": {
+      "implied": 0.2398,
+      "actual": 0.2573,
+      "bias": 0.0175,
+      "sample": 851
+    },
+    "4.0+": {
+      "implied": 0.1875,
+      "actual": 0.174,
+      "bias": -0.0135,
+      "sample": 822
+    }
+  },
+  "odds_change_signal": {
+    "description": "体彩胜赔变动方向与主胜率关系",
+    "drop": {
+      "sample": 1249,
+      "h_rate": 0.49,
+      "note": "胜赔下降时主胜率"
+    },
+    "rise": {
+      "sample": 1404,
+      "h_rate": 0.36,
+      "note": "胜赔上升时主胜率"
+    },
+    "unchanged": {
+      "sample": 166,
+      "h_rate": 0.46,
+      "note": "胜赔不变时主胜率"
+    },
+    "magnitude": {
+      "drop_small": {
+        "range": "<0.1",
+        "h_rate": 0.552,
+        "sample": 744
+      },
+      "drop_medium": {
+        "range": "0.1-0.3",
+        "h_rate": 0.477,
+        "sample": 398
+      },
+      "drop_large": {
+        "range": ">0.3",
+        "h_rate": 0.211,
+        "sample": 107
+      },
+      "rise_small": {
+        "range": "<0.1",
+        "h_rate": 0.524,
+        "sample": 529
+      },
+      "rise_medium": {
+        "range": "0.1-0.3",
+        "h_rate": 0.308,
+        "sample": 504
+      },
+      "rise_large": {
+        "range": ">0.3",
+        "h_rate": 0.211,
+        "sample": 371
+      }
+    }
+  }
 }
