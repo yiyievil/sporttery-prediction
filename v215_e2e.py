@@ -2471,7 +2471,7 @@ def assess_data_quality(data):
 # 数据源: predictions/historical_odds.db (680场 2025-2026赛季)
 # 自动回退: 无标定数据时使用经验值, 不影响原有逻辑
 # ============================================================
-import sqlite3 as _sqlite3
+# (sqlite3 已在文件顶部导入, 不重复导入)
 
 _CALIBRATION_DB = os.path.join(
     os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__))),
@@ -2499,7 +2499,7 @@ def _load_league_calibration():
         return None
     
     try:
-        conn = _sqlite3.connect(_CALIBRATION_DB)
+        conn = sqlite3.connect(_CALIBRATION_DB)
         c = conn.cursor()
         
         leagues = {}
@@ -2827,16 +2827,11 @@ def calibrate_shin_probs(probs, league, home_odds):
     if abs(bias) < 0.01:  # 偏差<1pp不调整
         return probs
     
-    # 修正主胜概率, 平局/客胜按比例补偿
+    # 修正主胜概率, 平局承担30%, 客胜承担70% (双向同一补偿比例, 主胜增减主要从客胜补)
     pw, pd, pl = probs
     pw_new = pw + bias
-    # 补偿: 平局承担30%, 客胜承担70% (主胜增加→主要从客胜减)
-    if bias > 0:
-        pd_new = pd - bias * 0.3
-        pl_new = pl - bias * 0.7
-    else:
-        pd_new = pd - bias * 0.3
-        pl_new = pl - bias * 0.7
+    pd_new = pd - bias * 0.3
+    pl_new = pl - bias * 0.7
     
     # 边界保护
     pw_new = max(0.05, min(0.90, pw_new))
@@ -2891,16 +2886,12 @@ def calibrate_global_odds_bias(probs, home_odds):
     if label == '2.5-3.5':
         return probs
     bias = bias * 0.5
-    
+
+    # 修正主胜概率, 平局承担30%, 客胜承担70% (双向同一补偿比例)
     pw, pd, pl = probs
     pw_new = pw + bias
-    # 补偿: 平局30%, 客胜70%
-    if bias > 0:
-        pd_new = pd - bias * 0.3
-        pl_new = pl - bias * 0.7
-    else:
-        pd_new = pd - bias * 0.3
-        pl_new = pl - bias * 0.7
+    pd_new = pd - bias * 0.3
+    pl_new = pl - bias * 0.7
     
     # 边界保护
     pw_new = max(0.05, min(0.90, pw_new))
@@ -2951,33 +2942,26 @@ def calibrate_odds_change_signal(probs, init_odds, final_odds):
         return probs
     
     pw, pd, pl = probs
-    
+
     # 根据变动方向和幅度计算修正量
-    # 基准主胜率约43% (全库均值)
-    base_h_rate = 0.43
-    
+    # Ultra 7.1: 目标主胜率从标定库 odds_change_signal.magnitude 动态读取
+    # (数据库增量更新后自动适配), 硬编码值仅作无数据/小样本回退
+    mag = sig.get('magnitude', {})
     if change < 0:
-        # 胜赔下降
-        if abs_change < 0.1:
-            # 微调下降: 主胜率55.2%, 偏差+12.2pp
-            target_h = 0.552
-        elif abs_change < 0.3:
-            # 小调下降: 主胜率47.7%, 偏差+4.7pp
-            target_h = 0.477
-        else:
-            # 大调下降: 反向信号! 主胜率21.1%, 偏差-21.9pp
-            target_h = 0.211
+        # 胜赔下降: 微调=最佳主胜信号, 大幅下降=反向信号
+        mag_key = 'drop_small' if abs_change < 0.1 else ('drop_medium' if abs_change < 0.3 else 'drop_large')
+        fallback_h = 0.552 if abs_change < 0.1 else (0.477 if abs_change < 0.3 else 0.211)
     else:
-        # 胜赔上升
-        if abs_change < 0.1:
-            # 微调上升: 主胜率52.4%, 偏差+9.4pp (偏中性偏正)
-            target_h = 0.524
-        elif abs_change < 0.3:
-            # 小调上升: 主胜率30.8%, 偏差-12.2pp
-            target_h = 0.308
-        else:
-            # 大调上升: 主胜率21.1%, 偏差-21.9pp
-            target_h = 0.211
+        # 胜赔上升: 幅度越大越看空主队
+        mag_key = 'rise_small' if abs_change < 0.1 else ('rise_medium' if abs_change < 0.3 else 'rise_large')
+        fallback_h = 0.524 if abs_change < 0.1 else (0.308 if abs_change < 0.3 else 0.211)
+    mag_entry = mag.get(mag_key)
+    target_h = mag_entry['h_rate'] if mag_entry and mag_entry.get('sample', 0) >= 50 else fallback_h
+
+    # 基准主胜率: 优先用标定库方向样本加权均值, 回退0.43 (全库经验值)
+    _dirs = [sig.get(k) for k in ('drop', 'rise', 'unchanged')]
+    _n = sum(d['sample'] for d in _dirs if d and d.get('sample'))
+    base_h_rate = (sum(d['h_rate'] * d['sample'] for d in _dirs if d and d.get('sample')) / _n) if _n >= 200 else 0.43
     
     # 计算偏差 (目标 - 基准)
     delta = target_h - base_h_rate
@@ -2997,15 +2981,10 @@ def calibrate_odds_change_signal(probs, init_odds, final_odds):
     if abs(correction) < 0.005:
         return probs
     
-    # 应用修正
+    # 应用修正: 平局承担35%, 客胜承担65% (双向同一补偿比例)
     pw_new = pw + correction
-    # 从平局和客胜中按比例扣除
-    if correction > 0:
-        pd_new = pd - correction * 0.35
-        pl_new = pl - correction * 0.65
-    else:
-        pd_new = pd - correction * 0.35
-        pl_new = pl - correction * 0.65
+    pd_new = pd - correction * 0.35
+    pl_new = pl - correction * 0.65
     
     # 边界保护
     pw_new = max(0.05, min(0.90, pw_new))
@@ -3019,10 +2998,13 @@ def calibrate_odds_change_signal(probs, init_odds, final_odds):
 # 动态主场优势: 不同联赛主场优势不同
 # Ultra 6.6: 优先使用历史标定值, 回退经验值
 LEAGUE_HOME_ADV = {
-    '韩职': 1.10, '韩K': 1.10,
-    '日职': 1.12, '日乙': 1.12,
-    '英超': 1.15, '西甲': 1.18, '德甲': 1.12,
-    '意甲': 1.15, '法甲': 1.13,
+    # Ultra 7.1: 回退值按 3099 场全量库重算 (仅数据库不可用时生效)
+    '韩职': 1.05, '韩K': 1.05,
+    '日职': 1.21, '日乙': 1.15,
+    '英超': 1.11, '西甲': 1.20, '德甲': 1.05,
+    '意甲': 1.05, '法甲': 1.06, '英冠': 1.09,
+    '瑞超': 1.10, '挪超': 1.18, '芬超': 1.12,
+    '美职': 1.09, '美职联': 1.09, '巴甲': 1.23,
     '中超': 1.20, '亚冠': 1.15,
 }
 
@@ -3035,12 +3017,14 @@ if _CALIBRATION:
 # Ultra 6.4: 联赛历史平局率先验 (经验值, 用于平局校准目标)
 # Ultra 6.6: 优先使用历史标定值
 LEAGUE_DRAW_RATE = {
-    '韩职': 0.26, '韩K': 0.26,
-    '日职': 0.25, '日乙': 0.26,
-    '芬超': 0.24, '瑞超': 0.25, '挪超': 0.24, '丹超': 0.26,
-    '美职': 0.25, '巴甲': 0.27,
-    '英超': 0.25, '西甲': 0.26, '德甲': 0.24,
-    '意甲': 0.27, '法甲': 0.26,
+    # Ultra 7.1: 回退值按 3099 场全量库重算 (仅数据库不可用时生效)
+    '韩职': 0.30, '韩K': 0.30,
+    '日职': 0.26, '日乙': 0.29,
+    '芬超': 0.25, '瑞超': 0.24, '挪超': 0.19, '丹超': 0.26,
+    '美职': 0.22, '美职联': 0.22, '巴甲': 0.30,
+    '英超': 0.26, '西甲': 0.31, '德甲': 0.27,
+    '意甲': 0.21, '法甲': 0.26, '英冠': 0.29,
+    '欧冠': 0.18, '欧罗巴': 0.18,
     '中超': 0.26, '亚冠': 0.25,
     'default': 0.25,
 }
@@ -3052,11 +3036,16 @@ if _CALIBRATION:
             LEAGUE_DRAW_RATE[_lg] = _data['d_rate']
 
 # Ultra 6.6: 联赛特定场均进球 (替代硬编码 LEAGUE_AVG_GF=1.3)
-LEAGUE_AVG_GF_MAP = {}
+# 语义区分 (Ultra 7.1 修复): 标定库 avg_goals 是"全场总进球"(主+客, 约2.4~3.3),
+# 而贝叶斯收缩先验需要"单队场均进球"(约1.2~1.65, 与原硬编码1.3同语义) → 必须减半;
+# 降级路径 total_goals_base 才是全场总进球语义 → 用 LEAGUE_AVG_GOALS_MAP。
+LEAGUE_AVG_GF_MAP = {}     # 单队场均进球 — bayesian_shrinkage 先验
+LEAGUE_AVG_GOALS_MAP = {}  # 全场总进球 — 降级路径总λ基数
 if _CALIBRATION:
     for _lg, _data in _CALIBRATION['leagues'].items():
         if _data['sample_size'] >= 20:
-            LEAGUE_AVG_GF_MAP[_lg] = _data['avg_goals']
+            LEAGUE_AVG_GF_MAP[_lg] = round(_data['avg_goals'] / 2, 4)
+            LEAGUE_AVG_GOALS_MAP[_lg] = _data['avg_goals']
 
 
 # ============================================================
@@ -3610,8 +3599,7 @@ def post_fusion_hhad_draw_calibration(probs, had, hhad, handicap, league):
     # 先精确匹配, 再尝试去后缀匹配
     lg_hcap = hcap_data.get('by_league', {}).get(league)
     if not lg_hcap and league:
-        import re as _re
-        lg_short = _re.sub(r'_\d{4}(-\d{2})?$', '', league)
+        lg_short = re.sub(r'_\d{4}(-\d{2})?$', '', league)
         if lg_short != league:
             lg_hcap = hcap_data.get('by_league', {}).get(lg_short)
 
@@ -4089,7 +4077,7 @@ def predict_match(match_num, data):
         lam_a /= home_adv  # 除法: 客队减弱与主队增强对称
     else:
         # 降级: 从赔率隐含概率推算，总进球基数由市场盘口决定
-        total_goals_base = LEAGUE_AVG_GF_MAP.get(sp.get('league', ''), market_goal_line)
+        total_goals_base = LEAGUE_AVG_GOALS_MAP.get(sp.get('league', ''), market_goal_line)
         if had_min_idx == 0:
             lam_h = total_goals_base * p1_w / (p1_w + p1_l) * 1.1
             lam_a = total_goals_base * p1_l / (p1_w + p1_l) * 0.9

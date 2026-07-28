@@ -8,7 +8,6 @@
 import json
 import os
 import re
-import math
 from datetime import datetime
 
 # Ultra-Opt: 通用路径 — 优先 SPORTTERY_WORKSPACE 环境变量, 缺省脚本所在目录

@@ -214,7 +214,7 @@ python v215_verify.py "2026-07-26 201,202,203,204"
 
 | 文件 | 说明 |
 |------|------|
-| `v215_e2e.py` | 核心预测引擎 (Ultra 6.10) |
+| `v215_e2e.py` | 核心预测引擎 (Ultra 7.1) |
 | `v215_verify.py` | 赛果验证+回归分析 |
 | `v215_simulate.py` | M串N模拟 |
 | `v215_update.py` | 数据更新 |
@@ -226,11 +226,42 @@ python v215_verify.py "2026-07-26 201,202,203,204"
 | `msn_simulator.py` | M串N容错模拟器 |
 | `leisu_session.py` | leisu会话工具 |
 | `nowscore_fetch.py` | nowscore数据获取 |
-| `predictions/historical_odds.db` | 历史数据库 (1452场) |
-| `predictions/league_calibration.json` | 联赛标定参数 |
-| `predictions/advanced_calibration.json` | 高级标定参数 |
+| `predictions/historical_odds.db` | 历史数据库 (3099场 + 62294条赔率变动) |
+| `predictions/league_calibration.json` | 联赛标定参数 (静态快照, 引擎实际从DB实时重算) |
+| `predictions/advanced_calibration.json` | 高级标定参数 (基于1452场, 待按全量库重算) |
 | `predictions/regression.db` | 回归验证数据库 |
 
 ---
 
-*文档结束 — 2026-07-27 12:00*
+## 七、Ultra 7.0 ~ 7.1 (2026-07-28)
+
+### 7.1 全量数据采集 (Ultra 7.0 数据基础)
+
+- `historical_odds.db`: 1452 → 3099 场 (2025-01 ~ 2026-07 全量体彩开盘), 新增 `odds_change_history` 表 62294 条赔率变动 (3055场)
+- 新增联赛: 意甲/西甲/德甲/法甲/韩职/日职/英冠/葡超/荷甲/德乙/美职联等
+- 采集脚本: `collect_odds_history.py` / `collect_mls.py` / `collect_mls_500.py` / `analyze_mls.py`
+
+### 7.2 经验校准函数 (Ultra 7.0)
+
+- `calibrate_global_odds_bias()`: 全局赔率区间偏差校准 (2.5-3.5区间跳过, 其余50%修正)
+- `calibrate_odds_change_signal()`: 初终赔变动信号校准 (微调15%/中等20%/大幅10%)
+- 回测 (2933场): 命中率 52.54% → 52.88% (全局偏差), 对数损失 0.9916 → 0.9911
+
+### 7.3 Ultra 7.1 修复 (2026-07-28 下午)
+
+- **严重**: 14:13 merge 将 25MB 全量库回退为 1452 场旧库 → 已从 git 历史 (8cda386) 恢复
+- **高影响 bug 修复**: `LEAGUE_AVG_GF_MAP` 语义混淆 — 原把"全场总进球"(2.4~3.3)当作贝叶斯收缩的"单队λ先验"(应~1.3), 导致 λ 系统性高估; 拆分为 `LEAGUE_AVG_GF_MAP`(单队, avg_goals/2) + `LEAGUE_AVG_GOALS_MAP`(全场)
+- `calibrate_odds_change_signal` 目标主胜率改为从标定库动态读取 (原硬编码, 数据更新不生效)
+- 回退参数表按 3099 场重算, 补 `美职联` 别名
+- 4个采集/回测脚本 `/workspace` 硬编码路径 → `SPORTTERY_WORKSPACE` 通用约定
+- 清理: 重复 sqlite3 导入 / 4处无用导入 / 3处同分支冗余 if-else / 函数内重复 import re
+
+### 7.4 待办参数建议 (见对话报告, 未应用)
+
+- home_adv clamp [1.05,1.35] 过窄 (7个联赛原始值<1.05)
+- 赔率变动 rise_medium/rise_large 修正回测为负收益
+- advanced_calibration.json 仍基于1452场, 建议按全量库重算
+
+---
+
+*文档更新 — 2026-07-28*

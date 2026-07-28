@@ -20,7 +20,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from difflib import SequenceMatcher
 import requests
 
-DB_PATH = '/workspace/sporttery/predictions/historical_odds.db'
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
 
 HEADERS_500 = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',

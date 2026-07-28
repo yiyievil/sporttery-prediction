@@ -20,7 +20,8 @@ import requests
 # ============================================================
 # 配置
 # ============================================================
-DB_PATH = '/workspace/sporttery/predictions/historical_odds.db'
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
 MLS_LEAGUE_ID = '50'
 MLS_LEAGUE_NAME = '美职联'  # 体彩简称
 

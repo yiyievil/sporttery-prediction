@@ -13,15 +13,15 @@
 import sqlite3
 import json
 import math
-import sys
 import os
 from collections import defaultdict
 
 # ============================================================
-# 加载校准数据
+# 加载校准数据 (路径通用: SPORTTERY_WORKSPACE 或脚本所在目录)
 # ============================================================
-CALIBRATION_PATH = '/workspace/sporttery/predictions/league_calibration.json'
-DB_PATH = '/workspace/sporttery/predictions/historical_odds.db'
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__)))
+CALIBRATION_PATH = os.path.join(_WORKSPACE, 'predictions', 'league_calibration.json')
+DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
 
 with open(CALIBRATION_PATH, 'r', encoding='utf-8') as f:
     CALIBRATION = json.load(f)
@@ -542,7 +542,7 @@ def main():
         'combined_hit_rate': results['combined']['correct'] / results['combined']['total'],
     }
     
-    output_path = '/workspace/sporttery/predictions/backtest_results.json'
+    output_path = os.path.join(_WORKSPACE, 'predictions', 'backtest_results.json')
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
     print(f"\n  结果已保存到: {output_path}")

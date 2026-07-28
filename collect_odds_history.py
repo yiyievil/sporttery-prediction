@@ -24,12 +24,13 @@ import json
 import re
 from datetime import datetime, timedelta
 import requests
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
 
 # ============================================================
 # 配置
 # ============================================================
-DB_PATH = '/workspace/sporttery/predictions/historical_odds.db'
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
 RESULT_URL = "https://webapi.sporttery.cn/gateway/uniform/football/getUniformMatchResultV1.qry"
 BONUS_URL = "https://webapi.sporttery.cn/gateway/uniform/football/getFixedBonusV1.qry"
 

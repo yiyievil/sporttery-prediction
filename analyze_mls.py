@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """验证美职联校准参数并输出分析结果"""
-import sqlite3, json
+import sqlite3, json, os
 
-DB_PATH = '/workspace/sporttery/predictions/historical_odds.db'
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
 conn = sqlite3.connect(DB_PATH)
 c = conn.cursor()
 
@@ -124,8 +125,7 @@ for row in c.fetchall():
 # 7. 更新 league_calibration.json
 print(f"\n  【更新 league_calibration.json】")
 # 读取现有的校准文件
-import os
-cal_path = '/workspace/sporttery/predictions/league_calibration.json'
+cal_path = os.path.join(_WORKSPACE, 'predictions', 'league_calibration.json')
 if os.path.exists(cal_path):
     with open(cal_path, 'r', encoding='utf-8') as f:
         cal_data = json.load(f)
