@@ -1,22 +1,25 @@
 # -*- coding: utf-8 -*-
-"""杯赛首回合大比分惩罚机制 (Ultra 7.4)
+"""杯赛首回合大比分惩罚机制 (Ultra 7.4 → 7.6 实证修正版)
 
 仅适用于有主客场两回合制的杯赛（欧冠/欧罗巴/欧协联/亚冠等），联赛不适用。
 
 核心逻辑:
 1. 从SWOT数据中解析首回合比分
-2. 当首回合分差≥3球时，落后方λ自动下调30-50%
+2. 当首回合分差≥3球时，落后方λ下调，领先方λ对称下调(轮换/战意松)
 3. 置信度封顶★★★★ (4.0星)，防止过度自信
+
+Ultra 7.6 实证修正 (2026-07-29, 欧战556场回测):
+- 旧参数: 落后方 λ×0.70 (3球) 每球+10% 上限-50%, 不惩罚领先方
+- 实证(剔除球队实力, 相对自身基线):
+    净负3+后下一场进球 = 自身均值的 0.910 (n=78)
+    净胜3+后下一场进球 = 自身均值的 0.926 (n=107)
+- 新参数: 落后方 ×0.90 (3球) 每球+3% 上限-15%; 领先方 ×0.95 (新增对称)
+- 置信度封顶★★★★ 保留 (次回合战术不确定性难建模)
 
 触发条件:
 - 联赛名匹配杯赛列表
 - SWOT文本中包含"首回合X-Y"比分信息
 - 首回合分差≥3球
-
-惩罚力度:
-- 3球分差: λ下调30%
-- 4球分差: λ下调40%
-- 5+球分差: λ下调50%
 """
 
 import json
@@ -44,11 +47,12 @@ CUP_LEAGUES = {
     '非洲冠', '非洲冠军联赛',
 }
 
-# ===== 惩罚参数 =====
+# ===== 惩罚参数 (Ultra 7.6 实证修正: 欧战556场回测标定) =====
 PENALTY_THRESHOLD = 3       # 首回合分差≥3球触发
-PENALTY_MIN = 0.30          # 3球分差: 下调30%
-PENALTY_PER_GOAL = 0.10     # 每多1球追加10%
-PENALTY_MAX = 0.50          # 上限50%
+PENALTY_MIN = 0.10          # 3球分差: 落后方下调10% (实证-9%)
+PENALTY_PER_GOAL = 0.03     # 每多1球追加3% (旧版10%超调)
+PENALTY_MAX = 0.15          # 落后方上限15%
+LEADER_PENALTY = 0.05       # 领先方对称下调5% (实证-7%, 轮换/战意松)
 CONFIDENCE_CAP = 4.0        # 置信度封顶 ★★★★
 
 
@@ -172,9 +176,10 @@ def compute_cup_leg_penalty(match_num, league, home_name='', away_name=''):
             'goal_diff': 4,          # 首回合分差
             'trailing_side': 'home', # 落后方: 'home' 或 'away'
             'lambda_factor': 0.6,    # 落后方λ乘数 (1-惩罚比例)
+            'leader_factor': 0.95,   # 领先方λ乘数 (Ultra 7.6 对称修正)
             'conf_cap': 4.0,         # 置信度封顶
             'penalty_pct': 0.40,     # 惩罚比例
-            'note': '首回合0-4落后,主队λ×0.60,置信度封顶★★★★'
+            'note': '首回合0-4落后,主队λ×0.60,客队λ×0.95,置信度封顶★★★★'
         }
     """
     # 1. 检查是否为杯赛
@@ -229,22 +234,25 @@ def compute_cup_leg_penalty(match_num, league, home_name='', away_name=''):
     if abs_diff < PENALTY_THRESHOLD:
         return None
     
-    # 6. 计算惩罚
+    # 6. 计算惩罚 (Ultra 7.6: 落后方+领先方对称修正)
     penalty_pct = min(
         PENALTY_MIN + (abs_diff - PENALTY_THRESHOLD) * PENALTY_PER_GOAL,
         PENALTY_MAX
     )
     lambda_factor = 1.0 - penalty_pct
-    
+    leader_factor = 1.0 - LEADER_PENALTY
+
     if goal_diff > 0:
         # 主队落后
         trailing_side = 'home'
-        note = f'首回合{first_leg_home}-{first_leg_away}落后{abs_diff}球,主队λ×{lambda_factor:.2f},置信度封顶★★★★'
+        note = (f'首回合{first_leg_home}-{first_leg_away}落后{abs_diff}球,'
+                f'主队λ×{lambda_factor:.2f},客队λ×{leader_factor:.2f},置信度封顶★★★★')
     else:
         # 客队落后
         trailing_side = 'away'
-        note = f'首回合{first_leg_home}-{first_leg_away}领先{abs_diff}球,客队λ×{lambda_factor:.2f},置信度封顶★★★★'
-    
+        note = (f'首回合{first_leg_home}-{first_leg_away}领先{abs_diff}球,'
+                f'客队λ×{lambda_factor:.2f},主队λ×{leader_factor:.2f},置信度封顶★★★★')
+
     return {
         'applied': True,
         'first_leg_home': first_leg_home,
@@ -252,8 +260,10 @@ def compute_cup_leg_penalty(match_num, league, home_name='', away_name=''):
         'goal_diff': abs_diff,
         'trailing_side': trailing_side,
         'lambda_factor': lambda_factor,
+        'leader_factor': leader_factor,
         'conf_cap': CONFIDENCE_CAP,
         'penalty_pct': penalty_pct,
+        'leader_penalty_pct': LEADER_PENALTY,
         'note': note,
     }
 
