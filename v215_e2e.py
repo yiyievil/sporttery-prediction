@@ -5130,11 +5130,15 @@ def predict_match(match_num, data):
         cup_leg_penalty_info = get_cup_leg_penalty(match_num, league, home_name, away_name)
         if cup_leg_penalty_info and cup_leg_penalty_info.get('applied'):
             factor = cup_leg_penalty_info['lambda_factor']
+            leader_factor = cup_leg_penalty_info.get('leader_factor', 1.0)
             side = cup_leg_penalty_info['trailing_side']
+            # Ultra 7.6: 落后方实证惩罚 + 领先方对称修正(轮换/战意松)
             if side == 'home':
                 lam_h *= factor
+                lam_a *= leader_factor
             else:
                 lam_a *= factor
+                lam_h *= leader_factor
             lam_h = max(0.3, min(lam_h, 4.0))
             lam_a = max(0.3, min(lam_a, 4.0))
             # 重新计算scores (惩罚改变了λ, 所有下游计算需更新)
