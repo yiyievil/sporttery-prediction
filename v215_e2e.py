@@ -198,12 +198,24 @@ def inject_memory_context():
     context = _mem.get_prediction_context(match_ids=match_ids, user_input=user_input)
     print(context)
 
-    # 检查是否有编号相关的警告
+    # 检查是否有编号相关的警告 (每编号只提示一次, Bug-2修复)
     for mid in match_ids:
         validation = _mem.validate_match_id(mid)
-        for w in validation.get('warnings', []):
-            if '260729001' in w or 'RULE-001' in w or 'RULE-003' in w:
-                print(f"  [记忆] ⚠️ 编号 {mid} 有历史纠正记录, 请确认编号正确!")
+        if any('RULE-001' in w or 'RULE-003' in w or '记忆库已有此编号记录' in w
+               for w in validation.get('warnings', [])):
+            print(f"  [记忆] ⚠️ 编号 {mid} 有历史纠正记录, 请确认编号正确!")
+
+    # Ultra 7.6: 纠错记录硬中止 — 编号曾被用户纠正(importance>=0.8)时中止预测
+    hard = _mem.get_correction_records(match_ids)
+    if hard:
+        print("\n  [记忆] ❌ 检测到历史纠错记录, 中止预测:")
+        for mid, texts in hard.items():
+            for t in texts:
+                print(f"    - {mid}: {t}")
+        print("  [记忆] 请确认编号无误后在命令行追加 --force 强制继续")
+        if '--force' not in sys.argv:
+            return 'ABORT'
+        print("  [记忆] --force 已指定, 继续预测")
 
     return context
 
@@ -409,13 +421,14 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
                             matches = _date_matches
                             print(f"  [回退] 结果API精确匹配 {_target_date_str}: {len(matches)}场")
                         else:
-                            # 周几和精确日期都不匹配, 但编号匹配了 → 保留结果并警告
-                            # (体彩周几=开盘日≠比赛日, 用户输入日期可能对应不同周几)
+                            # 周几和精确日期都不匹配 → 中止预测 (Ultra 7.6 / Bug-1修复)
+                            # 旧逻辑: 保留结果继续预测, 导致预测了其他日期可能已完赛的比赛
                             _wd_list = [v.get('weekday','') for v in matches.values()]
                             _md_list = [v.get('match_date','') for v in matches.values()]
-                            print(f"  [回退] ⚠️ 周几({TARGET_WEEKDAY})和日期({_target_date_str})均不匹配, "
-                                  f"但编号匹配{_before}场 → 保留(体彩周几=开盘日≠比赛日)")
-                            print(f"         实际周几: {set(_wd_list)}, 实际比赛日: {set(_md_list)}")
+                            print(f"  [回退] ❌ 编号 {match_numbers} 在 {TARGET_WEEKDAY}({_target_date_str}) 不存在, 中止预测!")
+                            print(f"         结果API匹配到的实为: 周几={set(_wd_list)}, 比赛日={set(_md_list)}")
+                            print(f"         如确需预测这些比赛, 请用对应编号日期重新输入")
+                            matches = {}  # 清空, 触发下方"可用编号"提示并中止
                 else:
                     print(f"  [回退] 结果API匹配: {len(matches)}场")
         else:
@@ -2224,6 +2237,128 @@ def ensemble_fuse(probs_list, weights=None):
     return fused, agreement
 
 
+# ============================================================
+# Ultra 7.6: 公共融合权重函数 (HAD/HHAD 共用)
+# 修复报告问题: P2 dq二值化悬崖 / P3 Power悖论 / P5 HHAD无动态调节
+#               P8 Elo精度分级 / P12 proxy xG降权
+# ============================================================
+def compute_fuse_weights(dq_score, market_probs=None, power_probs=None,
+                         hist_elo=False, xg_proxy=False, ppda_stab=0.0):
+    """根据数据质量/方向一致性/数据精度计算四源融合权重
+
+    参数:
+      dq_score:      数据质量评分 0-100 (assess_data_quality)
+      market_probs:  市场概率 [w,d,l] (用于方向一致性判断)
+      power_probs:   Power方法概率
+      hist_elo:      是否有历史Elo (完整时间序列, 高精度)
+      xg_proxy:      xG是否为占位符proxy (非五大联赛真实Understat数据)
+      ppda_stab:     PPDA稳定性因子 0-1
+    返回:
+      [market_w, power_w, poisson_w, elo_w]
+    """
+    # P2: dq渐变化 — 连续过渡替代二值跳变
+    # 过渡带 40→75 (dq评分分布集中在40~70, 50→80会让多数比赛停在低区分度段)
+    f = max(0.0, min(1.0, (dq_score - 40) / 35.0))  # 40→0, 75→1
+    market_w  = 1.5 + (1 - f) * 0.5   # 1.5~2.0 (低质量时偏向市场)
+    power_w   = 0.8 + (1 - f) * 0.2   # 0.8~1.0 (Power同样源自赔率)
+    poisson_w = 0.3 + f * 0.9         # 0.3~1.2 (渐变, 消除0.3↔1.2悬崖)
+    elo_w     = 0.2 + f * 0.8         # 0.2~1.0
+
+    # P12: proxy xG → Poisson可信度降权 (占位符无法反映真实攻防)
+    if xg_proxy:
+        poisson_w = min(poisson_w, 0.6)
+    elif ppda_stab > 0.7:
+        # 报告建议4: PPDA稳定时Poisson小幅加权 (仅在真实xG前提下)
+        poisson_w *= 1.1
+
+    # P8: Elo按数据精度分级
+    if hist_elo:
+        elo_w = min(1.3, elo_w * 1.3)   # 历史Elo高精度 → 最高1.3
+    else:
+        elo_w = min(elo_w, 0.8)         # 推导Elo低精度 → 上限0.8
+
+    # P3: Power悖论修复 — 方向一致时是独立验证信号, 应加分而非减分
+    if market_probs and power_probs:
+        if market_probs.index(max(market_probs)) == power_probs.index(max(power_probs)):
+            power_w = max(power_w, 1.0)
+
+    return [round(market_w, 3), round(power_w, 3), round(poisson_w, 3), round(elo_w, 3)]
+
+
+def infer_goal_line_from_had(had):
+    """P4: HHAD让球盘口缺失/为0时, 从HAD赔率反推让球档
+
+    竞彩让球为整数档, 主胜赔率与让球数强相关:
+      主胜<1.40 → 让2球(-2); 1.40~1.80 → 让1球(-1)
+      主胜>4.00 → 受让2球(+2); 2.60~4.00 → 受让1球(+1)
+      其余 → 0 (不让球, 不强行推断)
+    返回: 推断的goalLine (整数), 无法判断时返回0
+    """
+    if not had or 'h' not in had:
+        return 0
+    h, a = had.get('h', 0), had.get('a', 0)
+    if h <= 1 or a <= 1:
+        return 0
+    if h < 1.40:
+        return -2
+    if h < 1.80:
+        return -1
+    if a < 1.40:
+        return 2
+    if a < 1.80:
+        return 1
+    return 0
+
+
+# ============================================================
+# Ultra 7.6: 球队名称归一化 (修复巴甲等联赛队名割裂)
+# ============================================================
+_TEAM_ALIAS_CACHE = None
+
+def team_name_variants(name):
+    """返回队名的所有已知变体 (含自身), 用于数据库IN查询
+
+    从 predictions/team_alias.json 加载映射: 标准名 → [变体列表]
+    双向展开: 输入变体也能找到标准名及其他变体
+    """
+    global _TEAM_ALIAS_CACHE
+    if _TEAM_ALIAS_CACHE is None:
+        _TEAM_ALIAS_CACHE = {}
+        _p = os.path.join(
+            os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)),
+            'predictions', 'team_alias.json')
+        if os.path.exists(_p):
+            try:
+                with open(_p, 'r', encoding='utf-8') as _f:
+                    raw = json.load(_f)
+                # 双向展开: 标准名→变体, 变体→同组所有名
+                for std, variants in raw.items():
+                    group = {std} | set(variants)
+                    for n in group:
+                        _TEAM_ALIAS_CACHE[n] = group
+            except Exception:
+                _TEAM_ALIAS_CACHE = {}
+    group = _TEAM_ALIAS_CACHE.get(name)
+    return sorted(group) if group else [name]
+
+
+def compute_js_agreement(probs_list):
+    """JS散度一致性 (P10): 0-1, 越高各源概率分布越相似
+
+    相比argmax方向一致性(离散0.5/0.75/1.0), JS散度捕捉分布形状差异:
+    两个源都预测"胜"但一个90%一个34%时, 方向一致=1.0 但JS一致性显著更低。
+    回测(3930场): 触发差异仅0.13%, 故仅作信息字段, 不改变融合权重。
+    """
+    n = len(probs_list)
+    if n < 2:
+        return 1.0
+    avg = [sum(p[j] for p in probs_list) / n for j in range(3)]
+    def _kl(a, b):
+        return sum(a[j] * math.log(max(a[j], 1e-9) / max(b[j], 1e-9)) for j in range(3))
+    js = sum(0.5 * _kl(p, avg) + 0.5 * _kl(avg, p) for p in probs_list) / n
+    return round(max(0.0, 1.0 - js / math.log(2)), 3)
+
+
 def match_difficulty_score(had_probs, poisson_probs, data_quality, agreement):
     """比赛可预测性评分 (Ultra 3.0)
 
@@ -3524,6 +3659,10 @@ _XG_SUPPORTED_LEAGUES = _BIG5_LEAGUES | {
     "葡超", "澳超", "荷甲", "英冠", "欧冠", "欧罗巴",
 }
 
+# Ultra 7.6 (P12): 真实Understat xG仅覆盖五大联赛, 其余均为proxy占位符
+# (已验证数据库: 五大联赛xG去重率≈100%, 欧冠106/273, 巴甲5/37)
+_XG_REAL_LEAGUES = _BIG5_LEAGUES
+
 
 def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
     """从 Understat 数据库获取球队滚动 xG/xGA/PPDA 统计
@@ -3567,6 +3706,10 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
     team_names = [en_team] if en_team else []
     if team_cn not in team_names:
         team_names.append(team_cn)
+    # Ultra 7.6: 补充别名变体 (修复队名割裂, 如 弗鲁米嫩/弗鲁米嫩塞)
+    for v in team_name_variants(team_cn):
+        if v not in team_names:
+            team_names.append(v)
 
     _db_path = os.path.join(
         os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)),
@@ -3681,6 +3824,9 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
             'cv_quality': round(cv_quality, 3),
             'n_games': n,
             'has_xg': True,
+            # Ultra 7.6 (P12): proxy标记 — 五大联赛外的xG为联赛均值占位符/公式近似,
+            # 非真实Understat数据, Poisson源融合权重需降权, 置信度封顶
+            'is_proxy': league_cn not in _XG_REAL_LEAGUES,
         }
     except Exception as e:
         return None
@@ -4514,6 +4660,16 @@ def predict_match(match_num, data):
         hhad_list = [ow, od, ol]
         hhad_min_idx = had_min_idx
     handicap = hhad.get('goalLine', 0) if hhad else 0
+    # Ultra 7.6 (P4): goalLine缺失/为0且HHAD有独立赔率时, 从HAD赔率反推让球档
+    # (结果API获取的已完赛比赛goalLine常为0, 导致让球盘口分析失效)
+    if not handicap and had and 'h' in had:
+        _inferred_gl = infer_goal_line_from_had(had)
+        if _inferred_gl != 0:
+            handicap = _inferred_gl
+            if hhad is not None:
+                hhad['goalLine'] = _inferred_gl
+                hhad['goalLine_inferred'] = True
+            print(f"  [HHAD] goalLine缺失, 从HAD赔率反推让球档: {_inferred_gl:+d} (主胜@{had['h']:.2f})")
     
     # Ultra 3.0: had_dirs和had_min_idx在ensemble_fuse后重新计算, 此处仅暂存初始odds
     if had and 'h' in had:
@@ -4591,10 +4747,13 @@ def predict_match(match_num, data):
                 _md = sp.get('match_date', '9999')
                 
                 if not home_stats:
-                    _c.execute('''SELECT avg_gf_overall, avg_ga_overall, games_total, form_wr, form_string
-                                  FROM team_rolling_stats 
-                                  WHERE team_name = ? AND match_date < ? AND avg_gf_overall IS NOT NULL
-                                  ORDER BY match_date DESC LIMIT 1''', (home_name, _md))
+                    # Ultra 7.6: 队名别名变体IN查询 (修复队名割裂)
+                    _hv = team_name_variants(home_name)
+                    _ph = ','.join(['?'] * len(_hv))
+                    _c.execute(f'''SELECT avg_gf_overall, avg_ga_overall, games_total, form_wr, form_string
+                                  FROM team_rolling_stats
+                                  WHERE team_name IN ({_ph}) AND match_date < ? AND avg_gf_overall IS NOT NULL
+                                  ORDER BY match_date DESC LIMIT 1''', (*_hv, _md))
                     _row = _c.fetchone()
                     if _row and _row[0] is not None:
                         home_stats = {'avg_gf': _row[0], 'avg_ga': _row[1], 'games': _row[2],
@@ -4602,10 +4761,12 @@ def predict_match(match_num, data):
                         print(f"  [历史库] {home_name} 统计: 场均进{_row[0]:.1f}/失{_row[1]:.1f} {_row[2]}场 胜率{_row[3]:.2f}")
                 
                 if not away_stats:
-                    _c.execute('''SELECT avg_gf_overall, avg_ga_overall, games_total, form_wr, form_string
-                                  FROM team_rolling_stats 
-                                  WHERE team_name = ? AND match_date < ? AND avg_gf_overall IS NOT NULL
-                                  ORDER BY match_date DESC LIMIT 1''', (away_name, _md))
+                    _av = team_name_variants(away_name)
+                    _ph = ','.join(['?'] * len(_av))
+                    _c.execute(f'''SELECT avg_gf_overall, avg_ga_overall, games_total, form_wr, form_string
+                                  FROM team_rolling_stats
+                                  WHERE team_name IN ({_ph}) AND match_date < ? AND avg_gf_overall IS NOT NULL
+                                  ORDER BY match_date DESC LIMIT 1''', (*_av, _md))
                     _row = _c.fetchone()
                     if _row and _row[0] is not None:
                         away_stats = {'avg_gf': _row[0], 'avg_ga': _row[1], 'games': _row[2],
@@ -4625,15 +4786,19 @@ def predict_match(match_num, data):
             _conn = sqlite3.connect(_db_path)
             _c = _conn.cursor()
             _md = sp.get('match_date', '9999')
-            _c.execute('''SELECT elo_rating FROM team_elo_history 
-                          WHERE team_name = ? AND match_date < ? AND elo_rating IS NOT NULL
-                          ORDER BY match_date DESC LIMIT 1''', (home_name, _md))
+            _hv = team_name_variants(home_name)
+            _av = team_name_variants(away_name)
+            _phh = ','.join(['?'] * len(_hv))
+            _pha = ','.join(['?'] * len(_av))
+            _c.execute(f'''SELECT elo_rating FROM team_elo_history
+                          WHERE team_name IN ({_phh}) AND match_date < ? AND elo_rating IS NOT NULL
+                          ORDER BY match_date DESC LIMIT 1''', (*_hv, _md))
             _row = _c.fetchone()
             if _row:
                 _hist_elo_h = _row[0]
-            _c.execute('''SELECT elo_rating FROM team_elo_history 
-                          WHERE team_name = ? AND match_date < ? AND elo_rating IS NOT NULL
-                          ORDER BY match_date DESC LIMIT 1''', (away_name, _md))
+            _c.execute(f'''SELECT elo_rating FROM team_elo_history
+                          WHERE team_name IN ({_pha}) AND match_date < ? AND elo_rating IS NOT NULL
+                          ORDER BY match_date DESC LIMIT 1''', (*_av, _md))
             _row = _c.fetchone()
             if _row:
                 _hist_elo_a = _row[0]
@@ -4657,6 +4822,7 @@ def predict_match(match_num, data):
     _xg_home = fetch_xg_rolling_stats(home_name, sp.get('match_date', '9999'), sp.get('league', ''))
     _xg_away = fetch_xg_rolling_stats(away_name, sp.get('match_date', '9999'), sp.get('league', ''))
     _xg_data = None
+    _ppda_stab_factor = 0.0  # Ultra 7.6: PPDA稳定性因子, 供融合权重函数使用
     if _xg_home:
         _ppda_str = f", PPDA={_xg_home.get('avg_ppda', '?')}, 压迫={_xg_home.get('pressure_index', '?')}" if _xg_home.get('avg_ppda') else ""
         print(f"  [xG] {home_name}: xG进{_xg_home['avg_xg_for']}/失{_xg_home['avg_xg_against']} "
@@ -4709,6 +4875,7 @@ def predict_match(match_num, data):
                 # 稳定性因子: 两队PPDA稳定性的几何平均 (0.3~1.0)
                 _stab_factor = (_ppda_stab_h * _ppda_stab_a) ** 0.5
                 _stab_factor = max(0.3, min(1.0, _stab_factor))
+                _ppda_stab_factor = _stab_factor  # Ultra 7.6: 供融合权重使用
                 # 计算调整比例 (有界 ±8%)
                 _ppda_adj = _ppda_diff * _ppda_sensitivity * _stab_factor
                 _ppda_adj = max(-0.08, min(0.08, _ppda_adj))
@@ -4894,16 +5061,20 @@ def predict_match(match_num, data):
                                   hist_elo_h=_hist_elo_h, hist_elo_a=_hist_elo_a)
 
     # 5. 集成融合: 市场 + Power + 校准Poisson + Elo (四源)
+    # Ultra 7.6: 公共权重函数 — dq渐变化 + Power悖论修复 + Elo分级 + proxy降权
     dq = assess_data_quality(sp)
-    if dq['score'] < 50:
-        fuse_weights = [2.0, 1.0, 0.3, 0.2]
-    else:
-        fuse_weights = None
-        market_dir = market_probs.index(max(market_probs))
-        power_dir = power_probs.index(max(power_probs))
-        if market_dir == power_dir:
-            fuse_weights = [1.5, 0.5, 1.2, 1.0]
+    _xg_is_proxy = bool((_xg_home and _xg_home.get('is_proxy')) or
+                        (_xg_away and _xg_away.get('is_proxy')))
+    fuse_weights = compute_fuse_weights(
+        dq['score'], market_probs=market_probs, power_probs=power_probs,
+        hist_elo=(_hist_elo_h is not None and _hist_elo_a is not None),
+        xg_proxy=_xg_is_proxy, ppda_stab=_ppda_stab_factor)
+    if _xg_is_proxy:
+        print(f"  [融合] ⚠️ xG为proxy占位符(非真实Understat), Poisson权重降权, 置信度封顶★★★★")
     fused_probs, model_agreement = ensemble_fuse([market_probs, power_probs, poisson_calibrated, elo_probs], weights=fuse_weights)
+    # Ultra 7.6 (P10落地): JS散度一致性 — 连续分布相似度, 作为信息字段输出
+    # (回测结论: 不改变融合权重触发逻辑, 仅提供更细粒度的一致性度量)
+    js_agreement = compute_js_agreement([market_probs, power_probs, poisson_calibrated, elo_probs])
     p1_w, p1_d, p1_l = fused_probs  # 用融合概率替代原始概率
     
     # Ultra 6.7: 高级标定 (6大模块) — 在四源融合后施加有界修正
@@ -5044,7 +5215,12 @@ def predict_match(match_num, data):
         hhad_poisson_cal = calibrate_probabilities(hhad_probs_poisson, source='poisson', lam_total=lam_total, lam_h=lam_h, lam_a=lam_a,
                                                    league=_league_for_cal, draw_odds=_draw_odds_for_cal)
         # Elo概率复用HAD的(球队实力不变, 只是让球不同)
-        hhad_final_probs, hhad_agreement = ensemble_fuse([hhad_shin, hhad_power, hhad_poisson_cal, elo_probs])
+        # Ultra 7.6 (P5): HHAD与HAD共用动态权重函数, 具备相同的数据质量自适应能力
+        _hhad_weights = compute_fuse_weights(
+            dq['score'], market_probs=hhad_shin, power_probs=hhad_power,
+            hist_elo=(_hist_elo_h is not None and _hist_elo_a is not None),
+            xg_proxy=_xg_is_proxy, ppda_stab=_ppda_stab_factor)
+        hhad_final_probs, hhad_agreement = ensemble_fuse([hhad_shin, hhad_power, hhad_poisson_cal, elo_probs], weights=_hhad_weights)
         hhad_final_idx = hhad_final_probs.index(max(hhad_final_probs))
         hhad_dir = hhad_dirs[hhad_final_idx]
         hhad_odds_val = round(hhad_odds_list[hhad_final_idx], 2)
@@ -5087,13 +5263,18 @@ def predict_match(match_num, data):
     hhad_conf_score = delta_to_score(hhad_delta)
 
     # 数据质量调节 (Ultra 1.0): 质量差则降星
-    dq = assess_data_quality(sp)
+    # Ultra 7.6 (P7): 复用上方dq结果, 不再重复调用 assess_data_quality(sp)
     if dq['score'] < 50:
         had_conf_score = max(1.0, had_conf_score - 0.5)
         hhad_conf_score = max(1.0, hhad_conf_score - 0.5)
         had_conf_score = min(had_conf_score, 3.0)
     elif dq['score'] >= 80:
         had_conf_score = min(5.0, had_conf_score + 0.0)  # 高质量不额外加星, 防止过拟合
+
+    # Ultra 7.6 (P12): proxy xG 置信度封顶★★★★ (占位符数据不应给出满星信心)
+    if _xg_is_proxy:
+        had_conf_score = min(had_conf_score, 4.0)
+        hhad_conf_score = min(hhad_conf_score, 4.0)
 
     # Ultra 8.0: xG 交叉验证质量加星 — xG与实际进球一致性高时增信
     if _xg_data and _xg_data['cv_quality_avg'] >= 0.45:
@@ -5286,6 +5467,7 @@ def predict_match(match_num, data):
         'data_quality': dq,
         'difficulty': difficulty,  # Ultra 3.0: 比赛可预测性评分 0-100
         'model_agreement': round(model_agreement, 2),  # Ultra 3.0: 模型一致性 0-1
+        'js_agreement': js_agreement,  # Ultra 7.6 (P10): JS散度分布一致性 0-1 (信息字段)
         'score': {
             'top3': top3_str,
             'high_top3': high_top3_str,
@@ -5440,7 +5622,9 @@ def main():
     apply_cli_match_input()
 
     # 记忆系统 v2.0: 预测前自动召回铁律 + 相关记忆 + 编号验证
-    inject_memory_context()
+    if inject_memory_context() == 'ABORT':
+        print("\n[中止] 因历史纠错记录终止本次预测")
+        return
     
     # ===== Phase 1: Sporttery API (核心 — 体彩场次+赔率基准+固定奖金) =====
     t1 = time.time()
