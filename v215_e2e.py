@@ -4984,13 +4984,13 @@ def predict_match(match_num, data):
         v611_notes.append(f"客队防守回升(近况{away_form[-4:]}, 场均失{away_stats.get('avg_ga',0):.1f}), λ_h×{def_factor:.2f} λ_a×1.10")
         v611_flags['defensive_away'] = True
 
-    # --- 修正3: 跨盘口矛盾 (大球升盘+平赔下降=诱大 → 下调总λ) ---
+    # --- 修正3: 跨盘口矛盾 — 实证否决(backtest_v611b, 4222场) ---
+    # "大球升盘+平赔降=诱大"不成立: 触发组实际/期望=1.011(不低于对照), 原λ×0.85惩罚移除
+    # 保留检测作为信息字段, 不调整λ
     _initial_summary = _build_initial_summary(init_ouzhi, init_yazhi, init_daxiao)
     is_trap, trap_factor = detect_cross_market_trap(_initial_summary)
     if is_trap:
-        lam_h *= trap_factor
-        lam_a *= trap_factor
-        v611_notes.append(f"跨盘口诱大信号(O/U升盘+平赔降), λ×{trap_factor:.3f}")
+        v611_notes.append(f"跨盘口信号(O/U升盘+平赔降, 实证无诱大效应, 仅记录)")
         v611_flags['ou_trap'] = True
 
     lam_h = max(0.3, min(lam_h, 4.0))
@@ -4999,6 +4999,8 @@ def predict_match(match_num, data):
     scores = compute_scores(lam_h, lam_a, goal_line=handicap, market_goal_line=market_goal_line)
 
     # --- 修正4: 0-0赔率校准 (模型0-0概率<市场隐含50% → 上调低进球区间) ---
+    # 方向经实证支持(backtest_v611b 5A: 市场0-0赔率校准良好, 偏差±0.02内);
+    # 调整幅度(max 0.5)未经实证, 分歧场景历史样本不足, 保持原值待验证
     # 需要在scores计算后进行, 修正比分概率分布
     _sporttery_crs = {}
     _sb = sp.get('sporttery_bonus') or {}
