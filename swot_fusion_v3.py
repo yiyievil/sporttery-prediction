@@ -327,6 +327,15 @@ def fuse_swot_into_predictions(pred_file):
                 had['conf_old'] = had.get('conf')
                 had['conf'] = _score_to_conf(new_conf_score)
         
+        # Ultra 7.4: 杯赛首回合大比分惩罚 — SWOT融合后仍需遵守置信度封顶
+        cup_penalty = result.get('cup_leg_penalty')
+        if cup_penalty and cup_penalty.get('applied'):
+            conf_cap = cup_penalty.get('conf_cap', 4.0)
+            post_conf_score = _conf_to_score(had.get('conf', ''))
+            if post_conf_score is not None and post_conf_score > conf_cap:
+                had['conf'] = _score_to_conf(conf_cap)
+                fusion_advice += f' [杯赛惩罚封顶★★★★]'
+        
         # 生成关键因素
         trend = swot_data.get('trend', {})
         trend_str = ''

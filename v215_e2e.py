@@ -27,6 +27,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 import sqlite3
 
+# 记忆系统 v2.0: 预测前自动召回铁律和相关记忆
+try:
+    from memory import MemoryStore
+    _mem = MemoryStore()
+except Exception:
+    _mem = None
+
 # nowscore 辅助数据源 (为体彩预测提供统计增强; 500.com为降级备用)
 # 架构: Sporttery(体彩)是核心预测目标, nowscore/500.com均服务于体彩预测
 
@@ -150,6 +157,56 @@ def apply_cli_match_input():
     print(f"  [输入] ⚠️ 无法解析 '{text}', 回退文件顶部配置 "
           f"(正确格式: 260728 001,002 或 260728001,260728002)")
 
+
+def inject_memory_context():
+    """记忆系统 v2.0: 预测前自动召回铁律 + 相关记忆 + 编号验证
+
+    在 main() 中 apply_cli_match_input() 之后调用,
+    根据 MATCH_NUMBERS 和 TARGET_DATE/TARGET_WEEKDAY 构建完整编号,
+    注入铁律和相关记忆到预测上下文。
+    """
+    if _mem is None:
+        print("  [记忆] ⚠️ 记忆系统未加载, 跳过自动召回")
+        return
+
+    # 构建完整编号列表 (YYMMDD + NNN)
+    match_ids = []
+    if TARGET_DATE:
+        date_prefix = TARGET_DATE.strftime('%y%m%d')
+    elif TARGET_WEEKDAY:
+        # 从 TARGET_WEEKDAY 反推日期: 用今天往前找匹配的周几
+        today = datetime.now().date()
+        wd_map = {'周一': 0, '周二': 1, '周三': 2, '周四': 3, '周五': 4, '周六': 5, '周日': 6}
+        target_wd = wd_map.get(TARGET_WEEKDAY)
+        if target_wd is not None:
+            days_diff = (target_wd - today.weekday()) % 7
+            d = today + timedelta(days=days_diff)
+            date_prefix = d.strftime('%y%m%d')
+        else:
+            date_prefix = datetime.now().strftime('%y%m%d')
+    else:
+        date_prefix = datetime.now().strftime('%y%m%d')
+
+    for num in MATCH_NUMBERS:
+        full_id = f"{date_prefix}{num.zfill(3)}"
+        match_ids.append(full_id)
+
+    # 用户输入文本 (用于关键词召回)
+    user_input = f"预测 {TARGET_WEEKDAY or ''} {' '.join(match_ids)}"
+
+    # 获取预测上下文
+    context = _mem.get_prediction_context(match_ids=match_ids, user_input=user_input)
+    print(context)
+
+    # 检查是否有编号相关的警告
+    for mid in match_ids:
+        validation = _mem.validate_match_id(mid)
+        for w in validation.get('warnings', []):
+            if '260729001' in w or 'RULE-001' in w or 'RULE-003' in w:
+                print(f"  [记忆] ⚠️ 编号 {mid} 有历史纠正记录, 请确认编号正确!")
+
+    return context
+
 # ===== 推荐模式配置 (Pro 3.9/Ultra 1.0) =====
 # mode='prob':  命中率优先(默认), 纯概率排序, EV仅作参考
 # mode='ev':    EV优先, 主推期望值最高
@@ -164,6 +221,9 @@ HYBRID_PROB_TOLERANCE = 3.0  # 单位: 概率百分点
 #       leisu无覆盖的场次用500/nowscore统计数据型情报兜底
 # False: 跳过 (保留手动 swot_fast_v3.py + swot_fusion_v3.py 流程)
 AUTO_SWOT = True
+
+# ===== Ultra 7.4: 杯赛首回合大比分惩罚 (仅限欧冠/欧罗巴/欧协联等两回合制杯赛) =====
+from cup_leg_penalty import get_cup_leg_penalty, clear_cache as clear_leg_cache
 
 # ============================================================
 # Pro 3.1: 5星制置信度系统 (含半星)
@@ -307,25 +367,88 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
     if TARGET_WEEKDAY:
         matches = {k: v for k, v in matches.items() if v.get('weekday', '') == TARGET_WEEKDAY}
         if not matches:
-            print(f"  [过滤] match list API中无{TARGET_WEEKDAY}比赛, 从结果API获取...")
+            print(f"  [过滤] match list API中无{TARGET_WEEKDAY}的比赛编号 {match_numbers}")
 
-    # 回退: 如果match list API没找到(或被过滤掉), 从结果API获取
+    # 回退: 如果match list API没找到, 从结果API获取(仅限已完赛场次)
     if not matches:
-        print("  [回退] match list API未找到比赛, 从结果API获取赔率...")
-        matches = fetch_sporttery_matches_from_results(match_numbers)
-        # Ultra-Opt: 结果API返回全部周几的同号比赛, 必须同样应用周几过滤
-        # (旧版未过滤, 导致 "周六201" 请求混入 周五201/周四201... 共7倍场次)
-        if TARGET_WEEKDAY and matches:
-            before = len(matches)
-            matches = {k: v for k, v in matches.items() if v.get('weekday', '') == TARGET_WEEKDAY}
-            print(f"  [过滤] 结果API {before}场 → {TARGET_WEEKDAY}过滤后 {len(matches)}场")
-    
+        # 从编号日期解析目标日期 (如 260729 → 2026-07-29)
+        _target_date_str = None
+        _cli_args = [a for a in sys.argv[1:] if a.strip()]
+        if _cli_args:
+            _text = ' '.join(_cli_args).replace('，', ',').replace('、', ',').strip()
+            _full = re.findall(r'(\d{6})(\d{3})', _text)
+            if _full:
+                _d, _ = parse_code_date(_full[0][0])
+                if _d:
+                    _target_date_str = _d.strftime('%Y-%m-%d')
+            else:
+                _m = re.match(r'^(\d{6})\s+', _text)
+                if _m:
+                    _d, _ = parse_code_date(_m.group(1))
+                    if _d:
+                        _target_date_str = _d.strftime('%Y-%m-%d')
+        
+        if _target_date_str:
+            print(f"  [回退] 从结果API获取 (目标日期: {_target_date_str})...")
+            matches = fetch_sporttery_matches_from_results(match_numbers, target_date=_target_date_str)
+            # 结果API已在±1天窗口内查询, 优先按周几前缀匹配(如"周一201"匹配TARGET_WEEKDAY="周一")
+            # 若周几匹配有结果则直接采用; 否则回退到精确日期匹配
+            if matches:
+                _before = len(matches)
+                if TARGET_WEEKDAY:
+                    _weekday_matches = {k: v for k, v in matches.items()
+                                        if v.get('weekday', '') == TARGET_WEEKDAY}
+                    if _weekday_matches:
+                        matches = _weekday_matches
+                        print(f"  [回退] 结果API按周几匹配({TARGET_WEEKDAY}): {len(matches)}场")
+                    else:
+                        # 周几不匹配时, 尝试精确日期匹配
+                        _date_matches = {k: v for k, v in matches.items()
+                                   if v.get('match_date', '') == _target_date_str}
+                        if _date_matches:
+                            matches = _date_matches
+                            print(f"  [回退] 结果API精确匹配 {_target_date_str}: {len(matches)}场")
+                        else:
+                            # 周几和精确日期都不匹配, 但编号匹配了 → 保留结果并警告
+                            # (体彩周几=开盘日≠比赛日, 用户输入日期可能对应不同周几)
+                            _wd_list = [v.get('weekday','') for v in matches.values()]
+                            _md_list = [v.get('match_date','') for v in matches.values()]
+                            print(f"  [回退] ⚠️ 周几({TARGET_WEEKDAY})和日期({_target_date_str})均不匹配, "
+                                  f"但编号匹配{_before}场 → 保留(体彩周几=开盘日≠比赛日)")
+                            print(f"         实际周几: {set(_wd_list)}, 实际比赛日: {set(_md_list)}")
+                else:
+                    print(f"  [回退] 结果API匹配: {len(matches)}场")
+        else:
+            print(f"  [回退] 无法解析目标日期, 从结果API获取最近7天...")
+            matches = fetch_sporttery_matches_from_results(match_numbers)
+        
+        # 最终检查: 仍然没找到 → 列出当日可用编号
+        if not matches:
+            _available_nums = []
+            try:
+                _r = fetch_with_retry(SPORTTERY_URL, SPORTTERY_HEADERS)
+                _data = _r.json()
+                for mi in _data['value']['matchInfoList']:
+                    if mi.get('weekday', '') == TARGET_WEEKDAY:
+                        for s in mi['subMatchList']:
+                            _available_nums.append(str(s['matchNum'])[-3:])
+            except:
+                pass
+            if _available_nums:
+                print(f"  [错误] 比赛编号 {match_numbers} 在 {TARGET_WEEKDAY} 不存在!")
+                print(f"  [提示] {TARGET_WEEKDAY}可用编号: {', '.join(sorted(_available_nums))}")
+            else:
+                print(f"  [错误] 未找到比赛编号 {match_numbers}, 且{TARGET_WEEKDAY}无可用比赛")
+
     return matches
 
 
-def fetch_sporttery_matches_from_results(match_numbers):
+def fetch_sporttery_matches_from_results(match_numbers, target_date=None):
     """从sporttery结果API获取已完场比赛的赔率数据(回退方案)
     当getMatchListV1不再返回已完场比赛时使用
+
+    target_date: 若指定 (如 '2026-07-29'), 仅查询该日期±1天的结果
+                 避免7天窗口内取到错误日期的同编号比赛
     """
     RESULT_URL = "https://webapi.sporttery.cn/gateway/uniform/football/getUniformMatchResultV1.qry"
     RESULT_HEADERS = {
@@ -333,11 +456,22 @@ def fetch_sporttery_matches_from_results(match_numbers):
         'Referer': 'https://www.lottery.gov.cn/jc/zqsgkj/',
         'Accept': 'application/json',
     }
-    
-    # 查询最近7天的结果
-    today = datetime.now()
-    date_begin = (today - timedelta(days=7)).strftime('%Y-%m-%d')
-    date_end = today.strftime('%Y-%m-%d')
+
+    # 查询范围: 有目标日期时仅查±1天, 否则查最近7天
+    if target_date:
+        try:
+            td = datetime.strptime(target_date, '%Y-%m-%d')
+            date_begin = (td - timedelta(days=1)).strftime('%Y-%m-%d')
+            date_end = (td + timedelta(days=1)).strftime('%Y-%m-%d')
+            print(f"  [结果API] 按目标日期查询: {date_begin} ~ {date_end}")
+        except ValueError:
+            today = datetime.now()
+            date_begin = (today - timedelta(days=7)).strftime('%Y-%m-%d')
+            date_end = today.strftime('%Y-%m-%d')
+    else:
+        today = datetime.now()
+        date_begin = (today - timedelta(days=7)).strftime('%Y-%m-%d')
+        date_end = today.strftime('%Y-%m-%d')
     
     all_results = {}
     page = 1
@@ -389,9 +523,16 @@ def fetch_sporttery_matches_from_results(match_numbers):
             had = {'h': float(m.get('h') or 0), 'd': float(m.get('d') or 0), 'a': float(m.get('a') or 0)}
         except:
             pass
+        # HHAD让球赔率: 结果API可能含hhadH/hhadD/hhadA字段, 否则留空(后续getFixedBonusV1会补充)
         try:
-            gl = float(m.get('goalLine', 0) or 0)
-            hhad = {'h': had.get('h', 0), 'd': had.get('d', 0), 'a': had.get('a', 0), 'goalLine': gl}
+            _hhad_h = float(m.get('hhadH') or 0)
+            _hhad_d = float(m.get('hhadD') or 0)
+            _hhad_a = float(m.get('hhadA') or 0)
+            _gl = float(m.get('goalLine', 0) or 0)
+            if _hhad_h > 0:
+                hhad = {'h': _hhad_h, 'd': _hhad_d, 'a': _hhad_a, 'goalLine': _gl}
+            else:
+                hhad = {'goalLine': _gl}  # 仅有让球数, 赔率由getFixedBonusV1补充
         except:
             pass
         
@@ -434,6 +575,27 @@ def fetch_sporttery_fixed_bonus(match_id):
             return None
 
         out = {}
+
+        # HAD 胜平负终赔 (从hadList提取最新一条)
+        had_list = v.get('hadList') or []
+        if had_list:
+            had_latest = had_list[-1]  # 最后一条=最新
+            had_h = float(had_latest.get('h', 0)) if had_latest.get('h') else 0
+            had_d = float(had_latest.get('d', 0)) if had_latest.get('d') else 0
+            had_a = float(had_latest.get('a', 0)) if had_latest.get('a') else 0
+            if had_h > 0:
+                out['had'] = {'h': had_h, 'd': had_d, 'a': had_a}
+
+        # HHAD 让球胜平负终赔 (从hhadList提取最新一条)
+        hhad_list = v.get('hhadList') or []
+        if hhad_list:
+            hhad_latest = hhad_list[-1]
+            hhad_h = float(hhad_latest.get('h', 0)) if hhad_latest.get('h') else 0
+            hhad_d = float(hhad_latest.get('d', 0)) if hhad_latest.get('d') else 0
+            hhad_a = float(hhad_latest.get('a', 0)) if hhad_latest.get('a') else 0
+            gl = float(hhad_latest.get('goalLine', 0) or 0)
+            if hhad_h > 0:
+                out['hhad'] = {'h': hhad_h, 'd': hhad_d, 'a': hhad_a, 'goalLine': gl}
 
         # TTG 总进球: s0..s7 (7=7+球), f后缀为停售标记
         ttg_raw = (v.get('ttgList') or [{}])[0]
@@ -1801,23 +1963,20 @@ def bayesian_shrinkage(sample_mean, sample_size, league_mean, k=10):
     return (sample_size * sample_mean + k * league_mean) / (sample_size + k)
 
 
-def elo_probabilities(home_stats, away_stats, home_form_wr, away_form_wr, league_home_adv=65):
+def elo_probabilities(home_stats, away_stats, home_form_wr, away_form_wr, league_home_adv=65,
+                      hist_elo_h=None, hist_elo_a=None):
     """Elo评级概率 (Ultra 5.0 — 第4个概率源)
 
     原理: Elo评级系统量化球队实力差, 转换为胜平负概率。
-    无需历史数据库, 从当前可用数据(球队统计+近况)推导Elo评级:
-      1. 从场均进球/失球推导基础Elo: 进攻力-防守力
-      2. 从近况加权胜率微调: 反映当前状态
-      3. 用Elo公式转换为胜平负概率
+    优先使用历史库真实Elo评级, 其次从球队统计推导:
+      1. 若有历史Elo → 直接使用 (最准确, 基于完整时间序列)
+      2. 无历史Elo → 从场均进球/失球推导基础Elo: 进攻力-防守力
+      3. 从近况加权胜率微调: 反映当前状态
+      4. 用Elo公式转换为胜平负概率
 
     Elo→概率转换:
       P(home win) = 1 / (1 + 10^(-(R_h - R_a + HFA) / 400))
       平局概率: P_draw = 0.28 - 0.10 × |P_win - P_lose| (经验校准)
-
-    优势:
-      1. 独立于赔率, 基于球队实际表现
-      2. 包含近况信息(exponential_decay_form的输出)
-      3. 与Shin/Power/Poisson三源互补, 提供不同视角
 
     参数:
       home_stats: 主队统计 {avg_gf, avg_ga, ...} 或 None
@@ -1825,11 +1984,17 @@ def elo_probabilities(home_stats, away_stats, home_form_wr, away_form_wr, league
       home_form_wr: 主队加权胜率 (0-1, from exponential_decay_form)
       away_form_wr: 客队加权胜率
       league_home_adv: 主场优势Elo点数 (默认65)
+      hist_elo_h: 历史库Elo评级 (主队), 优先使用
+      hist_elo_a: 历史库Elo评级 (客队), 优先使用
     返回:
       [P_win, P_draw, P_lose] 或 None (数据不足时)
     """
     # 推导Elo评级
-    if home_stats and away_stats:
+    if hist_elo_h is not None and hist_elo_a is not None:
+        # 优先使用历史库真实Elo (基于完整时间序列计算)
+        R_home = hist_elo_h
+        R_away = hist_elo_a
+    elif home_stats and away_stats:
         # 基础Elo: 进攻力 - 防守力, 缩放到Elo尺度 (×100)
         home_attack = home_stats.get('avg_gf', 1.3)
         home_defense = home_stats.get('avg_ga', 1.3)
@@ -1844,8 +2009,10 @@ def elo_probabilities(home_stats, away_stats, home_form_wr, away_form_wr, league
         R_away = (away_form_wr - 0.5) * 200
 
     # 近况微调: 胜率偏离0.5的部分×50 (温和调整)
-    R_home += (home_form_wr - 0.5) * 50
-    R_away += (away_form_wr - 0.5) * 50
+    # 注意: 使用历史Elo时不做近况微调 (Elo已反映真实实力, 近况由其他源捕获)
+    if hist_elo_h is None or hist_elo_a is None:
+        R_home += (home_form_wr - 0.5) * 50
+        R_away += (away_form_wr - 0.5) * 50
 
     # Elo→胜率
     diff = R_home - R_away + league_home_adv
@@ -3301,6 +3468,224 @@ def _compute_h2h(home_team, away_team):
         return None
 
 
+# ============================================================
+# Ultra 8.0: xG/xGA 数据集成 — 从 Understat 获取预期进球数据
+# 替代实际进球, 降低运气噪声; 双源交叉验证作为特征质量指标
+# ============================================================
+
+# 中文→英文球队名映射 (五大联赛)
+_XG_TEAM_MAP = {
+    # 英超
+    "阿森纳": "Arsenal", "维拉": "Aston Villa", "伯恩茅斯": "Bournemouth",
+    "布伦特": "Brentford", "布赖顿": "Brighton", "切尔西": "Chelsea",
+    "水晶宫": "Crystal Palace", "埃弗顿": "Everton", "富勒姆": "Fulham",
+    "伊普斯": "Ipswich", "莱切斯特": "Leicester", "利物浦": "Liverpool",
+    "曼城": "Manchester City", "曼联": "Manchester United",
+    "纽卡斯尔": "Newcastle United", "诺丁汉": "Nottingham Forest",
+    "南安普敦": "Southampton", "热刺": "Tottenham", "西汉姆联": "West Ham",
+    "狼队": "Wolverhampton Wanderers", "伯恩利": "Burnley", "利兹联": "Leeds United",
+    # 西甲
+    "阿拉维斯": "Alaves", "毕尔巴鄂": "Athletic Club", "马竞": "Atletico Madrid",
+    "巴萨": "Barcelona", "塞尔塔": "Celta Vigo", "西班牙人": "Espanyol",
+    "赫塔费": "Getafe", "赫罗纳": "Girona", "拉帕马斯": "Las Palmas",
+    "莱加内斯": "Leganes", "马洛卡": "Mallorca", "奥萨苏纳": "Osasuna",
+    "巴列卡诺": "Rayo Vallecano", "贝蒂斯": "Real Betis", "皇马": "Real Madrid",
+    "皇家社会": "Real Sociedad", "巴利亚多": "Real Valladolid",
+    "塞维利亚": "Sevilla", "巴伦西亚": "Valencia", "比利亚雷": "Villarreal",
+    # 德甲
+    "奥格斯堡": "Augsburg", "勒沃库森": "Bayer Leverkusen", "拜仁": "Bayern Munich",
+    "波鸿": "Bochum", "多特蒙德": "Borussia Dortmund", "门兴": "Borussia M.Gladbach",
+    "法兰克福": "Eintracht Frankfurt", "海登海姆": "FC Heidenheim",
+    "弗赖堡": "Freiburg", "霍芬海姆": "Hoffenheim", "基尔": "Holstein Kiel",
+    "美因茨": "Mainz 05", "莱红牛": "RasenBallsport Leipzig", "圣保利": "St. Pauli",
+    "柏林联合": "Union Berlin", "斯图加特": "VfB Stuttgart",
+    "不来梅": "Werder Bremen", "沃夫斯堡": "Wolfsburg", "科隆": "FC Koln",
+    # 意甲
+    "AC米兰": "AC Milan", "亚特兰大": "Atalanta", "博洛尼亚": "Bologna",
+    "卡利亚里": "Cagliari", "科莫": "Como", "恩波利": "Empoli",
+    "佛罗伦萨": "Fiorentina", "热那亚": "Genoa", "国际米兰": "Inter",
+    "尤文图斯": "Juventus", "拉齐奥": "Lazio", "莱切": "Lecce",
+    "蒙扎": "Monza", "那不勒斯": "Napoli", "帕尔马": "Parma Calcio 1913",
+    "罗马": "Roma", "都灵": "Torino", "乌迪内斯": "Udinese",
+    "威尼斯": "Venezia", "维罗纳": "Verona",
+    # 法甲
+    "昂热": "Angers", "欧塞尔": "Auxerre", "布雷斯特": "Brest",
+    "勒阿弗尔": "Le Havre", "朗斯": "Lens", "里尔": "Lille",
+    "里昂": "Lyon", "马赛": "Marseille", "摩纳哥": "Monaco",
+    "蒙彼利埃": "Montpellier", "南特": "Nantes", "尼斯": "Nice",
+    "巴黎圣曼": "Paris Saint Germain", "兰斯": "Reims", "雷恩": "Rennes",
+    "圣埃蒂安": "Saint-Etienne", "斯特拉斯": "Strasbourg", "图卢兹": "Toulouse",
+}
+
+# 支持xG数据的联赛集合 (含大五联赛 + 数据库中有xG数据的联赛)
+_BIG5_LEAGUES = {"英超", "西甲", "德甲", "意甲", "法甲"}
+_XG_SUPPORTED_LEAGUES = _BIG5_LEAGUES | {
+    "瑞超", "挪超", "美职联", "芬超", "日职", "韩职",
+    "葡超", "澳超", "荷甲", "英冠", "欧冠", "欧罗巴",
+}
+
+
+def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
+    """从 Understat 数据库获取球队滚动 xG/xGA/PPDA 统计
+
+    优化1: 用 xG/xGA 替代实际进球, 降低运气噪声
+    优化2: 计算 xG vs 实际进球的交叉验证差异作为特征质量指标
+    优化3: 提取PPDA压迫强度特征 (防守压迫指标)
+
+    PPDA (Passes Per Defensive Action) 说明:
+        - 衡量球队无球时的压迫强度, 值越低越激进
+        - 低PPDA (<8): 高位逼抢, 在对方半场夺回球权, 创造更多机会
+        - 高PPDA (>14): 被动防守, 允许对手更多传球, 防守深度退守
+
+    Args:
+        team_cn: 中文球队名
+        match_date: 比赛日期 (YYYY-MM-DD)
+        league_cn: 中文联赛名
+        window: 滚动窗口 (默认10场)
+
+    Returns:
+        dict with:
+            avg_xg_for:        场均预期进球
+            avg_xg_against:    场均预期失球
+            avg_ppda:          场均PPDA (自身压迫强度, 越低越激进)
+            avg_opp_ppda:      对手场均PPDA (对方压迫强度, 越低越被压制)
+            pressure_index:    压迫强度指数 0-1 (1=最激进, 基于PPDA归一化)
+            ppda_diff_vs_opp:  PPDA优势 (= 对手PPDA - 自身PPDA, 正=自身压迫更强)
+            ppda_stability:    PPDA稳定性 (0-1, 1=非常稳定, 基于标准差)
+            overperformance:   xG超额 (实际-xG, 正=运气好)
+            cv_quality:        交叉验证质量 0-1 (xG与实际进球一致性)
+            n_games:           样本量
+            has_xg:            是否有xG数据
+        或 None (无数据)
+    """
+    if league_cn and league_cn not in _XG_SUPPORTED_LEAGUES:
+        return None
+
+    # 队名解析: 优先用映射表转英文, 映射不到则直接用中文 (数据库中非大五联赛存的是中文队名)
+    en_team = _XG_TEAM_MAP.get(team_cn)
+    # 查询时同时尝试英文和中文队名
+    team_names = [en_team] if en_team else []
+    if team_cn not in team_names:
+        team_names.append(team_cn)
+
+    _db_path = os.path.join(
+        os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)),
+        'predictions', 'historical_odds.db')
+    if not os.path.exists(_db_path):
+        return None
+
+    try:
+        conn = sqlite3.connect(_db_path)
+        c = conn.cursor()
+
+        # 查询该球队在目标日期前的最近N场比赛
+        # 球队可能为主队或客队, 同时尝试英文和中文队名
+        placeholders = ','.join(['?'] * len(team_names))
+        c.execute(f'''
+            SELECT home_team, away_team, home_xg, away_xg, home_goals, away_goals,
+                   home_ppda, away_ppda, match_date
+            FROM understat_matches
+            WHERE match_date < ? AND is_result = 1
+              AND (home_team IN ({placeholders}) OR away_team IN ({placeholders}))
+              AND home_xg IS NOT NULL AND away_xg IS NOT NULL
+            ORDER BY match_date DESC
+            LIMIT ?
+        ''', (match_date, *team_names, *team_names, window))
+
+        rows = c.fetchall()
+        conn.close()
+
+        if not rows:
+            return None
+
+        xg_for_list = []
+        xg_against_list = []
+        ppda_list = []        # 自身PPDA (压迫强度)
+        opp_ppda_list = []    # 对手PPDA (被压迫程度)
+        actual_for_list = []
+        cv_errors = []
+
+        for row in rows:
+            home_team, away_team, home_xg, away_xg, home_goals, away_goals, home_ppda, away_ppda, _ = row
+            if home_team in team_names:
+                xg_for_list.append(home_xg)
+                xg_against_list.append(away_xg)
+                ppda_list.append(home_ppda)      # 主队PPDA = 自身压迫强度
+                opp_ppda_list.append(away_ppda)   # 客队PPDA = 对手压迫强度
+                actual_for_list.append(home_goals)
+                cv_errors.append(abs(home_goals - home_xg))
+            else:
+                xg_for_list.append(away_xg)
+                xg_against_list.append(home_xg)
+                ppda_list.append(away_ppda)      # 客队PPDA = 自身压迫强度
+                opp_ppda_list.append(home_ppda)   # 主队PPDA = 对手压迫强度
+                actual_for_list.append(away_goals)
+                cv_errors.append(abs(away_goals - away_xg))
+
+        n = len(xg_for_list)
+        avg_xg_for = sum(xg_for_list) / n
+        avg_xg_against = sum(xg_against_list) / n
+
+        # PPDA: 自身压迫强度 (越低越激进)
+        valid_ppda = [p for p in ppda_list if p is not None]
+        avg_ppda = sum(valid_ppda) / len(valid_ppda) if valid_ppda else None
+
+        # 对手PPDA: 对方压迫强度 (越低说明自身被压制越多)
+        valid_opp_ppda = [p for p in opp_ppda_list if p is not None]
+        avg_opp_ppda = sum(valid_opp_ppda) / len(valid_opp_ppda) if valid_opp_ppda else None
+
+        # PPDA稳定性: 基于标准差的归一化 (变异系数CV的逆)
+        # CV = std/mean, stability = 1/(1+CV), 越高越稳定
+        if len(valid_ppda) >= 3:
+            ppda_mean = sum(valid_ppda) / len(valid_ppda)
+            ppda_var = sum((p - ppda_mean) ** 2 for p in valid_ppda) / len(valid_ppda)
+            ppda_std = ppda_var ** 0.5
+            cv = ppda_std / ppda_mean if ppda_mean > 0 else 1.0
+            ppda_stability = 1.0 / (1.0 + cv)
+        else:
+            ppda_stability = 0.5  # 样本不足, 中等稳定性
+
+        avg_actual = sum(actual_for_list) / n
+
+        # 交叉验证质量: xG与实际进球的MAE → quality = 1/(1+MAE)
+        mae = sum(cv_errors) / n
+        cv_quality = 1.0 / (1.0 + mae)
+
+        # xG超额表现: 实际进球 - xG (正=运气好/超额表现)
+        overperformance = avg_actual - avg_xg_for
+
+        # 压迫强度指数 (0-1, 1=最激进)
+        # PPDA归一化: 基于五大联赛经验分布 P10=6.3, P50=11.2, P90=20.1
+        # 使用sigmoid映射: pressure = 1 / (1 + exp((ppda - 11) / 3))
+        if avg_ppda is not None:
+            pressure_index = 1.0 / (1.0 + pow(2.71828, (avg_ppda - 11.0) / 3.0))
+            pressure_index = round(pressure_index, 3)
+        else:
+            pressure_index = None
+
+        # PPDA优势: 对手PPDA - 自身PPDA (正值=自身压迫更强)
+        if avg_ppda is not None and avg_opp_ppda is not None:
+            ppda_diff_vs_opp = round(avg_opp_ppda - avg_ppda, 2)
+        else:
+            ppda_diff_vs_opp = None
+
+        return {
+            'avg_xg_for': round(avg_xg_for, 2),
+            'avg_xg_against': round(avg_xg_against, 2),
+            'avg_ppda': round(avg_ppda, 2) if avg_ppda else None,
+            'avg_opp_ppda': round(avg_opp_ppda, 2) if avg_opp_ppda else None,
+            'pressure_index': pressure_index,
+            'ppda_diff_vs_opp': ppda_diff_vs_opp,
+            'ppda_stability': round(ppda_stability, 3),
+            'overperformance': round(overperformance, 2),
+            'cv_quality': round(cv_quality, 3),
+            'n_games': n,
+            'has_xg': True,
+        }
+    except Exception as e:
+        return None
+
+
 _ODDS_BINS = [(1.0,1.5,'1.0-1.5'),(1.5,2.0,'1.5-2.0'),
               (2.0,2.5,'2.0-2.5'),(2.5,3.5,'2.5-3.5'),(3.5,99,'3.5+')]
 
@@ -3995,6 +4380,7 @@ def predict_match(match_num, data):
     init_daxiao = sp.get('init_daxiao')
     
     # ===== 市场盘口（goal line）— 优先使用初赔AJAX数据 =====
+    league = sp.get('league', '')  # 提前获取联赛名 (盘口推断+标定均需要)
     if init_daxiao and init_daxiao.get('instant'):
         market_goal_line = abs(init_daxiao['instant']['goal_line_mode'])
         market_gl_source = f"500.com初赔({init_daxiao['num_valid']}家)"
@@ -4004,10 +4390,39 @@ def predict_match(match_num, data):
         market_gl_source = daxiao.get('source', '默认值')
         initial_goal_line = daxiao.get('initial_goal_line', market_goal_line)
     
+    # 无外部盘口数据时, 从历史库推断市场盘口
+    if market_gl_source == '默认值' and had and had.get('h'):
+        try:
+            _db_path = os.path.join(os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)), 'predictions', 'historical_odds.db')
+            if os.path.exists(_db_path):
+                _conn = sqlite3.connect(_db_path)
+                _c = _conn.cursor()
+                # 查找该联赛最近10场的平均总进球 (子查询确保LIMIT生效)
+                _c.execute('''SELECT AVG(total_goals) FROM (
+                                  SELECT (home_score + away_score) as total_goals 
+                                  FROM historical_matches 
+                                  WHERE league = ? AND home_score IS NOT NULL AND home_score >= 0
+                                  AND away_score IS NOT NULL AND away_score >= 0
+                                  AND match_date < ? 
+                                  ORDER BY match_date DESC LIMIT 10
+                              )''',
+                           (league, sp.get('match_date', '9999')))
+                _row = _c.fetchone()
+                if _row and _row[0] and _row[0] > 0:
+                    market_goal_line = round(_row[0] * 2) / 2  # 取最近的0.5
+                    market_goal_line = max(1.5, min(4.5, market_goal_line))
+                    market_gl_source = f'历史库推断({league}场均{_row[0]:.1f})'
+                    print(f"  [盘口推断] {league} 最近10场场均{_row[0]:.1f}球 → 盘口{market_goal_line}")
+                else:
+                    print(f"  [盘口推断] {league} 历史库无足够数据, 保持默认2.5")
+                _conn.close()
+        except Exception as e:
+            print(f"  [盘口推断] 历史库查询失败: {e}")
+    
     # Step 2: P0 (体彩 + 500.com融合)
     # Ultra 2.0: 使用Shin's method替代简单1/odds归一化, 修正favorite-longshot bias
     # 体彩HAD可能为空(未开盘)，此时用500.com欧指代替
-    league = sp.get('league', '')  # Ultra 6.6: 提前获取联赛名用于标定
+    # league 已在盘口推断前定义
     if had and 'h' in had:
         # Ultra 2.0: Shin's method 替代简单归一化
         shin_probs = shin_method([had['h'], had['d'], had['a']])
@@ -4166,23 +4581,158 @@ def predict_match(match_num, data):
             elif name in away_name or away_name in name:
                 away_stats = v
     
+    # Bug3修复: 无外部数据时, 从历史库获取球队统计
+    if not home_stats or not away_stats:
+        try:
+            _db_path = os.path.join(os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)), 'predictions', 'historical_odds.db')
+            if os.path.exists(_db_path):
+                _conn = sqlite3.connect(_db_path)
+                _c = _conn.cursor()
+                _md = sp.get('match_date', '9999')
+                
+                if not home_stats:
+                    _c.execute('''SELECT avg_gf_overall, avg_ga_overall, games_total, form_wr, form_string
+                                  FROM team_rolling_stats 
+                                  WHERE team_name = ? AND match_date < ? AND avg_gf_overall IS NOT NULL
+                                  ORDER BY match_date DESC LIMIT 1''', (home_name, _md))
+                    _row = _c.fetchone()
+                    if _row and _row[0] is not None:
+                        home_stats = {'avg_gf': _row[0], 'avg_ga': _row[1], 'games': _row[2],
+                                      'form_wr': _row[3] or 0.5, 'form_string': _row[4] or ''}
+                        print(f"  [历史库] {home_name} 统计: 场均进{_row[0]:.1f}/失{_row[1]:.1f} {_row[2]}场 胜率{_row[3]:.2f}")
+                
+                if not away_stats:
+                    _c.execute('''SELECT avg_gf_overall, avg_ga_overall, games_total, form_wr, form_string
+                                  FROM team_rolling_stats 
+                                  WHERE team_name = ? AND match_date < ? AND avg_gf_overall IS NOT NULL
+                                  ORDER BY match_date DESC LIMIT 1''', (away_name, _md))
+                    _row = _c.fetchone()
+                    if _row and _row[0] is not None:
+                        away_stats = {'avg_gf': _row[0], 'avg_ga': _row[1], 'games': _row[2],
+                                      'form_wr': _row[3] or 0.5, 'form_string': _row[4] or ''}
+                        print(f"  [历史库] {away_name} 统计: 场均进{_row[0]:.1f}/失{_row[1]:.1f} {_row[2]}场 胜率{_row[3]:.2f}")
+                
+                _conn.close()
+        except Exception as e:
+            print(f"  [历史库] 球队统计查询失败: {e}")
+    
+    # Bug3修复: 同时获取Elo评级 (用于第4源概率)
+    _hist_elo_h = None
+    _hist_elo_a = None
+    try:
+        _db_path = os.path.join(os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)), 'predictions', 'historical_odds.db')
+        if os.path.exists(_db_path):
+            _conn = sqlite3.connect(_db_path)
+            _c = _conn.cursor()
+            _md = sp.get('match_date', '9999')
+            _c.execute('''SELECT elo_rating FROM team_elo_history 
+                          WHERE team_name = ? AND match_date < ? AND elo_rating IS NOT NULL
+                          ORDER BY match_date DESC LIMIT 1''', (home_name, _md))
+            _row = _c.fetchone()
+            if _row:
+                _hist_elo_h = _row[0]
+            _c.execute('''SELECT elo_rating FROM team_elo_history 
+                          WHERE team_name = ? AND match_date < ? AND elo_rating IS NOT NULL
+                          ORDER BY match_date DESC LIMIT 1''', (away_name, _md))
+            _row = _c.fetchone()
+            if _row:
+                _hist_elo_a = _row[0]
+            _conn.close()
+            if _hist_elo_h and _hist_elo_a:
+                print(f"  [历史库] Elo: {home_name}={_hist_elo_h:.0f} vs {away_name}={_hist_elo_a:.0f}")
+    except Exception:
+        pass
+    
+    # Bug3修复: 无外部近况数据时, 从历史库form_string补充
+    if not home_form and home_stats and home_stats.get('form_string'):
+        home_form = home_stats['form_string']
+        home_form_cache = exponential_decay_form(home_form, decay_rate=0.15)
+        print(f"  [历史库] {home_name} 近况: {home_form}")
+    if not away_form and away_stats and away_stats.get('form_string'):
+        away_form = away_stats['form_string']
+        away_form_cache = exponential_decay_form(away_form, decay_rate=0.15)
+        print(f"  [历史库] {away_name} 近况: {away_form}")
+    
+    # Ultra 8.0: 获取 xG/xGA 数据 (替代实际进球, 降低运气噪声)
+    _xg_home = fetch_xg_rolling_stats(home_name, sp.get('match_date', '9999'), sp.get('league', ''))
+    _xg_away = fetch_xg_rolling_stats(away_name, sp.get('match_date', '9999'), sp.get('league', ''))
+    _xg_data = None
+    if _xg_home:
+        _ppda_str = f", PPDA={_xg_home.get('avg_ppda', '?')}, 压迫={_xg_home.get('pressure_index', '?')}" if _xg_home.get('avg_ppda') else ""
+        print(f"  [xG] {home_name}: xG进{_xg_home['avg_xg_for']}/失{_xg_home['avg_xg_against']} "
+              f"(n={_xg_home['n_games']}, 质量={_xg_home['cv_quality']}, 超额={_xg_home['overperformance']:+.2f}{_ppda_str})")
+    if _xg_away:
+        _ppda_str = f", PPDA={_xg_away.get('avg_ppda', '?')}, 压迫={_xg_away.get('pressure_index', '?')}" if _xg_away.get('avg_ppda') else ""
+        print(f"  [xG] {away_name}: xG进{_xg_away['avg_xg_for']}/失{_xg_away['avg_xg_against']} "
+              f"(n={_xg_away['n_games']}, 质量={_xg_away['cv_quality']}, 超额={_xg_away['overperformance']:+.2f}{_ppda_str})")
+    if _xg_home and _xg_away:
+        _xg_data = {
+            'home': _xg_home,
+            'away': _xg_away,
+            'cv_quality_avg': round((_xg_home['cv_quality'] + _xg_away['cv_quality']) / 2, 3),
+        }
+
     if home_stats and away_stats:
-        # 基于实际进球数据: 进攻力=(本队场均进+对手场均失)/2
-        lam_h = (home_stats['avg_gf'] + away_stats['avg_ga']) / 2
-        lam_a = (away_stats['avg_gf'] + home_stats['avg_ga']) / 2
-        # Ultra 2.0: 贝叶斯收缩 — 近10场数据向联赛均值收缩
-        # 联赛平均进球约1.3球/场, 防守约1.3球/场
-        # Ultra 6.6: 联赛特定场均进球 (替代硬编码1.3)
-        league = sp.get('league', '')
-        LEAGUE_AVG_GF = LEAGUE_AVG_GF_MAP.get(league, 1.3)
-        lam_h = bayesian_shrinkage(lam_h, 10, LEAGUE_AVG_GF, k=10)
-        lam_a = bayesian_shrinkage(lam_a, 10, LEAGUE_AVG_GF, k=10)
-        # Ultra 1.0: 主场优势用乘除法 (比 2.0-x 更合理)
-        # 主队进攻增强, 客队进攻减弱, 总进球量基本不变
+        if _xg_home and _xg_away:
+            # Ultra 8.0: 使用 xG/xGA 替代实际进球 (降低运气噪声)
+            # xG 过滤了折射、乌龙等运气成分, 更稳定地反映球队真实实力
+            lam_h = (_xg_home['avg_xg_for'] + _xg_away['avg_xg_against']) / 2
+            lam_a = (_xg_away['avg_xg_for'] + _xg_home['avg_xg_against']) / 2
+            # 贝叶斯收缩 — 用实际样本量而非硬编码10
+            league = sp.get('league', '')
+            LEAGUE_AVG_GF = LEAGUE_AVG_GF_MAP.get(league, 1.3)
+            lam_h = bayesian_shrinkage(lam_h, _xg_home['n_games'], LEAGUE_AVG_GF, k=10)
+            lam_a = bayesian_shrinkage(lam_a, _xg_away['n_games'], LEAGUE_AVG_GF, k=10)
+            # xG超额修正: 超额表现(实际>xG)不可持续, 适度回调
+            if _xg_home['overperformance'] > 0.3:
+                _adj = min(0.10, _xg_home['overperformance'] * 0.05)
+                lam_h *= (1 - _adj)
+            if _xg_away['overperformance'] > 0.3:
+                _adj = min(0.10, _xg_away['overperformance'] * 0.05)
+                lam_a *= (1 - _adj)
+
+            # Ultra 9.0: PPDA压迫强度修正
+            # 数据分析: 高压球队(PPDA<7)场均xG=1.90, 低压球队(PPDA>14)场均xG=1.47
+            # 压迫强度差越大, 强队xG提升越多, 弱队xG下降
+            # 调整公式: adj = ppda_diff * sensitivity * stability_factor
+            #   - ppda_diff > 0: 主队压迫更强 → 主队xG↑, 客队xG↓
+            #   - 有界调整 ±8%, 避免过度修正
+            _ppda_h = _xg_home.get('avg_ppda')
+            _ppda_a = _xg_away.get('avg_ppda')
+            _ppda_stab_h = _xg_home.get('ppda_stability', 0.5)
+            _ppda_stab_a = _xg_away.get('ppda_stability', 0.5)
+            if _ppda_h is not None and _ppda_a is not None:
+                # PPDA差: 正值=主队压迫更强(PPDA更低)
+                _ppda_diff = _ppda_a - _ppda_h
+                # 灵敏度系数: 每单位PPDA差调整0.4% (经验值)
+                _ppda_sensitivity = 0.004
+                # 稳定性因子: 两队PPDA稳定性的几何平均 (0.3~1.0)
+                _stab_factor = (_ppda_stab_h * _ppda_stab_a) ** 0.5
+                _stab_factor = max(0.3, min(1.0, _stab_factor))
+                # 计算调整比例 (有界 ±8%)
+                _ppda_adj = _ppda_diff * _ppda_sensitivity * _stab_factor
+                _ppda_adj = max(-0.08, min(0.08, _ppda_adj))
+                if abs(_ppda_adj) > 0.005:
+                    lam_h *= (1 + _ppda_adj)
+                    lam_a *= (1 - _ppda_adj)
+                    _p_label = "高压" if _ppda_diff > 0 else "低压"
+                    print(f"  [PPDA] 压迫修正: {_p_label} 主队PPDA={_ppda_h:.1f} vs 客队PPDA={_ppda_a:.1f} "
+                          f"→ λ_h{'×' if _ppda_adj > 0 else '÷'}{1+abs(_ppda_adj):.3f} "
+                          f"λ_a{'×' if _ppda_adj < 0 else '÷'}{1+abs(_ppda_adj):.3f} "
+                          f"(稳定度={_stab_factor:.2f})")
+        else:
+            # 回退: 基于实际进球数据
+            lam_h = (home_stats['avg_gf'] + away_stats['avg_ga']) / 2
+            lam_a = (away_stats['avg_gf'] + home_stats['avg_ga']) / 2
+            league = sp.get('league', '')
+            LEAGUE_AVG_GF = LEAGUE_AVG_GF_MAP.get(league, 1.3)
+            lam_h = bayesian_shrinkage(lam_h, 10, LEAGUE_AVG_GF, k=10)
+            lam_a = bayesian_shrinkage(lam_a, 10, LEAGUE_AVG_GF, k=10)
+        # Ultra 1.0: 主场优势用乘除法
         league = sp.get('league', '')
         home_adv = LEAGUE_HOME_ADV.get(league, 1.15)
         lam_h *= home_adv
-        lam_a /= home_adv  # 除法: 客队减弱与主队增强对称
+        lam_a /= home_adv
     else:
         # 降级: 从赔率隐含概率推算，总进球基数由市场盘口决定
         total_goals_base = LEAGUE_AVG_GOALS_MAP.get(sp.get('league', ''), market_goal_line)
@@ -4340,7 +4890,8 @@ def predict_match(match_num, data):
     a_wr_for_elo = away_form_cache[0] if away_form_cache else 0.5
     league = sp.get('league', '')
     elo_hfa = int((LEAGUE_HOME_ADV.get(league, 1.15) - 1.0) * 400)  # 主场优势→Elo点数
-    elo_probs = elo_probabilities(home_stats, away_stats, h_wr_for_elo, a_wr_for_elo, league_home_adv=elo_hfa)
+    elo_probs = elo_probabilities(home_stats, away_stats, h_wr_for_elo, a_wr_for_elo, league_home_adv=elo_hfa,
+                                  hist_elo_h=_hist_elo_h, hist_elo_a=_hist_elo_a)
 
     # 5. 集成融合: 市场 + Power + 校准Poisson + Elo (四源)
     dq = assess_data_quality(sp)
@@ -4400,6 +4951,28 @@ def predict_match(match_num, data):
             # 重新计算scores (比分/HHAD/一致性检查将使用校准后λ)
             scores = compute_scores(lam_h, lam_a, goal_line=handicap, market_goal_line=market_goal_line)
 
+    # ===== Ultra 7.4: 杯赛首回合大比分惩罚 (仅限欧冠/欧罗巴/欧协联等两回合制杯赛) =====
+    # 当首回合分差≥3球时, 落后方λ自动下调30-50%, 置信度封顶★★★★
+    # 联赛不适用, 仅对有主客场制的杯赛生效
+    cup_leg_penalty_info = None
+    try:
+        cup_leg_penalty_info = get_cup_leg_penalty(match_num, league, home_name, away_name)
+        if cup_leg_penalty_info and cup_leg_penalty_info.get('applied'):
+            factor = cup_leg_penalty_info['lambda_factor']
+            side = cup_leg_penalty_info['trailing_side']
+            if side == 'home':
+                lam_h *= factor
+            else:
+                lam_a *= factor
+            lam_h = max(0.3, min(lam_h, 4.0))
+            lam_a = max(0.3, min(lam_a, 4.0))
+            # 重新计算scores (惩罚改变了λ, 所有下游计算需更新)
+            scores = compute_scores(lam_h, lam_a, goal_line=handicap, market_goal_line=market_goal_line)
+            v611_notes.append(f"杯赛首回合惩罚: {cup_leg_penalty_info['note']}")
+            v611_flags['cup_leg_penalty'] = True
+    except Exception as _e:
+        pass  # 惩罚模块失败不影响主预测流程
+
     # ===== 半全场胜平负 (体彩第五种玩法) =====
     # Ultra 6.4: 传入融合概率做边际重加权, 平局高时含平组合自然上浮
     half_full = compute_half_full(lam_h, lam_a, fused_wdl=[p1_w, p1_d, p1_l])
@@ -4411,12 +4984,20 @@ def predict_match(match_num, data):
     total_expected = round(lam_h + lam_a, 1)
     over_under = '大' if (lam_h + lam_a) > market_goal_line else '小'
     if lam_h > lam_a * 1.3:
-        avg_gf = home_stats.get('avg_gf', 0) if home_stats else 0
-        attack = f"主队进攻占优(场均{avg_gf}球)" if home_stats else "主队预期占优"
+        if _xg_home:
+            attack = f"主队进攻占优(xG {_xg_home['avg_xg_for']:.1f})"
+        elif home_stats:
+            attack = f"主队进攻占优(场均{home_stats.get('avg_gf',0):.1f}球)"
+        else:
+            attack = "主队预期占优"
         key_insight = f"{attack}, 预期主{round(lam_h,1)}:客{round(lam_a,1)}, 总{total_expected}球偏{over_under}"
     elif lam_a > lam_h * 1.3:
-        avg_gf = away_stats.get('avg_gf', 0) if away_stats else 0
-        attack = f"客队进攻占优(场均{avg_gf}球)" if away_stats else "客队预期占优"
+        if _xg_away:
+            attack = f"客队进攻占优(xG {_xg_away['avg_xg_for']:.1f})"
+        elif away_stats:
+            attack = f"客队进攻占优(场均{away_stats.get('avg_gf',0):.1f}球)"
+        else:
+            attack = "客队预期占优"
         key_insight = f"{attack}, 预期主{round(lam_h,1)}:客{round(lam_a,1)}, 总{total_expected}球偏{over_under}"
     else:
         key_insight = f"双方预期进球接近(主{round(lam_h,1)}:客{round(lam_a,1)}), 总{total_expected}球偏{over_under}"
@@ -4428,6 +5009,12 @@ def predict_match(match_num, data):
         'total_expected': total_expected,
         'over_under': over_under,
         'key_insight': key_insight,
+        # Ultra 8.0: xG 数据
+        'home_xg': f"{_xg_home['avg_xg_for']:.1f}/{_xg_home['avg_xg_against']:.1f}" if _xg_home else None,
+        'away_xg': f"{_xg_away['avg_xg_for']:.1f}/{_xg_away['avg_xg_against']:.1f}" if _xg_away else None,
+        'xg_overperformance': f"主{_xg_home['overperformance']:+.2f}/客{_xg_away['overperformance']:+.2f}" if _xg_home and _xg_away else None,
+        'xg_cv_quality': _xg_data['cv_quality_avg'] if _xg_data else None,
+        'using_xg': bool(_xg_home and _xg_away),
     }
     
     # ===== 三条预测: HAD + HHAD + 比分 =====
@@ -4508,6 +5095,11 @@ def predict_match(match_num, data):
     elif dq['score'] >= 80:
         had_conf_score = min(5.0, had_conf_score + 0.0)  # 高质量不额外加星, 防止过拟合
 
+    # Ultra 8.0: xG 交叉验证质量加星 — xG与实际进球一致性高时增信
+    if _xg_data and _xg_data['cv_quality_avg'] >= 0.45:
+        had_conf_score = min(5.0, had_conf_score + 0.5)
+        hhad_conf_score = min(5.0, hhad_conf_score + 0.5)
+
     # HAD-Poisson一致性验证 — Ultra 3.0: 使用ensemble_fuse返回的agreement
     poisson_wdl = [v/100 for v in scores['poisson_wdl']]
     poisson_had_idx = poisson_wdl.index(max(poisson_wdl))
@@ -4555,6 +5147,30 @@ def predict_match(match_num, data):
         if historical_feedback.get('direction_rate', 100) < 40 and historical_feedback.get('direction_samples', 0) >= 10:
             had_conf_score = max(1.0, had_conf_score - 0.5)
             had_conf = format_stars(had_conf_score)
+        # Ultra 7.5: 历史校准警告自动降星 — 高置信度命中率偏低时降星
+        if historical_feedback.get('calibration_warning'):
+            had_conf_score = max(1.0, had_conf_score - 0.5)
+            had_conf = format_stars(had_conf_score)
+
+    # Ultra 7.4: 杯赛首回合大比分惩罚 — 置信度封顶★★★★
+    if cup_leg_penalty_info and cup_leg_penalty_info.get('applied'):
+        conf_cap = cup_leg_penalty_info.get('conf_cap', 4.0)
+        if had_conf_score > conf_cap:
+            had_conf_score = conf_cap
+            had_conf = format_stars(had_conf_score)
+        if hhad_conf_score > conf_cap:
+            hhad_conf_score = conf_cap
+
+    # Ultra 7.5: 高难度比赛置信度封顶 — 可预测性低则限制最高置信度
+    # difficulty < 30 (极难预测) → 封顶★★★; < 40 (难预测) → 封顶★★★½
+    if difficulty < 30:
+        had_conf_score = min(had_conf_score, 3.0)
+        hhad_conf_score = min(hhad_conf_score, 3.0)
+    elif difficulty < 40:
+        had_conf_score = min(had_conf_score, 3.5)
+        hhad_conf_score = min(hhad_conf_score, 3.5)
+
+    had_conf = format_stars(had_conf_score)
     hhad_conf = format_stars(hhad_conf_score)
     
     # ===== 证据收集 =====
@@ -4703,12 +5319,17 @@ def predict_match(match_num, data):
         },
         'market_gl_source': market_gl_source,
         'initial_gl': round(initial_goal_line, 2),
-        'ev': evidence[:4] + [consistency_note] + ([lam_calib_note] if lam_recalibrated else []) + _adv_notes + v611_notes,
+        'ev': evidence[:4] + [consistency_note] + ([lam_calib_note] if lam_recalibrated else []) + _adv_notes + v611_notes
+              + ([f"[xG] 使用xG替代进球(质量{_xg_data['cv_quality_avg']:.2f}), 超额修正"
+                  if _xg_data and _xg_data['cv_quality_avg'] > 0 else ""] if _xg_data else []),
         'initial': _build_initial_summary(init_ouzhi, init_yazhi, init_daxiao),
         'cross_market': cross_market,
         'historical_feedback': historical_feedback,
         'sporttery_pools': sporttery_pools,  # Ultra 6.5: 竞彩固定奖金EV分析
         'v611_flags': v611_flags,  # Ultra 6.11: 五大场景修正标记
+        'cup_leg_penalty': cup_leg_penalty_info,  # Ultra 7.4: 杯赛首回合惩罚信息
+        # Ultra 8.0: xG/xGA 数据 + 交叉验证质量
+        'xg_data': _xg_data,
     }
 
 # ============================================================
@@ -4817,6 +5438,9 @@ def main():
 
     # Ultra 7.3: 命令行编号日期输入 (如 260728 001,002) 优先于顶部配置
     apply_cli_match_input()
+
+    # 记忆系统 v2.0: 预测前自动召回铁律 + 相关记忆 + 编号验证
+    inject_memory_context()
     
     # ===== Phase 1: Sporttery API (核心 — 体彩场次+赔率基准+固定奖金) =====
     t1 = time.time()
@@ -4832,11 +5456,19 @@ def main():
                     bonus = fut.result()
                     if bonus:
                         matches[key]['sporttery_bonus'] = bonus
+                        # 从固定奖金中回填HAD/HHAD赔率 (结果API回退时体彩终赔可能缺失)
+                        if bonus.get('had') and not matches[key].get('HAD'):
+                            matches[key]['HAD'] = bonus['had']
+                        if bonus.get('hhad'):
+                            _old_hhad = matches[key].get('HHAD', {})
+                            # 优先使用getFixedBonusV1的HHAD (有独立赔率, 非HAD复制)
+                            if not _old_hhad or _old_hhad.get('h', 0) == matches[key].get('HAD', {}).get('h', -1):
+                                matches[key]['HHAD'] = bonus['hhad']
                 except Exception:
                     pass
         n_bonus = sum(1 for mi in matches.values() if mi.get('sporttery_bonus'))
         if n_bonus:
-            print(f"  [固定奖金] {n_bonus}/{len(matches)}场获取成功 (比分/总进球/半全场赔率)")
+            print(f"  [固定奖金] {n_bonus}/{len(matches)}场获取成功 (比分/总进球/半全场/HAD/HHAD赔率)")
     dt1 = time.time() - t1
     raw_sporttery = json.dumps(matches, ensure_ascii=False)
     monitor.append(('Phase1-sporttery', dt1, len(raw_sporttery), 
@@ -4907,6 +5539,12 @@ def main():
     _check_data_source_policy(all_data)
     
     # ===== Phase 4: 七步预测 =====
+    # Ultra 7.4: 清除杯赛首回合惩罚缓存 (每次运行使用最新SWOT数据)
+    try:
+        clear_leg_cache()
+    except Exception:
+        pass
+
     t4 = time.time()
     results = {}
     for key in all_data:

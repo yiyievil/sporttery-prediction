@@ -1,5 +1,5 @@
 {
- "refreshed_at": "2026-07-28 13:01:04",
+ "refreshed_at": "2026-07-29 11:49:34",
  "source": "swot_auto (leisu为主/stats备用)",
  "matches": {
   "周日210": {
@@ -258,16 +258,15 @@
    "away_name": "格风暴",
    "source": "manual_first_leg",
    "home_strengths": [
-    "哈茨首回合虽0-4惨败但全场19脚射门5次绝佳机会，主场连续8场取胜，狂热氛围下为荣誉而战战意十足",
-    "格风暴手握4球优势大概率大幅轮换留力，哈茨有望借对手松懈打出体面结果"
+    "哈茨首回合虽0-4惨败但全场19脚射门5次绝佳机会，主场连续8场取胜，狂热氛围下为荣誉而战战意十足"
    ],
-   "home_weaknesses": [],
+   "home_weaknesses": [
+    "首回合0-4落后翻盘几乎不可能，哈茨虽有为荣誉而战的战意但实际晋级希望渺茫"
+   ],
    "away_strengths": [
-    "格风暴首回合4-0完胜，实力与心理双重碾压，即便轮换阵容深度也占优"
+    "格风暴首回合4-0完胜，实力与心理双重碾压，阵容深度占优"
    ],
-   "away_weaknesses": [
-    "格风暴领先4球晋级几无悬念，客场战意明显下降，可能轮换主力避免伤病，不会全力投入"
-   ],
+   "away_weaknesses": [],
    "trend": null,
    "swot_url": ""
   },
@@ -299,9 +298,7 @@
    "home_strengths": [
     "波兹南首回合客场4-1大胜，实力优势明显，回到主场晋级形势极为有利"
    ],
-   "home_weaknesses": [
-    "波兹南总比分领先3球晋级几乎锁定，本场无需冒险争胜，可能轮换留力四天后的联赛，比赛强度或下降"
-   ],
+   "home_weaknesses": [],
    "away_strengths": [
     "奥胡斯首回合1-4惨败已无任何包袱，只剩全力进攻一条路，反而可能放手一搏打出开放局面"
    ],
@@ -310,6 +307,65 @@
    ],
    "trend": null,
    "swot_url": ""
+  },
+  "周三003": {
+   "home_strengths": [
+    "近况: 近6场3胜1平2负"
+   ],
+   "home_weaknesses": [],
+   "away_strengths": [
+    "近况出色: 近6场4胜0平2负"
+   ],
+   "away_weaknesses": [],
+   "trend": {},
+   "swot_url": "",
+   "source": "stats"
+  },
+  "周三004": {
+   "home_strengths": [],
+   "home_weaknesses": [
+    "近况低迷: 近6场2胜0平4负",
+    "联赛排名第16, 深陷降级区"
+   ],
+   "away_strengths": [
+    "近况出色: 近6场4胜2平0负",
+    "交锋占优: 历史16胜12平12负",
+    "联赛排名第2, 处于争冠集团"
+   ],
+   "away_weaknesses": [],
+   "trend": {},
+   "swot_url": "",
+   "source": "stats"
+  },
+  "周三005": {
+   "home_strengths": [
+    "近况: 近6场3胜3平0负",
+    "交锋占优: 历史14胜8平8负"
+   ],
+   "home_weaknesses": [],
+   "away_strengths": [
+    "近况: 近6场3胜2平1负"
+   ],
+   "away_weaknesses": [],
+   "trend": {},
+   "swot_url": "",
+   "source": "stats"
+  },
+  "周三006": {
+   "home_strengths": [
+    "近况: 近6场3胜1平2负"
+   ],
+   "home_weaknesses": [],
+   "away_strengths": [
+    "近况出色: 近6场4胜0平2负",
+    "交锋占优: 历史13胜6平4负",
+    "联赛排名第1, 处于争冠集团",
+    "防守稳固: 场均仅失0.8球"
+   ],
+   "away_weaknesses": [],
+   "trend": {},
+   "swot_url": "",
+   "source": "stats"
   }
  }
 }

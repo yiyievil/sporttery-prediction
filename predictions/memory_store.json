@@ -12,8 +12,8 @@
       ],
       "timestamp": 1785158967367,
       "created_at": "2026-07-27 13:29:27",
-      "access_count": 1,
-      "last_accessed": "2026-07-27 13:30:18"
+      "access_count": 6,
+      "last_accessed": "2026-07-29 11:49:28"
     },
     {
       "id": "_19fa3c42047",
@@ -42,8 +42,8 @@
       ],
       "timestamp": 1785158967367,
       "created_at": "2026-07-27 13:29:27",
-      "access_count": 1,
-      "last_accessed": "2026-07-27 13:30:18"
+      "access_count": 4,
+      "last_accessed": "2026-07-29 11:49:28"
     },
     {
       "id": "_19fa3c42048",
@@ -72,8 +72,8 @@
       ],
       "timestamp": 1785158967368,
       "created_at": "2026-07-27 13:29:27",
-      "access_count": 1,
-      "last_accessed": "2026-07-27 13:30:18"
+      "access_count": 5,
+      "last_accessed": "2026-07-29 11:49:28"
     },
     {
       "id": "_19fa3c42049",
@@ -87,8 +87,8 @@
       ],
       "timestamp": 1785158967369,
       "created_at": "2026-07-27 13:29:27",
-      "access_count": 3,
-      "last_accessed": "2026-07-27 13:46:07"
+      "access_count": 8,
+      "last_accessed": "2026-07-29 11:49:28"
     },
     {
       "id": "_19fa3c42049",
@@ -162,8 +162,8 @@
       ],
       "timestamp": 1785158967372,
       "created_at": "2026-07-27 13:29:27",
-      "access_count": 1,
-      "last_accessed": "2026-07-27 13:30:18"
+      "access_count": 9,
+      "last_accessed": "2026-07-29 11:49:28"
     },
     {
       "id": "_19fa3c4204c",
@@ -237,7 +237,8 @@
       ],
       "timestamp": 1785159018278,
       "created_at": "2026-07-27 13:30:18",
-      "access_count": 0
+      "access_count": 5,
+      "last_accessed": "2026-07-29 11:49:28"
     },
     {
       "id": "_19fa3c4e727",
@@ -251,7 +252,8 @@
       ],
       "timestamp": 1785159018279,
       "created_at": "2026-07-27 13:30:18",
-      "access_count": 0
+      "access_count": 10,
+      "last_accessed": "2026-07-29 11:49:28"
     },
     {
       "id": "_19fa3c4e727",
@@ -265,6 +267,114 @@
       ],
       "timestamp": 1785159018279,
       "created_at": "2026-07-27 13:30:18",
+      "access_count": 0
+    },
+    {
+      "id": "_19fad85af35",
+      "text": "体彩编号格式: 260729001 = 2026年07月29日第001场(9位完整编号)。周几(如周一/周三)基于体彩开盘日(businessDate)非比赛日(matchDate)。同一日期不同周几的编号不同: 260729(周三)只有001-006, 260727(周一)有201/202。用户说260729201和202时, 实际可能是指260727201(周一201赫根vs索尔纳)和260727202(周一202罗森博格vs腓特烈)。回退逻辑bug: 结果API找到周一201/202但TARGET_WEEKDAY=周三导致被排除, 需要放宽周几过滤或让用户用完整编号指定正确日期。",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.95,
+      "scope": "global",
+      "tags": [
+        "ERR-20260729-001 编号格式 回退逻辑"
+      ],
+      "timestamp": 1785322647349,
+      "created_at": "2026-07-29 10:57:27",
+      "access_count": 29,
+      "last_accessed": "2026-07-29 11:49:28"
+    },
+    {
+      "id": "_19fad957daf",
+      "text": "BUG修复: xG/PPDA数据联赛限制和队名映射错误。1) _BIG5_LEAGUES限制只允许五大联赛使用xG数据, 但数据库中有瑞超(257场)/挪超(236场)等联赛的xG数据 → 新增_XG_SUPPORTED_LEAGUES扩展支持。2) _XG_TEAM_MAP只有大五联赛球队映射, 瑞超/挪超球队缺失 → 修改为映射不到时直接用中文队名查询。3) 数据库中非大五联赛队名是中文(如'赫根'), 代码用_XG_TEAM_MAP转成英文后查询, 导致查不到 → 修改SQL同时尝试英文和中文队名。4) 瑞超/挪超PPDA数据0%覆盖, 需要采集。修复后xG数据成功获取: 赫根xG进1.38/失1.48, 索尔纳xG进1.44/失1.38, 罗森博格xG进1.54/失1.7, 腓特烈xG进1.38/失1.57。",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.95,
+      "scope": "global",
+      "tags": [
+        "ERR-20260729-002 xG PPDA 联赛限制 队名映射"
+      ],
+      "timestamp": 1785323683247,
+      "created_at": "2026-07-29 11:14:43",
+      "access_count": 0
+    },
+    {
+      "id": "_19fad959744",
+      "text": "BUG修复: fetch_sporttery_matches回退逻辑排除正确比赛。当用户输入260729(周三)但比赛属于周一(体彩开盘日)时, 结果API找到了周一201/202但被周几过滤(TARGET_WEEKDAY=周三)和精确日期过滤(match_date=2026-07-28≠2026-07-29)双重排除。修复: 当周几和精确日期都不匹配但编号匹配时, 保留结果并警告(体彩周几=开盘日≠比赛日)。关键记忆LRN-20260725-002已记录此问题但代码未完全实现。",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.9,
+      "scope": "global",
+      "tags": [
+        "ERR-20260729-003 回退逻辑 周几过滤"
+      ],
+      "timestamp": 1785323689796,
+      "created_at": "2026-07-29 11:14:49",
+      "access_count": 4,
+      "last_accessed": "2026-07-29 11:49:28"
+    },
+    {
+      "id": "_19fad9c6ad4",
+      "text": "用户确认: 体彩编号260729001是正确的编号(2026年07月29日第001场), 不是260729201。用户在2026-07-29明确纠正过。之前使用了错误的260729201和202导致找错比赛。RULE-001: 必须使用9位完整编号, 后3位序号需结合日期上下文补全。",
+      "category": "decision",
+      "category_cn": "决策",
+      "importance": 1.0,
+      "scope": "global",
+      "tags": [
+        "编号",
+        "用户确认",
+        "260729001",
+        "RULE-001"
+      ],
+      "timestamp": 1785324137172,
+      "created_at": "2026-07-29 11:22:17",
+      "access_count": 23,
+      "last_accessed": "2026-07-29 11:49:28"
+    },
+    {
+      "id": "_19fad9e0fbb",
+      "text": "记忆系统v2.0升级完成: 1) memory.py增加auto_recall自动召回机制(关键词触发+编号验证+铁律加载); 2) 创建CRITICAL_RULES.md含11条铁律(RULE-001到RULE-011); 3) v215_e2e.py集成inject_memory_context()在main()入口自动注入; 4) 正确编号260729001已存储(importance=1.0)。memory-lancedb-pro需OpenClaw框架当前环境不可用, 用文件记忆系统替代实现autoRecall功能。",
+      "category": "decision",
+      "category_cn": "决策",
+      "importance": 0.95,
+      "scope": "global",
+      "tags": [
+        "记忆系统",
+        "auto_recall",
+        "CRITICAL_RULES",
+        "v2.0"
+      ],
+      "timestamp": 1785324244923,
+      "created_at": "2026-07-29 11:24:04",
+      "access_count": 9,
+      "last_accessed": "2026-07-29 11:49:28"
+    },
+    {
+      "id": "_19fadbb22e8",
+      "text": "权重分配分析完成(260729): 发现9个问题。严重: 1)数据质量二值化悬崖(dq=50处Poisson权重4倍跳变) 2)Power权重悖论(分歧时反而更高) 3)几何平均系统性压制平局。中等: 4)HHAD无动态调节 5)PPDA/xG质量未反馈融合权重 6)Elo不区分精度 7)HAD/HHAD市场源不一致。优化建议: 渐变化+Power修复+Elo分级+PPDA反馈+HHAD动态+混合融合+KL散度一致性",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.9,
+      "scope": "global",
+      "tags": [
+        "权重"
+      ],
+      "timestamp": 1785326150376,
+      "created_at": "2026-07-29 11:55:50",
+      "access_count": 0
+    },
+    {
+      "id": "_19fadbb2b59",
+      "text": "数据完备性检查(260729): 7个关键缺失。严重: 1)PPDA欧冠巴甲全空 2)xG为proxy占位符(巴甲33/37场相同) 3)欧冠3队仅1场数据(奥莫尼亚/波兹南/奥胡斯) 4)巴甲8队名称不一致(弗鲁米嫩/弗鲁米嫩塞等)。中等: 5)500.com亚指大小球0%覆盖 6)巴甲仅37场样本 7)里莫仅1场。建议: 补充欧冠巴甲xG/PPDA真实数据+统一队名映射",
+      "category": "fact",
+      "category_cn": "事实",
+      "importance": 0.9,
+      "scope": "global",
+      "tags": [
+        "数据完备性"
+      ],
+      "timestamp": 1785326152537,
+      "created_at": "2026-07-29 11:55:52",
       "access_count": 0
     }
   ],
