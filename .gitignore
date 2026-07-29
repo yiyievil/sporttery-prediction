@@ -5,3 +5,21 @@ nowscore_cache/
 node_modules/
 *.log
 .DS_Store
+
+# --- 本地运行时产物（不入库）---
+*.zip
+*.jpg
+sporttery_ultra_6.5_*/
+predictions/sporttery_history.db
+predictions/swot_data_fast.json
+predictions/swot_links_temp.json
+predictions/team_ratings.json
+predictions/deep_analysis.md
+predictions/history_analysis.md
+predictions/half_full_empirical.json
+predictions/pred_20260725_*.json
+predictions/pred_20260726_210_217.json
+predictions/pred_20260730_*.json
+predictions/report_20260725_*.pdf
+verify_2026072[1235].html
+verify_20260725.pdf
