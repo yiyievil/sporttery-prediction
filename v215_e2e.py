@@ -4947,8 +4947,9 @@ def predict_match(match_num, data):
     # --- 修正1: 近况滑坡 (主队近3场LLL → 下调进攻λ) ---
     h_slump, h_slump_sev = detect_form_slump(home_form, n_recent=3)
     if h_slump:
-        # 下调幅度: severity 0.67(2L/3)→0.15, 1.0(3L/3)→0.30
-        h_slump_cut = 1.0 - min(0.30, h_slump_sev * 0.30)
+        # 实证标定(backtest_v611_calibration.py 五大联赛5256场):
+        # 3L→×0.87(n=517), 2L/3→×0.92(n=2146), DDD→×0.93(n=147)
+        h_slump_cut = 1.0 - min(0.13, h_slump_sev * 0.13)
         lam_h *= h_slump_cut
         v611_notes.append(f"主队近况滑坡(severity={h_slump_sev:.1f}), λ_h×{h_slump_cut:.2f}")
         v611_flags['home_slump'] = True
@@ -4956,20 +4957,21 @@ def predict_match(match_num, data):
     # --- 修正1b: 客队近况滑坡也影响客队进攻 ---
     a_slump, a_slump_sev = detect_form_slump(away_form, n_recent=3)
     if a_slump:
-        a_slump_cut = 1.0 - min(0.30, a_slump_sev * 0.30)
+        a_slump_cut = 1.0 - min(0.13, a_slump_sev * 0.13)
         lam_a *= a_slump_cut
         v611_notes.append(f"客队近况滑坡(severity={a_slump_sev:.1f}), λ_a×{a_slump_cut:.2f}")
         v611_flags['away_slump'] = True
 
-    # --- 修正2: 交锋压制因子 (主队h2h胜率<35% → 双方λ衰减) ---
+    # --- 修正2: 交锋压制因子 (主队h2h胜率<35% → λ_h衰减, 克星方λ_a加成) ---
     h2h_str = shuju.get('h2h', '')
     h2h_info = parse_h2h_record(h2h_str)
     if h2h_info and h2h_info['total'] >= 5:
         if h2h_info['home_win_rate'] < 0.35:
-            # 克星效应: 比赛节奏受控, 进球数偏低
-            lam_h *= 0.85
-            lam_a *= 0.90  # 主队被压制更甚
-            v611_notes.append(f"交锋压制(主胜率{h2h_info['home_win_rate']:.0%}, n={h2h_info['total']}), λ_h×0.85 λ_a×0.90")
+            # 实证标定(n=429): 被压制方进球×0.95, 克星方进球×1.07(反向!)
+            # 旧逻辑双方皆罚(λ_h×0.85/λ_a×0.90)与实证矛盾
+            lam_h *= 0.95
+            lam_a *= 1.05  # 克星方克制加成
+            v611_notes.append(f"交锋压制(主胜率{h2h_info['home_win_rate']:.0%}, n={h2h_info['total']}), λ_h×0.95 λ_a×1.05")
             v611_flags['h2h_suppression'] = True
 
     # --- 修正5: 防守型客队 (近4场3W+ + 场均失球<1.0 → 下调双方λ) ---
