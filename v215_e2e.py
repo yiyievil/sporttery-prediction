@@ -3609,7 +3609,9 @@ def _compute_h2h(home_team, away_team):
 # ============================================================
 
 # 中文→英文球队名映射 (五大联赛)
-_XG_TEAM_MAP = {
+# 唯一数据源为 src/config.TEAM_NAME_MAP (与 run_pipeline 采集器共用),
+# 下方 _XG_TEAM_MAP_LOCAL 仅作导入失败时的兜底及本地覆盖
+_XG_TEAM_MAP_LOCAL = {
     # 英超
     "阿森纳": "Arsenal", "维拉": "Aston Villa", "伯恩茅斯": "Bournemouth",
     "布伦特": "Brentford", "布赖顿": "Brighton", "切尔西": "Chelsea",
@@ -3651,6 +3653,13 @@ _XG_TEAM_MAP = {
     "巴黎圣曼": "Paris Saint Germain", "兰斯": "Reims", "雷恩": "Rennes",
     "圣埃蒂安": "Saint-Etienne", "斯特拉斯": "Strasbourg", "图卢兹": "Toulouse",
 }
+
+# 合并: src/config 为唯一源, 本地表覆盖差异项 (如 利兹联→Leeds United)
+try:
+    from src.config import TEAM_NAME_MAP as _CFG_TEAM_MAP
+    _XG_TEAM_MAP = {**_CFG_TEAM_MAP, **_XG_TEAM_MAP_LOCAL}
+except Exception:
+    _XG_TEAM_MAP = _XG_TEAM_MAP_LOCAL
 
 # 支持xG数据的联赛集合 (含大五联赛 + 数据库中有xG数据的联赛)
 _BIG5_LEAGUES = {"英超", "西甲", "德甲", "意甲", "法甲"}
@@ -3721,13 +3730,23 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
         conn = sqlite3.connect(_db_path)
         c = conn.cursor()
 
+        # 架构重构: 非五大联赛的proxy xG已迁至 understat_proxy 独立表,
+        # 主表仅含真实Understat数据; proxy表不存在时回退主表(兼容迁移前状态)
+        _table = 'understat_matches'
+        if league_cn and league_cn not in _XG_REAL_LEAGUES:
+            try:
+                c.execute('SELECT 1 FROM understat_proxy LIMIT 1')
+                _table = 'understat_proxy'
+            except sqlite3.Error:
+                pass
+
         # 查询该球队在目标日期前的最近N场比赛
         # 球队可能为主队或客队, 同时尝试英文和中文队名
         placeholders = ','.join(['?'] * len(team_names))
         c.execute(f'''
             SELECT home_team, away_team, home_xg, away_xg, home_goals, away_goals,
                    home_ppda, away_ppda, match_date
-            FROM understat_matches
+            FROM {_table}
             WHERE match_date < ? AND is_result = 1
               AND (home_team IN ({placeholders}) OR away_team IN ({placeholders}))
               AND home_xg IS NOT NULL AND away_xg IS NOT NULL

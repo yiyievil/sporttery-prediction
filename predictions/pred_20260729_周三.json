@@ -1,5 +1,5 @@
 {
- "saved_at": "2026-07-29 21:47:59",
+ "saved_at": "2026-07-29 22:47:48",
  "meta": {
   "周三001": {
    "home": "阿拉木图",
@@ -74,7 +74,7 @@
     "dir": "胜",
     "odds": 1.98,
     "conf": "★★★★",
-    "p": "45%/29%/25%",
+    "p": "43%/29%/27%",
     "conf_old": "★★★½"
    },
    "HHAD": {
@@ -82,18 +82,18 @@
     "handicap": -1.0,
     "odds": 1.65,
     "conf": "★★★★½",
-    "p": "26%/27%/47%",
-    "poisson": "37.5/23.3/39.2"
+    "p": "25%/27%/48%",
+    "poisson": "31.2/22.8/46.0"
    },
    "kelly": {
     "HAD": {
      "stake_pct": 0,
-     "ev": -13.9,
+     "ev": -18.2,
      "value": false
     },
     "HHAD": {
      "stake_pct": 0,
-     "ev": -22.6,
+     "ev": -21.2,
      "value": false
     }
    },
@@ -102,21 +102,21 @@
     "quality": "高",
     "details": "HAD✓ HHAD✓ 欧指✓ 近况✓统计△ 大小✓ 初赔三盘✓"
    },
-   "difficulty": 60.5,
+   "difficulty": 58.2,
    "model_agreement": 1.0,
-   "js_agreement": 0.979,
+   "js_agreement": 0.988,
    "score": {
-    "top3": "2-1:8.8 3-0:6.2 3-1:6.0",
-    "high_top3": "2-1:8.8 3-0:6.2 3-1:6.0",
-    "wdl": "61.0/21.2/17.8",
+    "top3": "2-1:8.6 1-2:5.7 3-1:5.5",
+    "high_top3": "2-1:8.6 1-2:5.7 3-1:5.5",
+    "wdl": "54.8/22.5/22.8",
     "main_dir": "大",
     "high_dir": "大",
     "market_gl_str": "2",
-    "over_main": 59.0,
-    "over_low": 80.2,
-    "over_high": 59.0
+    "over_main": 58.7,
+    "over_low": 80.0,
+    "over_high": 58.7
    },
-   "lam": "2.1/1.1",
+   "lam": "1.9/1.2",
    "lam_calibration": {
     "recalibrated": false,
     "original": null,
@@ -124,13 +124,13 @@
     "reason": "无冲突"
    },
    "goals": {
-    "home_expected": 2.1,
-    "away_expected": 1.1,
+    "home_expected": 1.9,
+    "away_expected": 1.2,
     "home_recent": "1.1/2.3",
     "away_recent": "N/A",
-    "total_expected": 3.2,
+    "total_expected": 3.1,
     "over_under": "大",
-    "key_insight": "主队进攻占优(xG 1.6), 预期主2.1:客1.1, 总3.2球偏大",
+    "key_insight": "主队进攻占优(xG 1.6), 预期主1.9:客1.2, 总3.1球偏大",
     "home_xg": "1.6/1.7",
     "away_xg": "1.8/1.5",
     "xg_overperformance": "主-0.55/客-0.84",
@@ -138,28 +138,28 @@
     "using_xg": true
    },
    "half_full": {
-    "main": "胜胜(27.9%)",
-    "top3": "胜胜:27.9 平平:17.4 负负:15.0",
+    "main": "胜胜(25.9%)",
+    "top3": "胜胜:25.9 平平:17.3 负负:16.4",
     "recalibrated": false
    },
    "total_goals": {
-    "main": "2球(20.5%)",
-    "top3": "2球:20.5% 3球:19.8% 4球:15.4%"
+    "main": "2球(20.6%)",
+    "top3": "2球:20.6% 3球:19.8% 1球:15.5%"
    },
-   "market_gl_source": "500.com初赔(30家)",
+   "market_gl_source": "500.com初赔(39家)",
    "initial_gl": 2.25,
    "ev": [
     "HAD 1.98/2.92/3.55→胜@1.98",
     "HHAD -1.0 4.5/3.32/1.65→让负",
-    "500:2.16/2.98/3.10 Δ↑(0.02)(初2.14/3.20/2.96)",
+    "500:2.31/2.93/2.89 Δ↑(0.17)(初2.14/3.20/2.96)",
     "主:DWWWWWWWLW",
     "HAD(胜)≠HHAD(让负)弱一致(险胜)",
     "[xG] 使用xG替代进球(质量0.52), 超额修正"
    ],
    "initial": {
     "ouzhi_init": "2.14/3.20/2.96",
-    "ouzhi_now": "2.16/2.98/3.10",
-    "ouzhi_n": 22,
+    "ouzhi_now": "2.31/2.93/2.89",
+    "ouzhi_n": 34,
     "yazhi_init": "+0.25",
     "yazhi_now": "+0.25",
     "dx_init": "+2.25",
@@ -170,69 +170,69 @@
      {
       "opt": "HHAD让负",
       "mkt": "HHAD",
-      "prob": 46.9,
+      "prob": 47.8,
       "odds": 1.65,
-      "ev": -22.6,
+      "ev": -21.2,
       "type": "伪单选"
      },
      {
       "opt": "HAD胜",
       "mkt": "HAD",
-      "prob": 43.5,
+      "prob": 41.3,
       "odds": 1.98,
-      "ev": -13.9,
+      "ev": -18.2,
       "type": "真单选"
      },
      {
       "opt": "HAD平",
       "mkt": "HAD",
-      "prob": 29.2,
+      "prob": 29.4,
       "odds": 2.92,
-      "ev": -14.7,
+      "ev": -14.1,
       "type": "真单选"
      }
     ],
     "primary_bet": {
      "market": "HHAD",
      "option": "HHAD让负",
-     "prob": 46.9,
+     "prob": 47.8,
      "odds": 1.65,
      "bets": 1,
      "cost": 2,
-     "ev_pct": -22.6,
+     "ev_pct": -21.2,
      "kelly_pct": 0,
      "value": false,
      "selection_type": "伪单选",
      "coverage": "平+负",
      "cost_advantage": "2元覆盖HAD平负双选(4元), 省一半成本",
      "hybrid_in_band": true,
-     "hybrid_score": 977.4
+     "hybrid_score": 978.8
     },
     "hhad_primary_bet": {
      "market": "HHAD",
      "option": "HHAD让负",
-     "prob": 46.9,
+     "prob": 47.8,
      "odds": 1.65,
      "bets": 1,
      "cost": 2,
-     "ev_pct": -22.6,
+     "ev_pct": -21.2,
      "kelly_pct": 0,
      "value": false,
      "selection_type": "伪单选",
      "coverage": "平+负",
      "cost_advantage": "2元覆盖HAD平负双选(4元), 省一半成本",
      "hybrid_in_band": true,
-     "hybrid_score": 977.4
+     "hybrid_score": 978.8
     },
     "double_recommend": {
      "market": "HAD双选",
      "option": "HAD胜平双选",
-     "prob": 72.7,
-     "odds": 2.36,
+     "prob": 70.7,
+     "odds": 2.37,
      "odds_detail": "1.98/2.92",
      "bets": 2,
      "cost": 4,
-     "ev_pct": -14.3,
+     "ev_pct": -16.1,
      "kelly_pct": 0,
      "value": false,
      "direction": "主队不败"
@@ -240,32 +240,32 @@
     "pure_direction_bet": {
      "market": "HAD",
      "option": "HAD胜",
-     "prob": 43.5,
+     "prob": 41.3,
      "odds": 1.98,
      "bets": 1,
      "cost": 2,
-     "ev_pct": -13.9,
+     "ev_pct": -18.2,
      "kelly_pct": 0,
      "value": false,
      "selection_type": "真单选",
      "coverage": "胜",
      "cost_advantage": null,
      "hybrid_in_band": false,
-     "hybrid_score": -56.5
+     "hybrid_score": -58.7
     },
     "primary_mode": "hybrid",
     "pass_risk": {
-     "prob": 23.3,
+     "prob": 22.8,
      "level": "中",
      "desc": "主队赢恰好1球概率23%，穿盘风险中等，让平有可能"
     },
     "margin_dist": {
-     "win_2plus": 37.5,
-     "win_1": 23.3,
-     "draw": 20.6,
-     "lose": 18.7
+     "win_2plus": 31.2,
+     "win_1": 22.8,
+     "draw": 22.2,
+     "lose": 23.8
     },
-    "insight": "[混合]主推HHAD让负@1.65(P=46.9%,EV=-22.6%)。HHAD主推HHAD让负@1.65(P=46.9%,EV=-22.6%)。纯方向HAD胜@1.98(P=43.5%,EV=-13.9%)。双选保险HAD胜平双选@2.36(P=72.7%,EV=-14.3%)。主队赢恰好1球概率23%，穿盘风险中等，让平有可能。客队不败:HAD平负双选高10% 主队不败:HAD胜平双选高47%"
+    "insight": "[混合]主推HHAD让负@1.65(P=47.8%,EV=-21.2%)。HHAD主推HHAD让负@1.65(P=47.8%,EV=-21.2%)。纯方向HAD胜@1.98(P=41.3%,EV=-18.2%)。双选保险HAD胜平双选@2.37(P=70.7%,EV=-16.1%)。主队赢恰好1球概率23%，穿盘风险中等，让平有可能。客队不败:HAD平负双选高11% 主队不败:HAD胜平双选高46%"
    },
    "historical_feedback": {
     "overall_rate": 38.5,
@@ -287,60 +287,60 @@
      {
       "option": "7+球",
       "odds": 45.0,
-      "prob": 6.3,
-      "ev_pct": 184.8
+      "prob": 6.2,
+      "ev_pct": 177.6
      },
      {
       "option": "6球",
       "odds": 24.0,
-      "prob": 6.1,
-      "ev_pct": 46.6
+      "prob": 6.0,
+      "ev_pct": 44.2
      },
      {
       "option": "5球",
       "odds": 11.0,
-      "prob": 10.3,
-      "ev_pct": 13.2
+      "prob": 10.2,
+      "ev_pct": 11.9
      }
     ],
     "hafu": [
      {
-      "option": "胜胜",
-      "odds": 3.35,
-      "prob": 27.9,
-      "ev_pct": -6.4
-     },
-     {
       "option": "胜平",
       "odds": 14.5,
-      "prob": 6.0,
-      "ev_pct": -13.6
+      "prob": 6.1,
+      "ev_pct": -11.5
      },
      {
-      "option": "平平",
-      "odds": 4.9,
-      "prob": 17.4,
-      "ev_pct": -14.7
+      "option": "负平",
+      "odds": 14.5,
+      "prob": 6.0,
+      "ev_pct": -12.6
+     },
+     {
+      "option": "胜胜",
+      "odds": 3.35,
+      "prob": 25.9,
+      "ev_pct": -13.3
      }
     ],
     "crs": [
      {
-      "option": "3-0",
-      "odds": 21.0,
-      "prob": 6.2,
-      "ev_pct": 30.2
-     },
-     {
       "option": "2-0",
       "odds": 10.0,
-      "prob": 9.0,
-      "ev_pct": -10.0
+      "prob": 7.9,
+      "ev_pct": -21.0
+     },
+     {
+      "option": "1-1",
+      "odds": 6.5,
+      "prob": 9.9,
+      "ev_pct": -35.6
      },
      {
       "option": "1-0",
       "odds": 7.25,
-      "prob": 9.2,
-      "ev_pct": -33.3
+      "prob": 8.6,
+      "ev_pct": -37.7
      }
     ]
    },
@@ -400,8 +400,8 @@
     "model_dir_orig": "胜",
     "prob_adjust": {
      "delta": 0.02,
-     "old_p": "43%/29%/27%",
-     "new_p": "45%/29%/25%",
+     "old_p": "41%/29%/29%",
+     "new_p": "43%/29%/27%",
      "old_dir": "胜",
      "new_dir": "胜",
      "flipped": false
@@ -410,7 +410,7 @@
     "conf_adjust": "+0.5★",
     "fusion_advice": "✅ SWOT与模型方向一致, 置信度上调+0.5★",
     "source_url": "",
-    "fused_at": "2026-07-29 21:48:02",
+    "fused_at": "2026-07-29 22:47:53",
     "trend": null
    }
   },
@@ -425,19 +425,19 @@
     "dir": "让胜",
     "handicap": -1.0,
     "odds": 2.54,
-    "conf": "★★★★",
-    "p": "42%/24%/34%",
-    "poisson": "52.6/22.5/24.8"
+    "conf": "★★★½",
+    "p": "41%/24%/35%",
+    "poisson": "45.5/23.2/31.3"
    },
    "kelly": {
     "HAD": {
      "stake_pct": 0,
-     "ev": -20.8,
+     "ev": -20.5,
      "value": false
     },
     "HHAD": {
-     "stake_pct": 1.1,
-     "ev": 6.5,
+     "stake_pct": 0.7,
+     "ev": 4.1,
      "value": true
     }
    },
@@ -446,21 +446,21 @@
     "quality": "高",
     "details": "HAD✓ HHAD✓ 欧指✓ 近况✓统计△ 大小✓ 初赔三盘✓"
    },
-   "difficulty": 72.6,
+   "difficulty": 72.8,
    "model_agreement": 1.0,
    "js_agreement": 0.986,
    "score": {
-    "top3": "2-0:12.0 1-0:10.8 3-0:9.5",
-    "high_top3": "2-0:12.0 1-0:10.8 3-0:9.5",
-    "wdl": "72.5/17.2/10.3",
+    "top3": "2-0:10.5 1-0:9.9 1-1:8.6",
+    "high_top3": "2-0:10.5 1-0:9.9 2-1:8.6",
+    "wdl": "66.3/19.2/14.4",
     "main_dir": "小",
     "high_dir": "小",
-    "market_gl_str": "3",
-    "over_main": 38.0,
-    "over_low": 58.8,
-    "over_high": 38.0
+    "market_gl_str": "2.5/3",
+    "over_main": 48.8,
+    "over_low": 69.7,
+    "over_high": 48.8
    },
-   "lam": "2.4/0.7",
+   "lam": "2.3/0.9",
    "lam_calibration": {
     "recalibrated": false,
     "original": null,
@@ -468,13 +468,13 @@
     "reason": "无冲突"
    },
    "goals": {
-    "home_expected": 2.4,
-    "away_expected": 0.7,
+    "home_expected": 2.3,
+    "away_expected": 0.9,
     "home_recent": "1.8/1.2",
     "away_recent": "N/A",
     "total_expected": 3.2,
     "over_under": "大",
-    "key_insight": "主队进攻占优(xG 1.3), 预期主2.4:客0.7, 总3.2球偏大",
+    "key_insight": "主队进攻占优(xG 1.3), 预期主2.3:客0.9, 总3.2球偏大",
     "home_xg": "1.3/1.4",
     "away_xg": "1.8/1.5",
     "xg_overperformance": "主+0.86/客-0.84",
@@ -482,102 +482,102 @@
     "using_xg": true
    },
    "half_full": {
-    "main": "胜胜(36.8%)",
-    "top3": "胜胜:36.8 平平:16.7 平胜:15.0",
+    "main": "胜胜(34.5%)",
+    "top3": "胜胜:34.5 平平:15.4 平胜:15.0",
     "recalibrated": false
    },
    "total_goals": {
     "main": "2球(20.4%)",
-    "top3": "2球:20.4% 3球:19.8% 4球:15.4%"
+    "top3": "2球:20.4% 3球:19.8% 4球:15.5%"
    },
-   "market_gl_source": "500.com初赔(25家)",
+   "market_gl_source": "500.com初赔(31家)",
    "initial_gl": 2.75,
    "ev": [
     "HAD 1.53/3.85/4.62→胜@1.53",
     "HHAD -1.0 2.54/3.75/2.13→让胜",
-    "500:1.74/3.70/3.55 Δ↓(0.01)(初1.75/3.60/3.70)",
+    "500:1.72/3.70/3.70 Δ↓(0.03)(初1.75/3.60/3.70)",
     "主:WWDWDWWWWD",
     "HAD(胜)=HHAD(让胜)一致",
-    "杯赛首回合惩罚: 首回合4-1领先3球,客队λ×0.70,置信度封顶★★★★",
+    "杯赛首回合惩罚: 首回合4-1领先3球,客队λ×0.90,主队λ×0.95,置信度封顶★★★★",
     "[xG] 使用xG替代进球(质量0.52), 超额修正"
    ],
    "initial": {
     "ouzhi_init": "1.75/3.60/3.70",
-    "ouzhi_now": "1.74/3.70/3.55",
-    "ouzhi_n": 40,
+    "ouzhi_now": "1.72/3.70/3.70",
+    "ouzhi_n": 42,
     "yazhi_init": "+0.75",
     "yazhi_now": "+0.75",
     "dx_init": "+2.75",
-    "dx_now": "+3.00"
+    "dx_now": "+2.75"
    },
    "cross_market": {
     "top3": [
      {
       "opt": "HAD胜",
       "mkt": "HAD",
-      "prob": 51.8,
+      "prob": 52.0,
       "odds": 1.53,
-      "ev": -20.8,
+      "ev": -20.5,
       "type": "真单选"
      },
      {
       "opt": "HHAD让胜",
       "mkt": "HHAD",
-      "prob": 41.9,
+      "prob": 41.0,
       "odds": 2.54,
-      "ev": 6.5,
+      "ev": 4.1,
       "type": "真单选"
      },
      {
       "opt": "HHAD让负",
       "mkt": "HHAD",
-      "prob": 34.2,
+      "prob": 35.1,
       "odds": 2.13,
-      "ev": -27.2,
+      "ev": -25.2,
       "type": "伪单选"
      }
     ],
     "primary_bet": {
      "market": "HAD",
      "option": "HAD胜",
-     "prob": 51.8,
+     "prob": 52.0,
      "odds": 1.53,
      "bets": 1,
      "cost": 2,
-     "ev_pct": -20.8,
+     "ev_pct": -20.5,
      "kelly_pct": 0,
      "value": false,
      "selection_type": "真单选",
      "coverage": "胜",
      "cost_advantage": null,
      "hybrid_in_band": true,
-     "hybrid_score": 979.2
+     "hybrid_score": 979.5
     },
     "hhad_primary_bet": {
      "market": "HHAD",
      "option": "HHAD让胜",
-     "prob": 41.9,
+     "prob": 41.0,
      "odds": 2.54,
      "bets": 1,
      "cost": 2,
-     "ev_pct": 6.5,
-     "kelly_pct": 1.1,
+     "ev_pct": 4.1,
+     "kelly_pct": 0.7,
      "value": true,
      "selection_type": "真单选",
      "coverage": "让胜",
      "cost_advantage": null,
      "hybrid_in_band": false,
-     "hybrid_score": -58.1
+     "hybrid_score": -59.0
     },
     "double_recommend": {
      "market": "HAD双选",
      "option": "HAD胜平双选",
-     "prob": 76.8,
-     "odds": 2.29,
+     "prob": 77.1,
+     "odds": 2.28,
      "odds_detail": "1.53/3.85",
      "bets": 2,
      "cost": 4,
-     "ev_pct": -12.2,
+     "ev_pct": -12.0,
      "kelly_pct": 0,
      "value": false,
      "direction": "主队不败"
@@ -585,32 +585,32 @@
     "pure_direction_bet": {
      "market": "HAD",
      "option": "HAD胜",
-     "prob": 51.8,
+     "prob": 52.0,
      "odds": 1.53,
      "bets": 1,
      "cost": 2,
-     "ev_pct": -20.8,
+     "ev_pct": -20.5,
      "kelly_pct": 0,
      "value": false,
      "selection_type": "真单选",
      "coverage": "胜",
      "cost_advantage": null,
      "hybrid_in_band": true,
-     "hybrid_score": 979.2
+     "hybrid_score": 979.5
     },
     "primary_mode": "hybrid",
     "pass_risk": {
-     "prob": 22.5,
+     "prob": 23.2,
      "level": "中",
      "desc": "主队赢恰好1球概率23%，穿盘风险中等，让平有可能"
     },
     "margin_dist": {
-     "win_2plus": 52.6,
-     "win_1": 22.5,
-     "draw": 15.7,
-     "lose": 9.1
+     "win_2plus": 45.5,
+     "win_1": 23.2,
+     "draw": 18.1,
+     "lose": 13.2
     },
-    "insight": "[混合]主推HAD胜@1.53(P=51.8%,EV=-20.8%)。HHAD主推HHAD让胜@2.54(P=41.9%,EV=6.5%)。双选保险HAD胜平双选@2.29(P=76.8%,EV=-12.2%)。主队赢恰好1球概率23%，穿盘风险中等，让平有可能。客队不败:HAD平负双选高14% 主队不败:HAD胜平双选高35%"
+    "insight": "[混合]主推HAD胜@1.53(P=52.0%,EV=-20.5%)。HHAD主推HHAD让胜@2.54(P=41.0%,EV=4.1%)。双选保险HAD胜平双选@2.28(P=77.1%,EV=-12.0%)。主队赢恰好1球概率23%，穿盘风险中等，让平有可能。客队不败:HAD平负双选高13% 主队不败:HAD胜平双选高36%"
    },
    "historical_feedback": {
     "overall_rate": 38.5,
@@ -632,60 +632,60 @@
      {
       "option": "7+球",
       "odds": 22.0,
-      "prob": 6.4,
-      "ev_pct": 41.3
+      "prob": 6.5,
+      "ev_pct": 42.4
      },
      {
       "option": "0球",
       "odds": 16.0,
       "prob": 6.2,
-      "ev_pct": -0.7
+      "ev_pct": -1.3
      },
      {
       "option": "6球",
       "odds": 15.0,
       "prob": 6.2,
-      "ev_pct": -7.6
+      "ev_pct": -7.1
      }
     ],
     "hafu": [
      {
       "option": "平平",
       "odds": 6.5,
-      "prob": 16.7,
-      "ev_pct": 8.3
+      "prob": 15.4,
+      "ev_pct": -0.2
      },
      {
       "option": "胜胜",
       "odds": 2.65,
-      "prob": 36.8,
-      "ev_pct": -2.4
+      "prob": 34.5,
+      "ev_pct": -8.6
      },
      {
       "option": "平负",
       "odds": 9.0,
-      "prob": 8.1,
-      "ev_pct": -27.2
+      "prob": 8.9,
+      "ev_pct": -19.8
      }
     ],
     "crs": [
      {
       "option": "3-0",
       "odds": 15.0,
-      "prob": 9.5,
-      "ev_pct": 42.5
+      "prob": 7.8,
+      "ev_pct": 17.0
      },
      {
       "option": "2-0",
       "odds": 9.0,
-      "prob": 12.0,
-      "ev_pct": 8.0
+      "prob": 10.5,
+      "ev_pct": -5.5
      },
      {
       "option": "1-0",
       "odds": 8.0,
-      "prob": 10.8,
-      "ev_pct": -13.6
+      "prob": 9.9,
+      "ev_pct": -20.8
      }
     ]
    },
@@ -698,10 +698,12 @@
     "first_leg_away": 1,
     "goal_diff": 3,
     "trailing_side": "away",
-    "lambda_factor": 0.7,
+    "lambda_factor": 0.9,
+    "leader_factor": 0.95,
     "conf_cap": 4.0,
-    "penalty_pct": 0.3,
-    "note": "首回合4-1领先3球,客队λ×0.70,置信度封顶★★★★"
+    "penalty_pct": 0.1,
+    "leader_penalty_pct": 0.05,
+    "note": "首回合4-1领先3球,客队λ×0.90,主队λ×0.95,置信度封顶★★★★"
    },
    "xg_data": {
     "home": {
@@ -756,7 +758,7 @@
     "conf_adjust": "无调整",
     "fusion_advice": "◐ SWOT与模型方向部分一致(含平局), 置信度不调整",
     "source_url": "",
-    "fused_at": "2026-07-29 21:48:02",
+    "fused_at": "2026-07-29 22:47:53",
     "trend": null
    }
   },
@@ -764,27 +766,27 @@
    "HAD": {
     "dir": "负",
     "odds": 1.63,
-    "conf": "★★★★",
-    "p": "25%/30%/45%",
-    "conf_old": "★★★½"
+    "conf": "★★★★½",
+    "p": "25%/29%/46%",
+    "conf_old": "★★★★"
    },
    "HHAD": {
     "dir": "让胜",
     "handicap": 1.0,
     "odds": 1.97,
     "conf": "★★★★★",
-    "p": "47%/27%/25%",
-    "poisson": "58.6/25.1/16.4"
+    "p": "46%/26%/28%",
+    "poisson": "50.7/23.9/25.4"
    },
    "kelly": {
     "HAD": {
      "stake_pct": 0,
-     "ev": -26.9,
+     "ev": -24.3,
      "value": false
     },
     "HHAD": {
      "stake_pct": 0,
-     "ev": -6.6,
+     "ev": -9.8,
      "value": false
     }
    },
@@ -793,21 +795,21 @@
     "quality": "高",
     "details": "HAD✓ HHAD✓ 欧指✓ 近况✓统计✓ 大小✓ 初赔三盘✓"
    },
-   "difficulty": 57.2,
+   "difficulty": 60.2,
    "model_agreement": 0.75,
-   "js_agreement": 0.948,
+   "js_agreement": 0.953,
    "score": {
-    "top3": "0-0:19.3 0-1:16.3 1-1:12.4",
-    "high_top3": "0-0:19.3 0-1:16.3 1-1:12.4",
-    "wdl": "25.5/34.3/40.2",
+    "top3": "0-1:11.6 1-1:11.4 0-0:9.2",
+    "high_top3": "0-1:11.6 1-1:11.4 0-0:9.2",
+    "wdl": "25.8/25.8/48.4",
     "main_dir": "小",
     "high_dir": "小",
     "market_gl_str": "2.5",
-    "over_main": 26.5,
-    "over_low": 26.5,
-    "over_high": 11.4
+    "over_main": 46.9,
+    "over_low": 46.9,
+    "over_high": 26.6
    },
-   "lam": "0.7/1.0",
+   "lam": "1.0/1.6",
    "lam_calibration": {
     "recalibrated": false,
     "original": null,
@@ -815,13 +817,13 @@
     "reason": "无冲突"
    },
    "goals": {
-    "home_expected": 0.7,
-    "away_expected": 1.0,
+    "home_expected": 1.0,
+    "away_expected": 1.6,
     "home_recent": "1.1/1.3",
     "away_recent": "1.9/0.9",
-    "total_expected": 1.8,
-    "over_under": "小",
-    "key_insight": "客队进攻占优(场均1.9球), 预期主0.7:客1.0, 总1.8球偏小",
+    "total_expected": 2.6,
+    "over_under": "大",
+    "key_insight": "客队进攻占优(场均1.9球), 预期主1.0:客1.6, 总2.6球偏大",
     "home_xg": null,
     "away_xg": null,
     "xg_overperformance": null,
@@ -829,31 +831,31 @@
     "using_xg": false
    },
    "half_full": {
-    "main": "负负(25.1%)",
-    "top3": "负负:25.1 平平:23.6 平负:18.3",
+    "main": "负负(28.0%)",
+    "top3": "负负:28.0 平平:19.1 平负:16.2",
     "recalibrated": false
    },
    "total_goals": {
-    "main": "1球(29.3%)",
-    "top3": "1球:29.3% 2球:24.1% 0球:19.8%"
+    "main": "2球(23.3%)",
+    "top3": "2球:23.3% 1球:20.6% 3球:19.2%"
    },
    "market_gl_source": "500.com初赔(9家)",
    "initial_gl": 2.5,
    "ev": [
     "HAD 4.32/3.52/1.63→负@1.63",
     "HHAD 1.0 1.97/3.34/3.1→让胜",
-    "500:3.55/3.35/2.01 Δ↑(0.35)(初3.20/3.45/2.08)",
+    "500:3.50/3.35/2.03 Δ↑(0.30)(初3.20/3.45/2.08)",
     "主:DWWDWWLLLL",
     "HAD(负)≠HHAD(让胜)弱一致(险胜)",
     "半全场转移: 平局粘性27%→平↓1.2pp",
-    "主队近况滑坡(severity=1.0), λ_h×0.70",
-    "交锋压制(主胜率30%, n=40), λ_h×0.85 λ_a×0.90",
-    "客队防守回升(近况WWWD, 场均失0.9), λ×0.85"
+    "主队近况滑坡(severity=1.0), λ_h×0.87",
+    "交锋压制(主胜率30%, n=40), λ_h×0.95 λ_a×1.05",
+    "客队防守回升(近况WWWD, 场均失0.9), λ_h×0.85 λ_a×1.10"
    ],
    "initial": {
     "ouzhi_init": "3.20/3.45/2.08",
-    "ouzhi_now": "3.55/3.35/2.01",
-    "ouzhi_n": 36,
+    "ouzhi_now": "3.50/3.35/2.03",
+    "ouzhi_n": 40,
     "yazhi_init": "-0.25",
     "yazhi_now": "-0.50",
     "dx_init": "+2.50",
@@ -864,69 +866,69 @@
      {
       "opt": "HHAD让胜",
       "mkt": "HHAD",
-      "prob": 47.4,
+      "prob": 45.8,
       "odds": 1.97,
-      "ev": -6.6,
+      "ev": -9.8,
       "type": "伪单选"
      },
      {
       "opt": "HAD负",
       "mkt": "HAD",
-      "prob": 44.9,
+      "prob": 46.5,
       "odds": 1.63,
-      "ev": -26.9,
+      "ev": -24.3,
       "type": "真单选"
      },
      {
       "opt": "HAD平",
       "mkt": "HAD",
-      "prob": 30.2,
+      "prob": 28.7,
       "odds": 3.52,
-      "ev": 6.4,
+      "ev": 1.1,
       "type": "真单选"
      }
     ],
     "primary_bet": {
      "market": "HHAD",
      "option": "HHAD让胜",
-     "prob": 47.4,
+     "prob": 45.8,
      "odds": 1.97,
      "bets": 1,
      "cost": 2,
-     "ev_pct": -6.6,
+     "ev_pct": -9.8,
      "kelly_pct": 0,
      "value": false,
      "selection_type": "伪单选",
      "coverage": "胜+平",
      "cost_advantage": "2元覆盖HAD胜平双选(4元), 省一半成本",
      "hybrid_in_band": true,
-     "hybrid_score": 993.4
+     "hybrid_score": 990.2
     },
     "hhad_primary_bet": {
      "market": "HHAD",
      "option": "HHAD让胜",
-     "prob": 47.4,
+     "prob": 45.8,
      "odds": 1.97,
      "bets": 1,
      "cost": 2,
-     "ev_pct": -6.6,
+     "ev_pct": -9.8,
      "kelly_pct": 0,
      "value": false,
      "selection_type": "伪单选",
      "coverage": "胜+平",
      "cost_advantage": "2元覆盖HAD胜平双选(4元), 省一半成本",
      "hybrid_in_band": true,
-     "hybrid_score": 993.4
+     "hybrid_score": 990.2
     },
     "double_recommend": {
      "market": "HAD双选",
      "option": "HAD平负双选",
-     "prob": 75.1,
-     "odds": 2.39,
+     "prob": 75.2,
+     "odds": 2.35,
      "odds_detail": "3.52/1.63",
      "bets": 2,
      "cost": 4,
-     "ev_pct": -10.2,
+     "ev_pct": -11.6,
      "kelly_pct": 0,
      "value": false,
      "direction": "客队不败"
@@ -934,32 +936,32 @@
     "pure_direction_bet": {
      "market": "HAD",
      "option": "HAD负",
-     "prob": 44.9,
+     "prob": 46.5,
      "odds": 1.63,
      "bets": 1,
      "cost": 2,
-     "ev_pct": -26.9,
+     "ev_pct": -24.3,
      "kelly_pct": 0,
      "value": false,
      "selection_type": "真单选",
      "coverage": "负",
      "cost_advantage": null,
      "hybrid_in_band": true,
-     "hybrid_score": 973.1
+     "hybrid_score": 975.7
     },
     "primary_mode": "hybrid",
     "pass_risk": {
-     "prob": 25.1,
-     "level": "高",
-     "desc": "主队输恰好1球概率25%，穿盘风险高，让平值得考虑"
+     "prob": 23.9,
+     "level": "中",
+     "desc": "主队输恰好1球概率24%，穿盘风险中等"
     },
     "margin_dist": {
-     "win_2plus": 7.7,
-     "win_1": 18.1,
-     "draw": 32.7,
-     "lose": 41.4
+     "win_2plus": 9.3,
+     "win_1": 15.9,
+     "draw": 25.4,
+     "lose": 49.3
     },
-    "insight": "[混合]主推HHAD让胜@1.97(P=47.4%,EV=-6.6%)。HHAD主推HHAD让胜@1.97(P=47.4%,EV=-6.6%)。纯方向HAD负@1.63(P=44.9%,EV=-26.9%)。双选保险HAD平负双选@2.39(P=75.1%,EV=-10.2%)。主队输恰好1球概率25%，穿盘风险高，让平值得考虑。让平EV=-8.6%@3.34,穿盘高风险。赢1球(18%)>赢2+球(8%),小胜概率大。客队不败:HAD平负双选高50% 主队不败:HAD胜平双选高8%"
+    "insight": "[混合]主推HHAD让胜@1.97(P=45.8%,EV=-9.8%)。HHAD主推HHAD让胜@1.97(P=45.8%,EV=-9.8%)。纯方向HAD负@1.63(P=46.5%,EV=-24.3%)。双选保险HAD平负双选@2.35(P=75.2%,EV=-11.6%)。主队输恰好1球概率24%，穿盘风险中等。赢1球(16%)>赢2+球(9%),小胜概率大。客队不败:HAD平负双选高47% 主队不败:HAD胜平双选高8%"
    },
    "historical_feedback": {
     "overall_rate": 38.5,
@@ -984,60 +986,60 @@
      {
       "option": "0球",
       "odds": 11.5,
-      "prob": 19.8,
-      "ev_pct": 128.0
+      "prob": 10.0,
+      "ev_pct": 14.7
+     },
+     {
+      "option": "7+球",
+      "odds": 37.0,
+      "prob": 3.1,
+      "ev_pct": 13.1
      },
      {
       "option": "1球",
       "odds": 4.5,
-      "prob": 29.3,
-      "ev_pct": 32.0
-     },
-     {
-      "option": "2球",
-      "odds": 3.25,
-      "prob": 24.1,
-      "ev_pct": -21.5
+      "prob": 20.6,
+      "ev_pct": -7.5
      }
     ],
     "hafu": [
      {
       "option": "平平",
       "odds": 5.25,
-      "prob": 23.6,
-      "ev_pct": 24.1
+      "prob": 19.1,
+      "ev_pct": 0.0
      },
      {
-      "option": "平胜",
-      "odds": 8.0,
-      "prob": 10.8,
-      "ev_pct": -13.2
+      "option": "胜胜",
+      "odds": 6.0,
+      "prob": 13.7,
+      "ev_pct": -17.9
      },
      {
-      "option": "平负",
-      "odds": 4.55,
-      "prob": 18.3,
-      "ev_pct": -16.7
+      "option": "负负",
+      "odds": 2.9,
+      "prob": 28.0,
+      "ev_pct": -18.9
      }
     ],
     "crs": [
      {
       "option": "0-0",
       "odds": 11.5,
-      "prob": 19.3,
-      "ev_pct": 122.0
+      "prob": 9.2,
+      "ev_pct": 5.8
      },
      {
-      "option": "1-0",
-      "odds": 10.5,
-      "prob": 11.9,
-      "ev_pct": 25.0
+      "option": "1-1",
+      "odds": 7.0,
+      "prob": 11.4,
+      "ev_pct": -20.2
      },
      {
       "option": "0-1",
       "odds": 6.75,
-      "prob": 16.3,
-      "ev_pct": 10.0
+      "prob": 11.6,
+      "ev_pct": -21.7
      }
     ]
    },
@@ -1079,7 +1081,7 @@
     "conf_adjust": "+0.5★",
     "fusion_advice": "✅ SWOT与模型方向一致, 置信度上调+0.5★",
     "source_url": "https://www.leisu.com/guide/swot-4465804",
-    "fused_at": "2026-07-29 21:48:02",
+    "fused_at": "2026-07-29 22:47:53",
     "trend": {
      "total": 20,
      "home_win_pct": "40%",
@@ -1157,28 +1159,28 @@
     "using_xg": false
    },
    "half_full": {
-    "main": "胜胜(29.9%)",
-    "top3": "胜胜:29.9 平平:17.8 平胜:15.6",
+    "main": "胜胜(30.0%)",
+    "top3": "胜胜:30.0 平平:17.8 平胜:15.6",
     "recalibrated": false
    },
    "total_goals": {
     "main": "2球(21.6%)",
     "top3": "2球:21.6% 3球:19.7% 1球:17.2%"
    },
-   "market_gl_source": "500.com初赔(12家)",
+   "market_gl_source": "500.com初赔(16家)",
    "initial_gl": 2.5,
    "ev": [
     "HAD 1.63/3.4/4.5→胜@1.63",
     "HHAD -1.0 3.3/3.05/2.01→让负",
-    "500:1.80/3.60/4.05 Δ↓(0.03)(初1.83/3.70/3.80)",
+    "500:1.80/3.55/4.10 Δ↓(0.03)(初1.83/3.70/3.80)",
     "主:WWWLWDWWDD",
     "HAD(胜)≠HHAD(让负)弱一致(险胜)",
     "半全场转移: 平局粘性27%→平↓1.2pp"
    ],
    "initial": {
     "ouzhi_init": "1.83/3.70/3.80",
-    "ouzhi_now": "1.80/3.60/4.05",
-    "ouzhi_n": 29,
+    "ouzhi_now": "1.80/3.55/4.10",
+    "ouzhi_n": 31,
     "yazhi_init": "+0.50",
     "yazhi_now": "+0.75",
     "dx_init": "+2.50",
@@ -1246,7 +1248,7 @@
     "double_recommend": {
      "market": "HAD双选",
      "option": "HAD胜平双选",
-     "prob": 77.4,
+     "prob": 77.5,
      "odds": 2.3,
      "odds_detail": "1.63/3.4",
      "bets": 2,
@@ -1284,7 +1286,7 @@
      "draw": 23.1,
      "lose": 23.7
     },
-    "insight": "[混合]主推HAD胜@1.63(P=48.3%,EV=-21.3%)。HHAD主推HHAD让负@2.01(P=39.2%,EV=-21.1%)。双选保险HAD胜平双选@2.3(P=77.4%,EV=-11.1%)。主队赢恰好1球概率23%，穿盘风险中等，让平有可能。客队不败:HAD平负双选高12% 主队不败:HAD胜平双选高44%"
+    "insight": "[混合]主推HAD胜@1.63(P=48.3%,EV=-21.3%)。HHAD主推HHAD让负@2.01(P=39.2%,EV=-21.1%)。双选保险HAD胜平双选@2.3(P=77.5%,EV=-11.1%)。主队赢恰好1球概率23%，穿盘风险中等，让平有可能。客队不败:HAD平负双选高12% 主队不败:HAD胜平双选高44%"
    },
    "historical_feedback": {
     "overall_rate": 38.5,
@@ -1330,13 +1332,13 @@
       "option": "平平",
       "odds": 6.0,
       "prob": 17.8,
-      "ev_pct": 6.6
+      "ev_pct": 6.7
      },
      {
       "option": "负负",
       "odds": 7.5,
       "prob": 12.6,
-      "ev_pct": -5.6
+      "ev_pct": -5.7
      },
      {
       "option": "胜平",
@@ -1417,7 +1419,7 @@
     "conf_adjust": "+0.5★",
     "fusion_advice": "✅ SWOT与模型方向一致, 置信度上调+0.5★",
     "source_url": "https://www.leisu.com/guide/swot-4465861",
-    "fused_at": "2026-07-29 21:48:02",
+    "fused_at": "2026-07-29 22:47:53",
     "trend": {
      "total": 20,
      "home_win_pct": "30%",
@@ -1430,27 +1432,27 @@
    "HAD": {
     "dir": "负",
     "odds": 1.69,
-    "conf": "★★★½",
-    "p": "23%/31%/46%",
-    "conf_old": "★★★"
+    "conf": "★★★★",
+    "p": "22%/30%/48%",
+    "conf_old": "★★★½"
    },
    "HHAD": {
     "dir": "让胜",
     "handicap": 1.0,
     "odds": 1.88,
     "conf": "★★★★★",
-    "p": "49%/27%/24%",
-    "poisson": "58.7/24.0/17.3"
+    "p": "49%/27%/25%",
+    "poisson": "57.9/22.0/20.1"
    },
    "kelly": {
     "HAD": {
      "stake_pct": 0,
-     "ev": -31.8,
+     "ev": -28.1,
      "value": false
     },
     "HHAD": {
      "stake_pct": 0,
-     "ev": -7.9,
+     "ev": -8.3,
      "value": false
     }
    },
@@ -1459,35 +1461,35 @@
     "quality": "高",
     "details": "HAD✓ HHAD✓ 欧指✓ 近况✓统计✓ 大小✓ 初赔三盘✓"
    },
-   "difficulty": 45.5,
-   "model_agreement": 0.5,
-   "js_agreement": 0.936,
+   "difficulty": 55.0,
+   "model_agreement": 0.75,
+   "js_agreement": 0.952,
    "score": {
-    "top3": "0-0:15.5 0-1:14.2 1-1:12.7",
-    "high_top3": "0-0:15.5 0-1:14.2 1-1:12.7",
-    "wdl": "22.7/31.6/45.8",
-    "main_dir": "小",
+    "top3": "1-2:7.8 2-1:6.7 2-2:4.6",
+    "high_top3": "1-1:11.8 0-1:10.1 0-0:9.0",
+    "wdl": "26.4/26.5/47.0",
+    "main_dir": "大",
     "high_dir": "小",
     "market_gl_str": "2/2.5",
-    "over_main": 46.0,
-    "over_low": 46.0,
-    "over_high": 24.2
+    "over_main": 60.1,
+    "over_low": 60.1,
+    "over_high": 37.7
    },
-   "lam": "0.9/1.1",
+   "lam": "1.2/1.4",
    "lam_calibration": {
-    "recalibrated": true,
-    "original": "1.08/0.94",
-    "calibrated": "0.89/1.14",
-    "reason": "λ校准: 1.08/0.94→0.89/1.14(方向冲突,按融合概率重分配)"
+    "recalibrated": false,
+    "original": null,
+    "calibrated": null,
+    "reason": "无冲突"
    },
    "goals": {
-    "home_expected": 0.9,
-    "away_expected": 1.1,
+    "home_expected": 1.2,
+    "away_expected": 1.4,
     "home_recent": "1.1/1.4",
     "away_recent": "1.7/0.8",
-    "total_expected": 2.0,
-    "over_under": "小",
-    "key_insight": "双方预期进球接近(主0.9:客1.1), 总2.0球偏小",
+    "total_expected": 2.6,
+    "over_under": "大",
+    "key_insight": "双方预期进球接近(主1.2:客1.4), 总2.6球偏大",
     "home_xg": null,
     "away_xg": null,
     "xg_overperformance": null,
@@ -1495,31 +1497,30 @@
     "using_xg": false
    },
    "half_full": {
-    "main": "平平(23.5%)",
-    "top3": "平平:23.5 负负:23.0 平负:15.8",
-    "recalibrated": true
+    "main": "负负(24.9%)",
+    "top3": "负负:24.9 平平:20.0 胜胜:15.4",
+    "recalibrated": false
    },
    "total_goals": {
-    "main": "1球(26.6%)",
-    "top3": "1球:26.6% 2球:24.5% 3球:16.5%"
+    "main": "2球(23.1%)",
+    "top3": "2球:23.1% 1球:20.1% 3球:19.3%"
    },
-   "market_gl_source": "500.com初赔(37家)",
+   "market_gl_source": "500.com初赔(39家)",
    "initial_gl": 2.25,
    "ev": [
     "HAD 4.3/3.3/1.69→负@1.69",
     "HHAD 1.0 1.88/3.3/3.4→让胜",
-    "500:3.90/3.20/1.95 Δ↑(0.65)(初3.25/3.35/2.11)",
+    "500:3.65/3.20/2.04 Δ↑(0.40)(初3.25/3.35/2.11)",
     "主:LWWWLWWWDL",
     "HAD(负)≠HHAD(让胜)弱一致(险胜)",
-    "λ校准: 1.08/0.94→0.89/1.14(方向冲突,按融合概率重分配)",
     "半全场转移: 平局粘性27%→平↓1.2pp",
-    "交锋压制(主胜率17%, n=23), λ_h×0.85 λ_a×0.90",
-    "客队防守回升(近况WWWL, 场均失0.8), λ×0.85"
+    "交锋压制(主胜率17%, n=23), λ_h×0.95 λ_a×1.05",
+    "客队防守回升(近况WWWL, 场均失0.8), λ_h×0.85 λ_a×1.10"
    ],
    "initial": {
     "ouzhi_init": "3.25/3.35/2.11",
-    "ouzhi_now": "3.90/3.20/1.95",
-    "ouzhi_n": 21,
+    "ouzhi_now": "3.65/3.20/2.04",
+    "ouzhi_n": 23,
     "yazhi_init": "-0.25",
     "yazhi_now": "-0.50",
     "dx_init": "+2.25",
@@ -1530,69 +1531,69 @@
      {
       "opt": "HHAD让胜",
       "mkt": "HHAD",
-      "prob": 49.0,
+      "prob": 48.8,
       "odds": 1.88,
-      "ev": -7.9,
+      "ev": -8.3,
       "type": "伪单选"
      },
      {
       "opt": "HAD负",
       "mkt": "HAD",
-      "prob": 40.4,
+      "prob": 42.6,
       "odds": 1.69,
-      "ev": -31.8,
+      "ev": -28.1,
       "type": "真单选"
      },
      {
       "opt": "HAD平",
       "mkt": "HAD",
-      "prob": 31.5,
+      "prob": 30.2,
       "odds": 3.3,
-      "ev": 3.9,
+      "ev": -0.4,
       "type": "真单选"
      }
     ],
     "primary_bet": {
      "market": "HHAD",
      "option": "HHAD让胜",
-     "prob": 49.0,
+     "prob": 48.8,
      "odds": 1.88,
      "bets": 1,
      "cost": 2,
-     "ev_pct": -7.9,
+     "ev_pct": -8.3,
      "kelly_pct": 0,
      "value": false,
      "selection_type": "伪单选",
      "coverage": "胜+平",
      "cost_advantage": "2元覆盖HAD胜平双选(4元), 省一半成本",
      "hybrid_in_band": true,
-     "hybrid_score": 992.1
+     "hybrid_score": 991.7
     },
     "hhad_primary_bet": {
      "market": "HHAD",
      "option": "HHAD让胜",
-     "prob": 49.0,
+     "prob": 48.8,
      "odds": 1.88,
      "bets": 1,
      "cost": 2,
-     "ev_pct": -7.9,
+     "ev_pct": -8.3,
      "kelly_pct": 0,
      "value": false,
      "selection_type": "伪单选",
      "coverage": "胜+平",
      "cost_advantage": "2元覆盖HAD胜平双选(4元), 省一半成本",
      "hybrid_in_band": true,
-     "hybrid_score": 992.1
+     "hybrid_score": 991.7
     },
     "double_recommend": {
      "market": "HAD双选",
      "option": "HAD平负双选",
-     "prob": 71.9,
-     "odds": 2.4,
+     "prob": 72.7,
+     "odds": 2.36,
      "odds_detail": "3.3/1.69",
      "bets": 2,
      "cost": 4,
-     "ev_pct": -13.9,
+     "ev_pct": -14.3,
      "kelly_pct": 0,
      "value": false,
      "direction": "客队不败"
@@ -1600,32 +1601,32 @@
     "pure_direction_bet": {
      "market": "HAD",
      "option": "HAD负",
-     "prob": 40.4,
+     "prob": 42.6,
      "odds": 1.69,
      "bets": 1,
      "cost": 2,
-     "ev_pct": -31.8,
+     "ev_pct": -28.1,
      "kelly_pct": 0,
      "value": false,
      "selection_type": "真单选",
      "coverage": "负",
      "cost_advantage": null,
      "hybrid_in_band": false,
-     "hybrid_score": -59.6
+     "hybrid_score": -57.4
     },
     "primary_mode": "hybrid",
     "pass_risk": {
-     "prob": 24.0,
+     "prob": 22.0,
      "level": "中",
-     "desc": "主队输恰好1球概率24%，穿盘风险中等"
+     "desc": "主队输恰好1球概率22%，穿盘风险中等"
     },
     "margin_dist": {
-     "win_2plus": 9.7,
-     "win_1": 18.7,
-     "draw": 30.3,
-     "lose": 41.3
+     "win_2plus": 13.2,
+     "win_1": 18.6,
+     "draw": 26.0,
+     "lose": 42.1
     },
-    "insight": "[混合]主推HHAD让胜@1.88(P=49.0%,EV=-7.9%)。HHAD主推HHAD让胜@1.88(P=49.0%,EV=-7.9%)。纯方向HAD负@1.69(P=40.4%,EV=-31.8%)。双选保险HAD平负双选@2.4(P=71.9%,EV=-13.9%)。主队输恰好1球概率24%，穿盘风险中等。赢1球(19%)>赢2+球(10%),小胜概率大。客队不败:HAD平负双选高48% 主队不败:HAD胜平双选高11%"
+    "insight": "[混合]主推HHAD让胜@1.88(P=48.8%,EV=-8.3%)。HHAD主推HHAD让胜@1.88(P=48.8%,EV=-8.3%)。纯方向HAD负@1.69(P=42.6%,EV=-28.1%)。双选保险HAD平负双选@2.36(P=72.7%,EV=-14.3%)。主队输恰好1球概率22%，穿盘风险中等。赢1球(19%)>赢2+球(13%),小胜概率大。客队不败:HAD平负双选高48% 主队不败:HAD胜平双选高9%"
    },
    "historical_feedback": {
     "overall_rate": 38.5,
@@ -1636,70 +1637,74 @@
     "direction_rate": 41.8,
     "direction_samples": 2,
     "direction_ci": "8%-76%",
+    "high_conf_rate": 37.0,
+    "high_conf_samples": 11,
+    "high_conf_ci": "14%-60%",
+    "calibration_warning": "高置信度贝叶斯命中率偏低, 置信度评级可能过拟合",
     "odds_range_rate": 29.2,
     "odds_range_samples": 5,
     "odds_range_ci": "2%-56%",
-    "recommendation": "历史规律正常(贝叶斯)"
+    "recommendation": "高置信度贝叶斯命中率37.0%(CI:14%-60%)偏低"
    },
    "sporttery_pools": {
     "ttg": [
      {
+      "option": "7+球",
+      "odds": 44.0,
+      "prob": 3.3,
+      "ev_pct": 43.1
+     },
+     {
+      "option": "6球",
+      "odds": 27.0,
+      "prob": 3.9,
+      "ev_pct": 6.5
+     },
+     {
       "option": "0球",
       "odds": 9.75,
-      "prob": 16.0,
-      "ev_pct": 56.5
-     },
-     {
-      "option": "1球",
-      "odds": 4.2,
-      "prob": 26.6,
-      "ev_pct": 11.9
-     },
-     {
-      "option": "2球",
-      "odds": 3.1,
-      "prob": 24.5,
-      "ev_pct": -24.0
+      "prob": 9.6,
+      "ev_pct": -6.1
      }
     ],
     "hafu": [
      {
       "option": "平平",
       "odds": 5.1,
-      "prob": 23.5,
-      "ev_pct": 20.0
+      "prob": 20.0,
+      "ev_pct": 2.0
      },
      {
       "option": "胜胜",
       "odds": 6.25,
-      "prob": 15.3,
-      "ev_pct": -4.4
+      "prob": 15.4,
+      "ev_pct": -3.7
      },
      {
       "option": "平胜",
       "odds": 8.0,
-      "prob": 11.6,
-      "ev_pct": -7.0
+      "prob": 10.2,
+      "ev_pct": -18.1
      }
     ],
     "crs": [
      {
       "option": "0-0",
       "odds": 9.75,
-      "prob": 15.5,
-      "ev_pct": 51.1
+      "prob": 9.0,
+      "ev_pct": -12.3
      },
      {
       "option": "1-0",
       "odds": 9.5,
-      "prob": 11.2,
-      "ev_pct": 6.4
+      "prob": 8.6,
+      "ev_pct": -18.3
      },
      {
-      "option": "0-1",
-      "odds": 6.25,
-      "prob": 14.2,
-      "ev_pct": -11.3
+      "option": "1-1",
+      "odds": 6.5,
+      "prob": 11.8,
+      "ev_pct": -23.3
      }
     ]
    },
@@ -1729,8 +1734,8 @@
     "model_dir_orig": "负",
     "prob_adjust": {
      "delta": -0.055,
-     "old_p": "28%/31%/40%",
-     "new_p": "23%/31%/46%",
+     "old_p": "27%/30%/43%",
+     "new_p": "22%/30%/48%",
      "old_dir": "负",
      "new_dir": "负",
      "flipped": false
@@ -1739,7 +1744,7 @@
     "conf_adjust": "+0.5★",
     "fusion_advice": "✅ SWOT与模型方向一致, 置信度上调+0.5★",
     "source_url": "",
-    "fused_at": "2026-07-29 21:48:02",
+    "fused_at": "2026-07-29 22:47:53",
     "trend": {}
    }
   },
@@ -1824,13 +1829,13 @@
    "ev": [
     "HAD 1.5/3.8/5.0→胜@1.5",
     "HHAD -1.0 3.02/2.92/2.2→让负",
-    "500:1.69/3.56/4.82 Δ↑(0.01)(初1.68/3.68/4.97)",
+    "500:1.69/3.56/4.82 Δ↑(0.01)(初1.68/3.68/4.96)",
     "主:DWLLWW",
     "HAD(胜)≠HHAD(让负)弱一致(险胜)",
     "半全场转移: 平局粘性27%→平↓1.2pp"
    ],
    "initial": {
-    "ouzhi_init": "1.68/3.68/4.97",
+    "ouzhi_init": "1.68/3.68/4.96",
     "ouzhi_now": "1.69/3.56/4.82",
     "ouzhi_n": 30,
     "yazhi_init": "-0.75",
@@ -2043,7 +2048,7 @@
     "conf_adjust": "无调整",
     "fusion_advice": "◐ SWOT与模型方向部分一致(含平局), 置信度不调整",
     "source_url": "",
-    "fused_at": "2026-07-29 21:48:02",
+    "fused_at": "2026-07-29 22:47:53",
     "trend": {}
    }
   }
@@ -2052,9 +2057,9 @@
   "周三001": {
    "shuju": {
     "avg_odds": {
-     "w": 2.16,
-     "d": 2.98,
-     "l": 3.1
+     "w": 2.31,
+     "d": 2.93,
+     "l": 2.89
     },
     "source": "nowscore",
     "form_home": "DWWWWWWWLW",
@@ -2065,9 +2070,9 @@
   "周三002": {
    "shuju": {
     "avg_odds": {
-     "w": 1.74,
+     "w": 1.72,
      "d": 3.7,
-     "l": 3.55
+     "l": 3.7
     },
     "source": "nowscore",
     "form_home": "WWDWDWWWWD",
@@ -2078,9 +2083,9 @@
   "周三004": {
    "shuju": {
     "avg_odds": {
-     "w": 3.55,
+     "w": 3.5,
      "d": 3.35,
-     "l": 2.01
+     "l": 2.03
     },
     "source": "nowscore",
     "form_home": "DWWDWWLLLL",
@@ -2118,8 +2123,8 @@
    "shuju": {
     "avg_odds": {
      "w": 1.8,
-     "d": 3.6,
-     "l": 4.05
+     "d": 3.55,
+     "l": 4.1
     },
     "source": "nowscore",
     "form_home": "WWWLWDWWDD",
@@ -2156,9 +2161,9 @@
   "周三006": {
    "shuju": {
     "avg_odds": {
-     "w": 3.9,
+     "w": 3.65,
      "d": 3.2,
-     "l": 1.95
+     "l": 2.04
     },
     "source": "nowscore",
     "form_home": "LWWWLWWWDL",
@@ -2220,5 +2225,5 @@
   }
  },
  "history": [],
- "swot_fused_at": "2026-07-29 21:48:02"
+ "swot_fused_at": "2026-07-29 22:47:53"
 }

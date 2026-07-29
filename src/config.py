@@ -42,7 +42,7 @@ TEAM_NAME_MAP_EPL = {
     "南安普敦": "Southampton", "热刺": "Tottenham", "西汉姆联": "West Ham",
     "狼队": "Wolverhampton Wanderers",
     # 降级队 (历史数据可能出现)
-    "伯恩利": "Burnley", "利兹联": "Leeds", "桑德兰": "Sunderland",
+    "伯恩利": "Burnley", "利兹联": "Leeds United", "桑德兰": "Sunderland",
     "诺维奇": "Norwich City", "沃特福德": "Watford",
     "谢菲联": "Sheffield United", "卢顿": "Luton",
 }
