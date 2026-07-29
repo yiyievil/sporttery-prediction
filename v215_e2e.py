@@ -456,6 +456,47 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
     return matches
 
 
+# 竞彩官方计算器API (含单关标识/排名/赔率趋势标志, getMatchListV1没有这些字段)
+SPORTTERY_CALC_URL = "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?clientCode=3001"
+
+
+def enrich_sporttery_extra(matches):
+    """用官方计算器API补充: 单关标识 bettingSingle / 联赛排名 / 赔率趋势标志
+
+    趋势标志: 官方对每个赔率给出涨跌标记 (1=升 0=平 -1=降),
+    可与我们基于快照的趋势推断交叉校验 (借鉴 SportteryAPI parse.ts)
+    """
+    if not matches:
+        return
+    try:
+        r = fetch_with_retry(SPORTTERY_CALC_URL, SPORTTERY_HEADERS)
+        data = r.json()
+    except Exception:
+        return
+
+    def _tr(flag):
+        return {'1': '↑', '0': '→', '-1': '↓'}.get(str(flag or '').strip(), '')
+
+    extra = {}
+    for mi in data.get('value', {}).get('matchInfoList', []):
+        for s in mi.get('subMatchList', []):
+            had = s.get('had') or {}
+            extra[s.get('matchId')] = {
+                'betting_single': str(s.get('bettingSingle', '0')) == '1',
+                'home_rank': s.get('homeRank') or '',
+                'away_rank': s.get('awayRank') or '',
+                'had_trend': f"{_tr(had.get('hf'))}{_tr(had.get('df'))}{_tr(had.get('af'))}",
+            }
+    n = 0
+    for m in matches.values():
+        e = extra.get(m.get('match_id'))
+        if e:
+            m.update(e)
+            n += 1
+    if n:
+        print(f"  [增强] 单关标识/排名/赔率趋势: {n}场")
+
+
 def fetch_sporttery_matches_from_results(match_numbers, target_date=None):
     """从sporttery结果API获取已完场比赛的赔率数据(回退方案)
     当getMatchListV1不再返回已完场比赛时使用
@@ -2426,9 +2467,21 @@ def _build_initial_summary(init_ouzhi, init_yazhi, init_daxiao):
 # ============================================================
 # Pro 3.0: Kelly公式 + 数据质量评分 + 动态主场优势
 # ============================================================
-def kelly_criterion(prob, odds):
-    """四分之一Kelly投注比例
+def pool_margin(odds_list):
+    """玩法抽水率 (借鉴 SportteryAPI derive.ts): margin = 1 - 1/Σ(1/o)
+
+    竞彩各玩法抽水深度不同 (如比分玩法远高于胜平负),
+    用于value判定加权: 抽水越深, 要求的EV边际越高
+    """
+    valid = [o for o in odds_list if o and o > 1]
+    s = sum(1.0 / o for o in valid)
+    return max(0.0, 1.0 - 1.0 / s) if s > 0 else 0.0
+
+
+def kelly_criterion(prob, odds, margin=0.0):
+    """四分之一Kelly投注比例 + margin加权value判定
     f* = (bp - q) / b, 实际使用 f* / 4
+    value: f>0 且 EV >= margin/2 (抽水越深的玩法要求越高边际, 默认margin=0保持旧行为)
     返回: {'stake_pct': float, 'ev': float, 'value': bool}
     """
     b = odds - 1
@@ -2437,7 +2490,8 @@ def kelly_criterion(prob, odds):
     f = (b * prob - (1 - prob)) / b
     ev = prob * odds - 1  # EV = P×赔率 - 1
     stake = max(0, f * 0.25) * 100
-    return {'stake_pct': round(stake, 1), 'ev': round(ev * 100, 1), 'value': f > 0}
+    return {'stake_pct': round(stake, 1), 'ev': round(ev * 100, 1),
+            'value': f > 0 and ev >= margin / 2}
 
 
 def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handicap, lam_h, lam_a, mode='prob'):
@@ -2497,9 +2551,10 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     # ROI = P×赔率 - 1 (每元投入的期望收益率)
     if had_dict and 'h' in had_dict:
         had_odds_list = [had_dict['h'], had_dict['d'], had_dict['a']]
+        had_margin = pool_margin(had_odds_list)
         for i in range(3):
             ev = had_probs[i] * had_odds_list[i] - 1
-            kelly = kelly_criterion(had_probs[i], had_odds_list[i])
+            kelly = kelly_criterion(had_probs[i], had_odds_list[i], had_margin)
             sel_type, coverage, _ = get_selection_type('HAD', i, handicap)
             all_options.append({
                 'market': 'HAD',
@@ -2510,7 +2565,7 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                 'cost': 2,
                 'ev_pct': round(ev * 100, 1),
                 'kelly_pct': kelly['stake_pct'],
-                'value': ev > 0,
+                'value': kelly['value'],
                 'selection_type': sel_type,
                 'coverage': coverage,
                 'cost_advantage': None,
@@ -2519,9 +2574,10 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     # HHAD选项EV
     if hhad_dict and 'h' in hhad_dict:
         hhad_odds_list = [hhad_dict['h'], hhad_dict['d'], hhad_dict['a']]
+        hhad_margin = pool_margin(hhad_odds_list)
         for i in range(3):
             ev = hhad_probs[i] * hhad_odds_list[i] - 1
-            kelly = kelly_criterion(hhad_probs[i], hhad_odds_list[i])
+            kelly = kelly_criterion(hhad_probs[i], hhad_odds_list[i], hhad_margin)
             sel_type, coverage, cost_adv = get_selection_type('HHAD', i, handicap)
             all_options.append({
                 'market': 'HHAD',
@@ -2532,7 +2588,7 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                 'cost': 2,
                 'ev_pct': round(ev * 100, 1),
                 'kelly_pct': kelly['stake_pct'],
-                'value': ev > 0,
+                'value': kelly['value'],
                 'selection_type': sel_type,
                 'coverage': coverage,
                 'cost_advantage': cost_adv,
@@ -5490,8 +5546,10 @@ def predict_match(match_num, data):
             'poisson': hhad_wdl_str,
         },
         'kelly': {
-            'HAD': kelly_criterion(p_for_had_dir, odds),
-            'HHAD': kelly_criterion(p_for_hhad_dir, hhad_odds_val),
+            'HAD': kelly_criterion(p_for_had_dir, odds,
+                                   pool_margin([had['h'], had['d'], had['a']]) if had and 'h' in had else 0.0),
+            'HHAD': kelly_criterion(p_for_hhad_dir, hhad_odds_val,
+                                    pool_margin([hhad['h'], hhad['d'], hhad['a']]) if hhad and 'h' in hhad else 0.0),
         },
         'data_quality': dq,
         'difficulty': difficulty,  # Ultra 3.0: 比赛可预测性评分 0-100
@@ -5658,6 +5716,8 @@ def main():
     # ===== Phase 1: Sporttery API (核心 — 体彩场次+赔率基准+固定奖金) =====
     t1 = time.time()
     matches = fetch_sporttery_matches(MATCH_NUMBERS, TARGET_DATE)
+    # Ultra 7.7: 官方单关标识/联赛排名/赔率趋势增强 (借鉴 SportteryAPI 字段)
+    enrich_sporttery_extra(matches)
     # Ultra 6.5: 并行获取竞彩官方固定奖金 (比分/总进球/半全场赔率, 供EV价值分析)
     if matches:
         with ThreadPoolExecutor(max_workers=4) as pool:
@@ -5772,7 +5832,10 @@ def main():
                   'match_time': m.get('match_time', ''), 'weekday': m.get('weekday', ''),
                   'league': m.get('league', ''), 'fid': m.get('fixture_id', 0),
                   'data_source': m.get('data_source', '500.com'),
-                  'fallback_reason': m.get('fallback_reason', '')}
+                  'fallback_reason': m.get('fallback_reason', ''),
+                  'betting_single': m.get('betting_single', False),
+                  'home_rank': m.get('home_rank', ''), 'away_rank': m.get('away_rank', ''),
+                  'had_trend': m.get('had_trend', '')}
             for key, m in all_data.items()}
     
     output_json = json.dumps({

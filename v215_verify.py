@@ -2918,6 +2918,16 @@ def main():
     settle_sim_bets(verified_matches)
 
 
+# M串N 容错串关表 (与 v215_simulate.PARLAY_FOLDS 保持一致)
+_PARLAY_FOLDS = {
+    2: {'2串1': [2]},
+    3: {'3串1': [3], '3串3': [2], '3串4': [2, 3]},
+    4: {'4串1': [4], '4串4': [3], '4串5': [3, 4], '4串6': [2], '4串11': [2, 3, 4]},
+    5: {'5串1': [5], '5串5': [4], '5串6': [4, 5], '5串10': [2],
+        '5串16': [3, 4, 5], '5串20': [2, 3], '5串26': [2, 3, 4, 5]},
+}
+
+
 def settle_sim_bets(verified_matches):
     """结算模拟投注 — 验证赛果时自动计算盈亏
 
@@ -2960,7 +2970,7 @@ def settle_sim_bets(verified_matches):
 
         # 检查每场比赛是否都有赛果
         all_resolved = True
-        all_hit = True
+        hits = []  # 每场命中标记
 
         for m in matches:
             key = m['key']
@@ -2979,17 +2989,42 @@ def settle_sim_bets(verified_matches):
             else:
                 actual = v['actual_had']
 
-            if bet_dir != actual:
-                all_hit = False
-                # 不break, 继续检查其他场次 (用于报告)
+            hits.append(bet_dir == actual)
 
         if not all_resolved:
             still_pending += 1
             continue
 
-        # 所有场次都有赛果, 可以结算
+        all_hit = all(hits)
         now = time.strftime('%Y-%m-%d %H:%M:%S')
-        if all_hit:
+
+        # M串N 容错串关结算 (借鉴 SportteryAPI parlay.ts):
+        # 奖金 = Σ 命中组合 (2元×Π赔率×倍数), 单票封顶500万
+        _mp = _re.match(r'^(\d+)串(\d+)$', bet_type or '')
+        if _mp and _mp.group(2) != '1':
+            from itertools import combinations as _comb
+            _M = int(_mp.group(1))
+            _folds = _PARLAY_FOLDS.get(_M, {}).get(bet_type, [_M])
+            hit_legs = [m for m, ok in zip(matches, hits) if ok]
+            payout = 0.0
+            for size in _folds:
+                for combo in _comb(hit_legs, size):
+                    co = 1.0
+                    for leg in combo:
+                        co *= leg['odds']
+                    payout += 2 * co * multiplier
+            actual_payout = round(min(payout, 5_000_000), 2)
+            profit = round(actual_payout - stake, 2)
+            status = 'won' if profit > 0 else ('partial' if actual_payout > 0 else 'lost')
+            n_hit = sum(hits)
+            icon = '✅' if status == 'won' else ('🔶' if status == 'partial' else '❌')
+            print(f"  {icon} {bet_id} {bet_type} 命中{n_hit}/{len(hits)}场 奖金{actual_payout}元 盈亏{profit:+.2f}元")
+            for m, ok in zip(matches, hits):
+                v = verified_map.get(m['key'], {})
+                market = m['market']
+                actual = v.get('actual_hhad', '') if market == 'HHAD' else v.get('actual_had', '')
+                print(f"     {m['key']} {m['home']} vs {m['away']} → {m['option']}@{m['odds']} {'✓' if ok else '✗'} (实际{actual})")
+        elif all_hit:
             # 中奖! 奖金 = 2元 × 总赔率 × 倍数
             actual_payout = round(2 * total_odds * multiplier, 2)
             profit = round(actual_payout - stake, 2)
@@ -3004,12 +3039,11 @@ def settle_sim_bets(verified_matches):
             profit = round(-stake, 2)
             status = 'lost'
             print(f"  ❌ {bet_id} {bet_type} 未中奖 亏损{abs(profit)}元")
-            for m in matches:
+            for m, ok in zip(matches, hits):
                 v = verified_map.get(m['key'], {})
                 market = m['market']
                 actual = v.get('actual_hhad', '') if market == 'HHAD' else v.get('actual_had', '')
-                hit_str = '✓' if m['bet_dir'] == actual else '✗'
-                print(f"     {m['key']} {m['home']} vs {m['away']} → {m['option']}@{m['odds']} {hit_str} (实际{actual})")
+                print(f"     {m['key']} {m['home']} vs {m['away']} → {m['option']}@{m['odds']} {'✓' if ok else '✗'} (实际{actual})")
 
         c.execute('''UPDATE sim_bets SET status=?, actual_payout=?, profit=?, verified_at=?
                      WHERE bet_id=?''',
@@ -3044,24 +3078,27 @@ def show_sim_stats():
     total_payout = 0
     settled_stake = 0
     settled_profit = 0
-    won = lost = pending = 0
+    won = lost = pending = partial = 0
 
     for status, count, stake, payout, profit in rows:
         total_stake += stake or 0
         total_payout += payout or 0
-        if status in ('won', 'lost'):
+        if status in ('won', 'lost', 'partial'):
             settled_stake += stake or 0
             settled_profit += profit or 0
         if status == 'won':
             won = count
         elif status == 'lost':
             lost = count
+        elif status == 'partial':
+            partial = count
         elif status == 'pending':
             pending = count
 
     # Net profit = total recovered - total invested (consistent with show_history)
     net_profit = total_payout - total_stake
-    print(f"\n  📊 模拟投注累计: {won}中/{lost}未中/{pending}待结 | 投入{total_stake}元 回收{total_payout:.0f}元 盈亏{net_profit:+.0f}元", end='')
+    _pt = f"/{partial}保本" if partial else ""
+    print(f"\n  📊 模拟投注累计: {won}中/{lost}未中{_pt}/{pending}待结 | 投入{total_stake}元 回收{total_payout:.0f}元 盈亏{net_profit:+.0f}元", end='')
     if total_stake > 0:
         print(f" ROI={net_profit/total_stake*100:+.1f}%", end='')
     if settled_stake > 0:

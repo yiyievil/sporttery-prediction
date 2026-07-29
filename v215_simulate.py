@@ -42,6 +42,32 @@ STAR_SCORE = {
     '★★★': 3.0, '★★½': 2.5, '★★': 2.0, '★½': 1.5, '★': 1.0,
 }
 
+# M串N 容错串关表 (借鉴 SportteryAPI parlay.ts):
+# 每种玩法 = 若干"关数"的组合, 注数 = Σ C(M, size)
+PARLAY_FOLDS = {
+    2: {'2串1': [2]},
+    3: {'3串1': [3], '3串3': [2], '3串4': [2, 3]},
+    4: {'4串1': [4], '4串4': [3], '4串5': [3, 4], '4串6': [2], '4串11': [2, 3, 4]},
+    5: {'5串1': [5], '5串5': [4], '5串6': [4, 5], '5串10': [2],
+        '5串16': [3, 4, 5], '5串20': [2, 3], '5串26': [2, 3, 4, 5]},
+}
+
+# 容错串关触发规则: (场数, 最低星级) → 玩法
+COVERAGE_RULES = [
+    (5, 4.5, '5串6'),   # 5场全★★★★½+: 5个4串1 + 1个5串1, 容1错
+    (4, 4.0, '4串5'),   # 4场全★★★★+:  4个3串1 + 1个4串1, 容1错
+    (3, 3.5, '3串4'),   # 3场全★★★½+:  3个2串1 + 1个3串1, 容1错
+]
+
+
+def parlay_bets_count(bet_type, m):
+    """M串N 的注数 = Σ C(M, size)"""
+    from math import comb
+    folds = PARLAY_FOLDS.get(m, {}).get(bet_type)
+    if not folds:
+        return 0
+    return sum(comb(m, s) for s in folds)
+
 # 串关决策: 根据最低星级决定最大串数
 def decide_max_legs(matches):
     """根据选中场次的最低置信度决定最大串数
@@ -110,7 +136,7 @@ def find_pred_files(date_arg=None, weekday=None):
 
 def load_predictions(pred_file):
     """加载预测文件, 提取可投注的场次"""
-    with open(pred_file, 'r') as f:
+    with open(pred_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
     meta = data.get('meta', {})
@@ -191,6 +217,7 @@ def load_predictions(pred_file):
             'league': m.get('league', ''),
             'match_date': m.get('match_date', ''),
             'match_time': m.get('match_time', ''),
+            'betting_single': bool(m.get('betting_single', False)),  # 官方单关标识
             'market': market,
             'option': option,
             'bet_dir': bet_dir,  # 胜/平/负 或 让胜/让平/让负
@@ -202,6 +229,64 @@ def load_predictions(pred_file):
     # 按置信度降序
     candidates.sort(key=lambda x: x['star_score'], reverse=True)
     return candidates, data.get('meta', {})
+
+
+def _mk_legs(selected):
+    return [{
+        'key': s['key'], 'home': s['home'], 'away': s['away'], 'league': s['league'],
+        'market': s['market'], 'option': s['option'], 'bet_dir': s['bet_dir'],
+        'odds': s['odds'], 'conf': s['conf'],
+    } for s in selected]
+
+
+def build_coverage_parlay(selected, bet_type):
+    """构建 M串N 容错串关 (容1错: 错1场仍有奖金)
+
+    注数 = Σ C(M, size); 每注 2元×10倍=20元; 总投入 = 20×注数
+    潜在奖金按全中计算 (各关奖金之和)
+    """
+    m = len(selected)
+    n_bets = parlay_bets_count(bet_type, m)
+    if n_bets <= 0:
+        return None
+    from math import comb
+    from itertools import combinations
+    folds = PARLAY_FOLDS[m][bet_type]
+    total_odds = 1.0
+    for s in selected:
+        total_odds *= s['odds']
+    # 全中时奖金 = Σ 各组合 (2×Πodds×倍数)
+    max_payout = 0.0
+    for size in folds:
+        for combo in combinations(selected, size):
+            co = 1.0
+            for s in combo:
+                co *= s['odds']
+            max_payout += BET_UNIT * co * MULTIPLIER
+    return {
+        'legs': m,
+        'bet_type': bet_type,
+        'n_bets': n_bets,
+        'stake': STAKE * n_bets,
+        'multiplier': MULTIPLIER,
+        'total_odds': round(total_odds, 4),
+        'potential_payout': round(max_payout, 2),
+        'matches': _mk_legs(selected),
+    }
+
+
+def build_single_bet(candidate):
+    """官方单关场次的单场投注 (betting_single=True)"""
+    return {
+        'legs': 1,
+        'bet_type': '单关',
+        'n_bets': 1,
+        'stake': STAKE,
+        'multiplier': MULTIPLIER,
+        'total_odds': candidate['odds'],
+        'potential_payout': round(BET_UNIT * candidate['odds'] * MULTIPLIER, 2),
+        'matches': _mk_legs([candidate]),
+    }
 
 
 def select_and_build_parlay(candidates):
@@ -227,20 +312,9 @@ def select_and_build_parlay(candidates):
 
     # 构建串关
     total_odds = 1.0
-    bet_legs = []
+    bet_legs = _mk_legs(selected)
     for s in selected:
         total_odds *= s['odds']
-        bet_legs.append({
-            'key': s['key'],
-            'home': s['home'],
-            'away': s['away'],
-            'league': s['league'],
-            'market': s['market'],
-            'option': s['option'],
-            'bet_dir': s['bet_dir'],
-            'odds': s['odds'],
-            'conf': s['conf'],
-        })
 
     potential_payout = round(BET_UNIT * total_odds * MULTIPLIER, 2)
 
@@ -314,14 +388,21 @@ def print_bet_card(bet_id, parlay, pred_file):
     print('=' * 60)
     print(f'  【模拟投注】{bet_id}')
     print(f'  来源: {os.path.basename(pred_file)}')
-    print(f'  类型: {parlay["bet_type"]}  |  投注: {parlay["stake"]}元 ({parlay["multiplier"]}倍)')
-    print(f'  总赔率: {parlay["total_odds"]}  |  潜在奖金: {parlay["potential_payout"]}元')
+    n_bets = parlay.get('n_bets', 1)
+    print(f'  类型: {parlay["bet_type"]} ({n_bets}注)  |  投注: {parlay["stake"]}元 ({parlay["multiplier"]}倍/注)')
+    print(f'  总赔率: {parlay["total_odds"]}  |  潜在奖金(全中): {parlay["potential_payout"]}元')
     print('-' * 60)
     for i, m in enumerate(parlay['matches'], 1):
         print(f'  第{i}场 {m["key"]} {m["home"]} vs {m["away"]}')
         print(f'       {m["market"]} {m["option"]} @{m["odds"]} {m["conf"]}')
     print('-' * 60)
-    print(f'  中奖条件: {parlay["legs"]}场全部猜对')
+    bt = parlay['bet_type']
+    if bt == '单关':
+        print(f'  中奖条件: 该场猜对 (官方单关场次)')
+    elif bt.endswith('串1'):
+        print(f'  中奖条件: {parlay["legs"]}场全部猜对')
+    else:
+        print(f'  中奖条件: 容错串关, 错1场仍有奖金 (详见{bt}规则)')
     print(f'  若全中: {parlay["potential_payout"]}元 (净赚{parlay["potential_payout"] - parlay["stake"]:.2f}元)')
     print('=' * 60)
 
@@ -373,12 +454,14 @@ def show_history():
     total_profit = total_payout - total_stake
     won = sum(1 for r in rows if r[5] == 'won')
     lost = sum(1 for r in rows if r[5] == 'lost')
+    partial = sum(1 for r in rows if r[5] == 'partial')
     pending = sum(1 for r in rows if r[5] == 'pending')
 
+    _pt = f" | 保本{partial}" if partial else ""
     print(f"\n{'='*60}")
     print(f"  模拟投注历史统计")
     print(f"{'='*60}")
-    print(f"  总注数: {len(rows)} (中奖{won} | 未中{lost} | 待结算{pending})")
+    print(f"  总注数: {len(rows)} (中奖{won} | 未中{lost}{_pt} | 待结算{pending})")
     print(f"  总投入: {total_stake}元")
     print(f"  总回收: {total_payout:.2f}元")
     print(f"  总盈亏: {total_profit:+.2f}元")
@@ -408,9 +491,18 @@ def run_simulation(date_arg=None, weekday=None):
         return
 
     for c in candidates:
-        print(f"    {c['key']} {c['home']} vs {c['away']} → {c['option']}@{c['odds']} {c['conf']}")
+        sg = ' [单关]' if c.get('betting_single') else ''
+        print(f"    {c['key']} {c['home']} vs {c['away']} → {c['option']}@{c['odds']} {c['conf']}{sg}")
 
-    # 3. 构建串关
+    # 3a. 官方单关场次: ★★★★+ 可单场投注
+    singles = [c for c in candidates if c.get('betting_single') and c['star_score'] >= 4.0]
+    for c in singles[:2]:  # 最多2场单关, 控制投入
+        bet = build_single_bet(c)
+        bet_id = save_bet(bet, pred_file, pred_meta)
+        print(f"\n  🎯 官方单关: {c['key']} {c['option']}@{c['odds']}")
+        print_bet_card(bet_id, bet, pred_file)
+
+    # 3b. 主串关 (M串1)
     parlay = select_and_build_parlay(candidates)
     if not parlay:
         return
@@ -423,6 +515,19 @@ def run_simulation(date_arg=None, weekday=None):
 
     # 5. 打印投注卡
     print_bet_card(bet_id, parlay, pred_file)
+
+    # 6. 容错串关 (M串N, 容1错): 按覆盖规则触发
+    legs = parlay['legs']
+    min_star = min(m.get('star_score', 0) if 'star_score' in m else 0
+                   for m in candidates[:legs]) if legs else 0
+    for need_legs, need_star, cov_type in COVERAGE_RULES:
+        if legs >= need_legs and min_star >= need_star:
+            cov = build_coverage_parlay(candidates[:need_legs], cov_type)
+            if cov:
+                cov_id = save_bet(cov, pred_file, pred_meta)
+                print(f"\n  🛡️ 容错串关: {cov_type} ({cov['n_bets']}注, 容1错)")
+                print_bet_card(cov_id, cov, pred_file)
+            break
 
 
 if __name__ == '__main__':
