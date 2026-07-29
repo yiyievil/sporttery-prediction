@@ -387,7 +387,34 @@ class MemoryStore:
         result['matched_memories'].sort(key=lambda m: m['importance'], reverse=True)
         result['matched_memories'] = result['matched_memories'][:10]
 
+        # Bug修复(P6): 警告去重, 避免同一警告重复输出
+        result['warnings'] = list(dict.fromkeys(result['warnings']))
+
         return result
+
+    def get_correction_records(self, match_ids):
+        """检查编号是否有历史纠错记录 (importance>=0.8)
+
+        用于预测流程的硬中止判断: 当某编号曾被用户纠正过,
+        预测前应中止而非继续执行。
+
+        Args:
+            match_ids: 9位体彩编号列表
+
+        Returns:
+            dict: {match_id: [纠错记忆文本, ...]} (仅含高重要性记录)
+        """
+        hard = {}
+        for mid in match_ids or []:
+            for mem in self.recall(mid, limit=5):
+                text = mem.get('text', '')
+                if mid not in text or mem.get('importance', 0) < 0.8:
+                    continue
+                # 仅当记忆明确指认该编号为错误时才算纠错记录
+                # (避免"用户确认260729001是正确编号"这类正面记录误伤正确编号)
+                if f"不是{mid}" in text or f"错误的{mid}" in text or f"错误编号{mid}" in text:
+                    hard.setdefault(mid, []).append(text[:120])
+        return hard
 
     def validate_match_id(self, match_id):
         """验证体彩编号格式
@@ -504,12 +531,13 @@ class MemoryStore:
                     lines.append(f"    {text_preview}...")
                     lines.append("")
 
-        # 4. 全局警告
+        # 4. 全局警告 (跨节去重: 编号验证节已展示的警告不再重复)
         all_warnings = []
         if match_ids:
             for mid in match_ids:
                 v = self.validate_match_id(mid)
                 all_warnings.extend(v['warnings'])
+        all_warnings = list(dict.fromkeys(all_warnings))
         if all_warnings:
             lines.append(">>> 警告汇总:")
             for w in all_warnings:
