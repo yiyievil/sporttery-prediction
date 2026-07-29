@@ -1720,7 +1720,7 @@ def detect_defensive_away(away_form, away_stats):
     avg_ga = away_stats.get('avg_ga', 99) if isinstance(away_stats, dict) else away_stats.get('avg_ga', 99)
 
     if w_count >= 3 and avg_ga < 1.0:
-        factor = 0.80 if w_count == 4 else 0.85
+        factor = 0.83 if w_count == 4 else 0.85  # 实证标定: ×0.83/×0.85
         return True, factor
     if w_count >= 4 and avg_ga < 1.2:
         return True, 0.85
@@ -4974,12 +4974,14 @@ def predict_match(match_num, data):
             v611_notes.append(f"交锋压制(主胜率{h2h_info['home_win_rate']:.0%}, n={h2h_info['total']}), λ_h×0.95 λ_a×1.05")
             v611_flags['h2h_suppression'] = True
 
-    # --- 修正5: 防守型客队 (近4场3W+ + 场均失球<1.0 → 下调双方λ) ---
+    # --- 修正5: 防守型客队 (近4场3W+ + 场均失球<1.0 → 主队λ衰减, 客队λ加成) ---
     is_def_away, def_factor = detect_defensive_away(away_form, away_stats)
     if is_def_away:
+        # 实证标定(backtest_v611_calibration.py): 主队进球被压制×0.83/0.85(验证准确),
+        # 客队自身进球反增×1.16-1.18(连胜状态), 旧逻辑双方同罚方向相反, 保守取×1.10
         lam_h *= def_factor
-        lam_a *= def_factor
-        v611_notes.append(f"客队防守回升(近况{away_form[-4:]}, 场均失{away_stats.get('avg_ga',0):.1f}), λ×{def_factor:.2f}")
+        lam_a *= 1.10
+        v611_notes.append(f"客队防守回升(近况{away_form[-4:]}, 场均失{away_stats.get('avg_ga',0):.1f}), λ_h×{def_factor:.2f} λ_a×1.10")
         v611_flags['defensive_away'] = True
 
     # --- 修正3: 跨盘口矛盾 (大球升盘+平赔下降=诱大 → 下调总λ) ---

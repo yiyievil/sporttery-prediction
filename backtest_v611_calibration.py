@@ -184,6 +184,72 @@ def calibrate_h2h_suppression(rows, hist, min_h2h=4):
     print('解读: "相对对照"即为实证λ系数; 当前假设 λ_h×0.85, λ_a×0.90')
 
 
+def calibrate_defensive_away(rows, hist):
+    """修正5: 防守型客队 — 近4场3W+且赛季场均失球<1.0 → 当前假设双方λ×0.80(4W)/0.85(3W)
+
+    分组: 4W+失球<1.0 / 3W+失球<1.0 / 对照
+    分别测量主队λ与客队λ的 实际/期望 比值 (相对对照)
+    """
+    groups = defaultdict(lambda: [0.0, 0.0, 0])
+
+    for lg, season, date, h, a, hg, ag in rows:
+        if hg is None or ag is None:
+            continue
+        a_seq = [m for m in hist.get((lg, season, a), []) if m[0] < date]
+        if len(a_seq) < 4 + MIN_BASE_GAMES:
+            continue
+        recent4 = a_seq[-4:]
+        base = a_seq[:-4]
+        w4 = sum(1 for m in recent4 if m[3] == 'W')
+        avg_ga = sum(m[2] for m in base) / len(base)  # 赛季(窗口前)场均失球
+        if w4 >= 3 and avg_ga < 1.0:
+            key = '4W+失球<1.0 (当前×0.80)' if w4 == 4 else '3W+失球<1.0 (当前×0.85)'
+        else:
+            key = '对照组 (无修正)'
+
+        # 期望: 主队 = 0.5*(主队主场进球基线 + 客队客场失球基线), 客队对称
+        h_seq = [m for m in hist.get((lg, season, h), []) if m[0] < date]
+        h_home = [m for m in h_seq if m[5]]
+        a_away = [m for m in a_seq if not m[5]]
+        h_awaybase = [m for m in a_seq if not m[5]]
+        h_base_ha = [m for m in h_seq if not m[5]]
+        if len(h_home) < 3 or len(a_away) < 3 or len(h_base_ha) < 3:
+            continue
+        eh = 0.5 * (sum(m[1] for m in h_home) / len(h_home) +
+                    sum(m[2] for m in a_away) / len(a_away))
+        ea = 0.5 * (sum(m[1] for m in h_awaybase) / len(h_awaybase) +
+                    sum(m[2] for m in h_base_ha) / len(h_base_ha))
+        if eh <= 0 or ea <= 0:
+            continue
+        g = groups[(key, 'home')]
+        g[0] += hg; g[1] += eh; g[2] += 1
+        g = groups[(key, 'away')]
+        g[0] += ag; g[1] += ea; g[2] += 1
+
+    print('=' * 70)
+    print('标定3: 防守型客队 — 近4场3W+且场均失球<1.0时的进球抑制')
+    print('=' * 70)
+    order = ['4W+失球<1.0 (当前×0.80)', '3W+失球<1.0 (当前×0.85)', '对照组 (无修正)']
+    ratios = {}
+    for key in order:
+        for side in ('home', 'away'):
+            actual, expected, n = groups[(key, side)]
+            if n:
+                ratios[(key, side)] = (actual / expected, n, actual, expected)
+    ctrl_h = ratios[('对照组 (无修正)', 'home')][0]
+    ctrl_a = ratios[('对照组 (无修正)', 'away')][0]
+    print(f"{'分组':<30}{'方':>4}{'n':>6}{'实际':>8}{'期望':>8}{'比值':>8}{'相对对照':>9}")
+    for key in order:
+        for side, label, ctrl in (('home', '主', ctrl_h), ('away', '客', ctrl_a)):
+            r = ratios.get((key, side))
+            if not r:
+                continue
+            ratio, n, actual, expected = r
+            print(f"{key:<30}{label:>4}{n:>6}{actual/n:>8.3f}{expected/n:>8.3f}{ratio:>8.3f}{ratio/ctrl:>9.3f}")
+    print()
+    print('解读: "相对对照"即为实证λ系数; 当前假设 4W→×0.80, 3W→×0.85 (双方同罚)')
+
+
 def main():
     rows = load_matches()
     print(f'样本: {len(rows)} 场 (五大联赛 2023-24 ~ 2025-26)')
@@ -192,6 +258,8 @@ def main():
     calibrate_form_slump(rows, hist)
     print()
     calibrate_h2h_suppression(rows, hist)
+    print()
+    calibrate_defensive_away(rows, hist)
 
 
 if __name__ == '__main__':
