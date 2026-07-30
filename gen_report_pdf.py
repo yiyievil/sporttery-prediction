@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""预测报告PDF生成器
+"""预测报告PDF生成器 (手机阅读优化版)
 
 直接从预测JSON生成PDF报告，每场明确标注第一推荐和第二推荐。
 复用 gen_report_v2.py 的 rank_match 逻辑。
+
+v2: 手机阅读优化 — 放大字体、明亮高对比配色、宽行距
 """
 
 import json
@@ -85,50 +87,82 @@ def register_cjk_font():
                 continue
     raise RuntimeError('未找到可用CJK字体, 请设置 SPORTTERY_FONT_DIR 或将字体放入 ./fonts/')
 
-# ============ 页面常量 ============
+# ============ 页面常量 (手机优化: 减小边距, 增大内容区) ============
 PAGE_SIZE = A4
 PAGE_W, PAGE_H = PAGE_SIZE
-LM = 15 * mm
-RM = 15 * mm
-TM = 18 * mm
-BM = 18 * mm
+LM = 10 * mm    # 左边距缩小 (15→10)
+RM = 10 * mm    # 右边距缩小
+TM = 12 * mm    # 上边距缩小 (18→12)
+BM = 12 * mm    # 下边距缩小
 CW = PAGE_W - LM - RM  # content width
 
-# ============ 样式 ============
+# ============ 明亮配色方案 (手机阅读优化) ============
+# 背景
+BG_PAGE      = HexColor('#ffffff')   # 纯白页面背景
+BG_HEADER    = HexColor('#1a56db')   # 明亮蓝标题栏
+BG_CARD      = HexColor('#f0f5ff')   # 浅蓝卡片背景
+BG_CARD_ALT  = HexColor('#e6effd')   # 浅蓝交替行
+BG_SWOT      = HexColor('#fefce8')   # 浅黄SWOT栏
+BG_EXTRA     = HexColor('#f8fafc')   # 极浅灰额外信息
+BG_POOL      = HexColor('#fffbeb')   # 浅橙玩法区
+BG_REC1      = HexColor('#ecfdf5')   # 浅绿第一推荐
+BG_REC2      = HexColor('#eff6ff')   # 浅蓝第二推荐
+BG_MSN_HEAD  = HexColor('#065f46')   # 深绿M串N表头
+BG_MSN_HI    = HexColor('#d1fae5')   # 浅绿高亮行
+
+# 文字
+INK_DARK     = HexColor('#0f172a')   # 深黑 (标题/重要文字)
+INK_BODY     = HexColor('#1e293b')   # 深灰 (正文)
+INK_MUTED    = HexColor('#475569')   # 中灰 (次要文字)
+INK_WHITE    = colors.white
+
+# 强调色
+ACCENT_BLUE  = HexColor('#1d4ed8')   # 明亮蓝
+ACCENT_GREEN = HexColor('#059669')   # 明亮绿
+ACCENT_RED   = HexColor('#dc2626')   # 明亮红
+ACCENT_AMBER = HexColor('#d97706')   # 明亮橙
+ACCENT_TEAL  = HexColor('#0891b2')   # 明亮青
+
+# 边框
+BORDER_LIGHT = HexColor('#cbd5e1')   # 浅灰边框
+BORDER_BLUE  = HexColor('#3b82f6')   # 蓝色边框
+BORDER_GREEN = HexColor('#10b981')   # 绿色边框
+
+# ============ 样式 (手机优化: 放大字体 + 宽行距) ============
 def get_styles(cjk_font='CJK'):
-    """获取样式字典"""
+    """获取样式字典 — 手机阅读优化版"""
     bold_font = 'CJK-Bold' if cjk_font == 'CJK' else cjk_font
     return {
-        'title': ParagraphStyle('Title', fontName=bold_font, fontSize=22, leading=28,
-                                 textColor=HexColor('#ffffff'), alignment=TA_CENTER, spaceAfter=6, wordWrap='CJK'),
-        'subtitle': ParagraphStyle('Subtitle', fontName=cjk_font, fontSize=10, leading=14,
-                                   textColor=HexColor('#a0a0a0'), alignment=TA_CENTER, spaceAfter=4, wordWrap='CJK'),
-        'section': ParagraphStyle('Section', fontName=bold_font, fontSize=14, leading=20,
-                                   textColor=HexColor('#3498db'), spaceBefore=20, spaceAfter=10, wordWrap='CJK'),
-        'match_title': ParagraphStyle('MatchTitle', fontName=bold_font, fontSize=13, leading=18,
-                                       textColor=HexColor('#ffffff'), wordWrap='CJK'),
-        'match_info': ParagraphStyle('MatchInfo', fontName=cjk_font, fontSize=9, leading=12,
-                                      textColor=HexColor('#888888'), alignment=2, wordWrap='CJK'),
-        'label': ParagraphStyle('Label', fontName=bold_font, fontSize=9, leading=12,
-                                 textColor=HexColor('#2ecc71'), wordWrap='CJK'),
-        'label2': ParagraphStyle('Label2', fontName=bold_font, fontSize=9, leading=12,
-                                 textColor=HexColor('#3498db'), wordWrap='CJK'),
-        'rec_main': ParagraphStyle('RecMain', fontName=bold_font, fontSize=12, leading=16,
-                                    textColor=HexColor('#ffffff'), wordWrap='CJK'),
-        'body': ParagraphStyle('Body', fontName=cjk_font, fontSize=9, leading=13,
-                               textColor=HexColor('#cccccc'), wordWrap='CJK'),
-        'small': ParagraphStyle('Small', fontName=cjk_font, fontSize=8, leading=11,
-                                 textColor=HexColor('#888888'), wordWrap='CJK'),
-        'th': ParagraphStyle('Th', fontName=bold_font, fontSize=8, leading=11,
-                              textColor=colors.white, alignment=TA_CENTER, wordWrap='CJK'),
-        'td': ParagraphStyle('Td', fontName=cjk_font, fontSize=8, leading=11,
-                             textColor=HexColor('#cccccc'), alignment=TA_CENTER, wordWrap='CJK'),
-        'td_first': ParagraphStyle('TdFirst', fontName=bold_font, fontSize=8, leading=11,
-                                    textColor=HexColor('#2ecc71'), alignment=TA_CENTER, wordWrap='CJK'),
-        'td_second': ParagraphStyle('TdSecond', fontName=bold_font, fontSize=8, leading=11,
-                                     textColor=HexColor('#3498db'), alignment=TA_CENTER, wordWrap='CJK'),
-        'td_score': ParagraphStyle('TdScore', fontName=bold_font, fontSize=8, leading=11,
-                                    textColor=HexColor('#f39c12'), alignment=TA_CENTER, wordWrap='CJK'),
+        'title': ParagraphStyle('Title', fontName=bold_font, fontSize=28, leading=36,
+                                 textColor=INK_WHITE, alignment=TA_CENTER, spaceAfter=8, wordWrap='CJK'),
+        'subtitle': ParagraphStyle('Subtitle', fontName=cjk_font, fontSize=14, leading=20,
+                                   textColor=HexColor('#bfdbfe'), alignment=TA_CENTER, spaceAfter=6, wordWrap='CJK'),
+        'section': ParagraphStyle('Section', fontName=bold_font, fontSize=20, leading=28,
+                                   textColor=ACCENT_BLUE, spaceBefore=24, spaceAfter=12, wordWrap='CJK'),
+        'match_title': ParagraphStyle('MatchTitle', fontName=bold_font, fontSize=17, leading=24,
+                                       textColor=INK_DARK, wordWrap='CJK'),
+        'match_info': ParagraphStyle('MatchInfo', fontName=cjk_font, fontSize=13, leading=18,
+                                      textColor=INK_MUTED, alignment=2, wordWrap='CJK'),
+        'label': ParagraphStyle('Label', fontName=bold_font, fontSize=14, leading=20,
+                                 textColor=ACCENT_GREEN, wordWrap='CJK'),
+        'label2': ParagraphStyle('Label2', fontName=bold_font, fontSize=14, leading=20,
+                                 textColor=ACCENT_BLUE, wordWrap='CJK'),
+        'rec_main': ParagraphStyle('RecMain', fontName=bold_font, fontSize=16, leading=24,
+                                    textColor=INK_DARK, wordWrap='CJK'),
+        'body': ParagraphStyle('Body', fontName=cjk_font, fontSize=13, leading=20,
+                               textColor=INK_BODY, wordWrap='CJK'),
+        'small': ParagraphStyle('Small', fontName=cjk_font, fontSize=12, leading=18,
+                                 textColor=INK_MUTED, wordWrap='CJK'),
+        'th': ParagraphStyle('Th', fontName=bold_font, fontSize=12, leading=16,
+                              textColor=INK_WHITE, alignment=TA_CENTER, wordWrap='CJK'),
+        'td': ParagraphStyle('Td', fontName=cjk_font, fontSize=12, leading=16,
+                             textColor=INK_BODY, alignment=TA_CENTER, wordWrap='CJK'),
+        'td_first': ParagraphStyle('TdFirst', fontName=bold_font, fontSize=12, leading=16,
+                                    textColor=ACCENT_GREEN, alignment=TA_CENTER, wordWrap='CJK'),
+        'td_second': ParagraphStyle('TdSecond', fontName=bold_font, fontSize=12, leading=16,
+                                     textColor=ACCENT_BLUE, alignment=TA_CENTER, wordWrap='CJK'),
+        'td_score': ParagraphStyle('TdScore', fontName=bold_font, fontSize=12, leading=16,
+                                    textColor=ACCENT_AMBER, alignment=TA_CENTER, wordWrap='CJK'),
     }
 
 
@@ -143,18 +177,18 @@ def normalize_text(text):
     return str(text)
 
 
-# ============ 背景色绘制 ============
+# ============ 背景色绘制 (明亮白底) ============
 def draw_bg(canvas, doc):
-    """绘制深色背景"""
+    """绘制明亮白色背景"""
     canvas.saveState()
-    canvas.setFillColor(HexColor('#0f1117'))
+    canvas.setFillColor(BG_PAGE)
     canvas.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
     canvas.restoreState()
 
 
 # ============ 汇总表 ============
 def build_summary_table(matches, styles):
-    """构建汇总表"""
+    """构建汇总表 — 明亮配色"""
     data = [[
         Paragraph('场次', styles['th']),
         Paragraph('联赛', styles['th']),
@@ -190,14 +224,14 @@ def build_summary_table(matches, styles):
         else:
             row.extend([Paragraph('-', styles['td']), Paragraph('-', styles['td'])])
 
-        swot_color = '#888888'
+        swot_color = INK_MUTED
         if '占优' in m['swot_lean']:
             if '主' in m['swot_lean']:
-                swot_color = '#2ecc71'
+                swot_color = ACCENT_GREEN
             else:
-                swot_color = '#e74c3c'
+                swot_color = ACCENT_RED
         swot_style = ParagraphStyle('swot', parent=styles['td'],
-                                     textColor=HexColor(swot_color), fontName='CJK-Bold')
+                                     textColor=swot_color, fontName='CJK-Bold')
         row.append(Paragraph(normalize_text(m['swot_lean']), swot_style))
 
         data.append(row)
@@ -206,17 +240,21 @@ def build_summary_table(matches, styles):
     table = LongTable(data, colWidths=col_widths, repeatRows=1)
 
     table.setStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#222631')),
-        ('BACKGROUND', (0, 1), (-1, -1), HexColor('#1a1d24')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [HexColor('#1a1d24'), HexColor('#161821')]),
-        ('GRID', (0, 0), (-1, -1), 0.3, HexColor('#2a2d35')),
+        # 表头: 明亮蓝底白字
+        ('BACKGROUND', (0, 0), (-1, 0), BG_HEADER),
+        # 数据行: 白色/浅蓝交替
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [HexColor('#ffffff'), BG_CARD_ALT]),
+        # 网格线
+        ('GRID', (0, 0), (-1, -1), 0.5, BORDER_LIGHT),
+        ('LINEBELOW', (0, 0), (-1, 0), 1.5, ACCENT_BLUE),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, 0), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-        ('TOPPADDING', (0, 1), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        # 内边距加大 (手机阅读更舒适)
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 1), (-1, -1), 7),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 7),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
     ])
 
     return table
@@ -224,7 +262,7 @@ def build_summary_table(matches, styles):
 
 # ============ 比赛卡片 ============
 def build_match_card(m, styles):
-    """构建单场比赛的推荐卡片"""
+    """构建单场比赛的推荐卡片 — 明亮配色"""
     elements = []
 
     # 比赛标题行
@@ -234,28 +272,28 @@ def build_match_card(m, styles):
     ]]
     header = Table(header_data, colWidths=[CW * 0.65, CW * 0.35])
     header.setStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), HexColor('#222631')),
+        ('BACKGROUND', (0, 0), (-1, -1), BG_CARD),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ('LEFTPADDING', (0, 0), (-1, -1), 12),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 12),
-        ('LINEBELOW', (0, 0), (-1, -1), 1, HexColor('#2a2d35')),
+        ('TOPPADDING', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        ('LEFTPADDING', (0, 0), (-1, -1), 14),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 14),
+        ('LINEBELOW', (0, 0), (-1, -1), 2, ACCENT_BLUE),
     ])
     elements.append(header)
 
     # SWOT信息栏
     swot_text = normalize_text(m['swot_lean'])
     swot_adj = normalize_text(m.get('swot_adjust', ''))
-    swot_color = '#888888'
+    swot_color = INK_MUTED
     if '占优' in swot_text:
         if '主' in swot_text:
-            swot_color = '#2ecc71'
+            swot_color = ACCENT_GREEN
         else:
-            swot_color = '#e74c3c'
+            swot_color = ACCENT_RED
 
     swot_data = [[
-        Paragraph(f'<font color="{swot_color}"><b>SWOT: {swot_text}</b></font>', styles['body']),
+        Paragraph(f'<font color="#{swot_color.hexval()[2:]}"><b>SWOT: {swot_text}</b></font>', styles['body']),
         Paragraph(f'置信调整: <b>{swot_adj}</b>', styles['body']),
     ]]
     if m.get('swot_key_factor'):
@@ -264,11 +302,11 @@ def build_match_card(m, styles):
 
     swot_bar = Table(swot_data, colWidths=[CW * 0.25, CW * 0.2, CW * 0.55])
     swot_bar.setStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), HexColor('#161821')),
+        ('BACKGROUND', (0, 0), (-1, -1), BG_SWOT),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('LEFTPADDING', (0, 0), (-1, -1), 12),
+        ('TOPPADDING', (0, 0), (-1, -1), 7),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+        ('LEFTPADDING', (0, 0), (-1, -1), 14),
     ])
     elements.append(swot_bar)
 
@@ -298,18 +336,18 @@ def build_match_card(m, styles):
         ]
         inner_table = Table(inner, colWidths=[CW * 0.48])
         inner_table.setStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), HexColor(bg_color)),
-            ('BOX', (0, 0), (-1, -1), 1.5, HexColor(border_color)),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+            ('BACKGROUND', (0, 0), (-1, -1), bg_color),
+            ('BOX', (0, 0), (-1, -1), 2, border_color),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 12),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 12),
         ])
         return inner_table
 
     rec_row = [[
-        make_rec_cell(first, '第一推荐', styles['label'], '#0d2818', '#2ecc71'),
-        make_rec_cell(second, '第二推荐', styles['label2'], '#0d1d28', '#3498db'),
+        make_rec_cell(first, '第一推荐', styles['label'], BG_REC1, BORDER_GREEN),
+        make_rec_cell(second, '第二推荐', styles['label2'], BG_REC2, BORDER_BLUE),
     ]]
     rec_table = Table(rec_row, colWidths=[CW * 0.5, CW * 0.5])
     rec_table.setStyle([
@@ -348,18 +386,16 @@ def build_match_card(m, styles):
     extra_data = [[Paragraph(extra_text, styles['small'])]]
     extra_table = Table(extra_data, colWidths=[CW])
     extra_table.setStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), HexColor('#161821')),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('LEFTPADDING', (0, 0), (-1, -1), 12),
+        ('BACKGROUND', (0, 0), (-1, -1), BG_EXTRA),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 14),
     ])
     elements.append(extra_table)
 
     # Ultra 6.5: 竞彩官方玩法区块 (半全场/总进球/比分 — 官方赔率 × 模型概率 EV)
-    # 竞彩可投注玩法完整呈现: 模型Top概率 + 官方固定奖金 + EV正值标记✅
     sp_pools = m.get('sporttery_pools') or {}
     pool_lines = []
-    # 半全场: 模型Top3概率 (half_full.top3) + 官方赔率/EV (sporttery_pools.hafu)
     hf_top3 = half_full.get('top3', '')
     if hf_top3:
         hafu_odds = {p['option']: p for p in (sp_pools.get('hafu') or [])}
@@ -375,7 +411,6 @@ def build_match_card(m, styles):
                     parts.append(f"{name} {pct}%")
         if parts:
             pool_lines.append('半全场: ' + ' | '.join(parts))
-    # 总进球: 官方EV榜 (sp_pools.ttg 已按EV排序, 含概率)
     if sp_pools.get('ttg'):
         parts = []
         for p in sp_pools['ttg'][:3]:
@@ -384,7 +419,6 @@ def build_match_card(m, styles):
         pool_lines.append('总进球: ' + ' | '.join(parts))
     elif total_goals.get('top3'):
         pool_lines.append('总进球(模型): ' + normalize_text(total_goals['top3']))
-    # 比分: 官方EV榜
     if sp_pools.get('crs'):
         parts = []
         for p in sp_pools['crs'][:3]:
@@ -399,10 +433,10 @@ def build_match_card(m, styles):
             pl_data = [[Paragraph(normalize_text(line), styles['small'])]]
             pl_table = Table(pl_data, colWidths=[CW])
             pl_table.setStyle([
-                ('BACKGROUND', (0, 0), (-1, -1), HexColor('#1a1d16')),
-                ('TOPPADDING', (0, 0), (-1, -1), 3),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-                ('LEFTPADDING', (0, 0), (-1, -1), 12),
+                ('BACKGROUND', (0, 0), (-1, -1), BG_POOL),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 14),
             ])
             elements.append(pl_table)
 
@@ -412,14 +446,14 @@ def build_match_card(m, styles):
         opts_data = [[Paragraph(f'全部选项: {all_opts}', styles['small'])]]
         opts_table = Table(opts_data, colWidths=[CW])
         opts_table.setStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), HexColor('#161821')),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LEFTPADDING', (0, 0), (-1, -1), 12),
+            ('BACKGROUND', (0, 0), (-1, -1), BG_EXTRA),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 14),
         ])
         elements.append(opts_table)
 
-    elements.append(Spacer(1, 8))
+    elements.append(Spacer(1, 10))
     return elements
 
 
@@ -441,7 +475,7 @@ def main():
 
     # 控制台输出
     print("=" * 60)
-    print("预测报告 PDF - 第一/第二推荐")
+    print("预测报告 PDF (手机阅读优化版) - 第一/第二推荐")
     print("=" * 60)
     for m in matches:
         f_str = f'{m["first"]["name"]}@{m["first"]["odds"]}({m["first"]["score"]})' if m['first'] else 'N/A'
@@ -457,54 +491,53 @@ def main():
 
     story = []
 
-    # 标题
+    # 标题 (明亮蓝底白字)
     now_str = datetime.now().strftime('%Y-%m-%d %H:%M')
     title_data = [[
         Paragraph(f'预测报告 · {REPORT_TITLE}', styles['title']),
     ]]
     title_table = Table(title_data, colWidths=[CW])
     title_table.setStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), HexColor('#1a1d24')),
-        ('TOPPADDING', (0, 0), (-1, -1), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+        ('BACKGROUND', (0, 0), (-1, -1), BG_HEADER),
+        ('TOPPADDING', (0, 0), (-1, -1), 16),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 16),
     ])
     story.append(title_table)
 
     meta_data = [[Paragraph(f'共 {len(matches)} 场 | 生成时间 {now_str} | nowscore/500.com + SWOT融合', styles['subtitle'])]]
     meta_table = Table(meta_data, colWidths=[CW])
     meta_table.setStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), HexColor('#1a1d24')),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('BACKGROUND', (0, 0), (-1, -1), BG_HEADER),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
     ])
     story.append(meta_table)
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 14))
 
     # 汇总表
     story.append(Paragraph('全场汇总', styles['section']))
     story.append(build_summary_table(matches, styles))
 
     # 逐场详情
-    story.append(Spacer(1, 16))
+    story.append(Spacer(1, 18))
     story.append(Paragraph('逐场推荐详情', styles['section']))
 
     for m in matches:
         card = build_match_card(m, styles)
-        # 尝试KeepTogether, 如果太大就自然分页
         story.extend(card)
 
-    # Ultra 6.5: M串N 容错过关推荐 (严格按官方32种组合, 概率=SWOT融合后, SP=官方固定奖金)
+    # Ultra 6.5: M串N 容错过关推荐
     msn_section = build_msn_section(PRED_FILE, styles)
     if msn_section:
-        story.append(Spacer(1, 8))
+        story.append(Spacer(1, 10))
         story.extend(msn_section)
 
     doc.build(story, onFirstPage=draw_bg, onLaterPages=draw_bg)
-    print(f'\nPDF报告已生成: {OUTPUT_PDF}')
+    print(f'\nPDF报告已生成 (手机阅读优化版): {OUTPUT_PDF}')
 
 
 def build_msn_section(pred_file, styles):
-    """M串N 容错过关推荐区块 — 数据来自 msn_simulator (官方32种组合)"""
+    """M串N 容错过关推荐区块 — 明亮配色"""
     try:
         from msn_simulator import extract_had_bets, simulate_combo, poisson_binomial_probs, COMBO_TABLE
     except ImportError:
@@ -542,17 +575,21 @@ def build_msn_section(pred_file, styles):
                         f"{r['p_any_win']:.0%}", f"{r['exp_profit']:+.1f}元", f"{r['roi']:+.1%}"])
         t = Table(tbl, colWidths=[CW * 0.16, CW * 0.08, CW * 0.12, CW * 0.16, CW * 0.14, CW * 0.17, CW * 0.17])
         t.setStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), HexColor('#1a2d1a')),
-            ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#2a2d34')),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            # 明亮绿表头
+            ('BACKGROUND', (0, 0), (-1, 0), BG_MSN_HEAD),
+            ('TEXTCOLOR', (0, 0), (-1, 0), INK_WHITE),
+            ('GRID', (0, 0), (-1, -1), 0.5, BORDER_LIGHT),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
             ('FONTNAME', (0, 0), (-1, -1), styles['small'].fontName),
             ('FONTSIZE', (0, 0), (-1, -1), styles['small'].fontSize),
-            ('TEXTCOLOR', (0, 0), (-1, -1), styles['small'].textColor),
+            ('TEXTCOLOR', (0, 1), (-1, -1), INK_BODY),
+            # 数据行交替色
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [HexColor('#ffffff'), HexColor('#f0fdf4')]),
         ])
         # 高亮前3名
         for i in range(1, min(4, len(tbl))):
-            t.setStyle([('BACKGROUND', (0, i), (-1, i), HexColor('#14202a'))])
+            t.setStyle([('BACKGROUND', (0, i), (-1, i), BG_MSN_HI)])
         els.append(t)
 
         best_roi = rows[0]

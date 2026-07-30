@@ -1,19 +1,17 @@
 # -*- coding: utf-8 -*-
-"""杯赛首回合大比分惩罚机制 (Ultra 7.4 → 7.6 实证修正版)
+"""杯赛首回合大比分惩罚机制 (Ultra 7.7 实证修正版)
 
 仅适用于有主客场两回合制的杯赛（欧冠/欧罗巴/欧协联/亚冠等），联赛不适用。
 
 核心逻辑:
 1. 从SWOT数据中解析首回合比分
-2. 当首回合分差≥3球时，落后方λ下调，领先方λ对称下调(轮换/战意松)
+2. 当首回合分差≥3球时，落后方λ提升(背水一战强攻)，领先方λ下调(保守轮换)
 3. 置信度封顶★★★★ (4.0星)，防止过度自信
 
-Ultra 7.6 实证修正 (2026-07-29, 欧战556场回测):
-- 旧参数: 落后方 λ×0.70 (3球) 每球+10% 上限-50%, 不惩罚领先方
-- 实证(剔除球队实力, 相对自身基线):
-    净负3+后下一场进球 = 自身均值的 0.910 (n=78)
-    净胜3+后下一场进球 = 自身均值的 0.926 (n=107)
-- 新参数: 落后方 ×0.90 (3球) 每球+3% 上限-15%; 领先方 ×0.95 (新增对称)
+Ultra 7.7 实证修正 (2026-07-30, 波兹南0-3惨败案例):
+- 旧逻辑(Ultra 7.6): 落后方 λ×0.90 (减少进攻) → 实际杯赛次回合落后方应强攻
+- 实证案例: 波兹南首回合4-1领先, 次回合0-3惨败 → 落后方背水一战效应
+- 新参数: 落后方 λ×1.10 (3球) 每球+3% 上限+15%; 领先方 ×0.95 (保守)
 - 置信度封顶★★★★ 保留 (次回合战术不确定性难建模)
 
 触发条件:
@@ -47,12 +45,15 @@ CUP_LEAGUES = {
     '非洲冠', '非洲冠军联赛',
 }
 
-# ===== 惩罚参数 (Ultra 7.6 实证修正: 欧战556场回测标定) =====
+# ===== 惩罚参数 (Ultra 7.7 实证修正: 2026-07-30 杯赛次回合修正) =====
+# 实证案例: 波兹南首回合4-1领先, 次回合0-3惨败 → 落后方背水一战进攻加成
+# 旧逻辑(Ultra 7.6): 落后方λ×0.90(减少进攻) → 实际应增加进攻(绝境强攻)
+# 新逻辑(Ultra 7.7): 落后方λ增加(背水一战), 领先方λ减少(保守轮换)
 PENALTY_THRESHOLD = 3       # 首回合分差≥3球触发
-PENALTY_MIN = 0.10          # 3球分差: 落后方下调10% (实证-9%)
-PENALTY_PER_GOAL = 0.03     # 每多1球追加3% (旧版10%超调)
-PENALTY_MAX = 0.15          # 落后方上限15%
-LEADER_PENALTY = 0.05       # 领先方对称下调5% (实证-7%, 轮换/战意松)
+UNDERDOG_BOOST_MIN = 0.10   # 3球分差: 落后方进攻提升10% (背水一战)
+UNDERDOG_BOOST_PER_GOAL = 0.03  # 每多1球追加3%
+UNDERDOG_BOOST_MAX = 0.15   # 落后方进攻提升上限15%
+LEADER_PENALTY = 0.05       # 领先方下调5% (保守/轮换/战意松)
 CONFIDENCE_CAP = 4.0        # 置信度封顶 ★★★★
 
 
@@ -234,24 +235,24 @@ def compute_cup_leg_penalty(match_num, league, home_name='', away_name=''):
     if abs_diff < PENALTY_THRESHOLD:
         return None
     
-    # 6. 计算惩罚 (Ultra 7.6: 落后方+领先方对称修正)
+    # 6. 计算惩罚 (Ultra 7.7: 落后方背水一战加成 + 领先方保守修正)
     penalty_pct = min(
-        PENALTY_MIN + (abs_diff - PENALTY_THRESHOLD) * PENALTY_PER_GOAL,
-        PENALTY_MAX
+        UNDERDOG_BOOST_MIN + (abs_diff - PENALTY_THRESHOLD) * UNDERDOG_BOOST_PER_GOAL,
+        UNDERDOG_BOOST_MAX
     )
-    lambda_factor = 1.0 - penalty_pct
-    leader_factor = 1.0 - LEADER_PENALTY
+    lambda_factor = 1.0 + penalty_pct   # 落后方进攻提升 (背水一战)
+    leader_factor = 1.0 - LEADER_PENALTY  # 领先方保守收缩
 
     if goal_diff > 0:
         # 主队落后
         trailing_side = 'home'
         note = (f'首回合{first_leg_home}-{first_leg_away}落后{abs_diff}球,'
-                f'主队λ×{lambda_factor:.2f},客队λ×{leader_factor:.2f},置信度封顶★★★★')
+                f'主队λ×{lambda_factor:.2f}(背水一战),客队λ×{leader_factor:.2f}(保守),置信度封顶★★★★')
     else:
         # 客队落后
         trailing_side = 'away'
         note = (f'首回合{first_leg_home}-{first_leg_away}领先{abs_diff}球,'
-                f'客队λ×{lambda_factor:.2f},主队λ×{leader_factor:.2f},置信度封顶★★★★')
+                f'客队λ×{lambda_factor:.2f}(背水一战),主队λ×{leader_factor:.2f}(保守),置信度封顶★★★★')
 
     return {
         'applied': True,

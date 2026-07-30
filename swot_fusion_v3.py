@@ -310,9 +310,11 @@ def fuse_swot_into_predictions(pred_file):
                 conf_adjust = '+0.5★'
                 fusion_advice = '✅ SWOT与模型方向一致, 置信度上调+0.5★'
         elif orig_model_dir == '平' or swot_dir == '平':
+            # Ultra 7.7: 部分一致(含平局)也降级 — SWOT判断平局意味着方向不确定
+            # 实证案例: 波兹南SWOT判"势均力敌", 模型判"胜", 实际0-3惨败
             consistency = '部分一致'
-            conf_adjust = '无调整'
-            fusion_advice = '◐ SWOT与模型方向部分一致(含平局), 置信度不调整'
+            conf_adjust = '-0.5★'
+            fusion_advice = '◐ SWOT与模型方向部分一致(含平局分歧), 置信度降低-0.5★'
         else:
             consistency = '不一致'
             conf_adjust = '-0.5★'

@@ -4545,7 +4545,8 @@ def query_historical_feedback(league, had_dir, conf_score, odds):
                 feedback['high_conf_rate'] = round(bayes_rate * 100, 1)
                 feedback['high_conf_samples'] = hc_total
                 feedback['high_conf_ci'] = f"{ci_lo*100:.0f}%-{ci_hi*100:.0f}%"
-                if bayes_rate < 0.55:
+                # Ultra 7.7: 放宽阈值 0.55→0.50, 更早触发校准警告
+                if bayes_rate < 0.50:
                     feedback['calibration_warning'] = '高置信度贝叶斯命中率偏低, 置信度评级可能过拟合'
 
         # 5. 赔率区间命中率 (贝叶斯)
@@ -4569,11 +4570,12 @@ def query_historical_feedback(league, had_dir, conf_score, odds):
             return None
 
         # 生成建议 (基于贝叶斯后验, 更稳健)
+        # Ultra 7.7: 放宽预警阈值 — 实证显示旧阈值(40/35/55)过保守
         recs = []
-        if 'league_rate' in feedback and feedback['league_rate'] < 40:
+        if 'league_rate' in feedback and feedback['league_rate'] < 50:
             ci = feedback.get('league_ci', '?')
             recs.append(f"{league}贝叶斯命中率{feedback['league_rate']}%(CI:{ci})偏低")
-        if 'direction_rate' in feedback and feedback['direction_rate'] < 35:
+        if 'direction_rate' in feedback and feedback['direction_rate'] < 45:
             ci = feedback.get('direction_ci', '?')
             recs.append(f"{had_dir}方向贝叶斯命中率{feedback['direction_rate']}%(CI:{ci})偏低")
         if 'high_conf_rate' in feedback and feedback['high_conf_rate'] < 55:
@@ -4925,11 +4927,18 @@ def predict_match(match_num, data):
             lam_h = bayesian_shrinkage(lam_h, _xg_home['n_games'], LEAGUE_AVG_GF, k=10)
             lam_a = bayesian_shrinkage(lam_a, _xg_away['n_games'], LEAGUE_AVG_GF, k=10)
             # xG超额修正: 超额表现(实际>xG)不可持续, 适度回调
+            # Ultra 7.7: 超额>+0.5 视为强回归信号, 加大回调力度
             if _xg_home['overperformance'] > 0.3:
                 _adj = min(0.10, _xg_home['overperformance'] * 0.05)
+                # 超额>+0.5: 回归风险高, 额外增加5%回调
+                if _xg_home['overperformance'] > 0.5:
+                    _adj += 0.05
                 lam_h *= (1 - _adj)
             if _xg_away['overperformance'] > 0.3:
                 _adj = min(0.10, _xg_away['overperformance'] * 0.05)
+                # 超额>+0.5: 回归风险高, 额外增加5%回调
+                if _xg_away['overperformance'] > 0.5:
+                    _adj += 0.05
                 lam_a *= (1 - _adj)
 
             # Ultra 9.0: PPDA压迫强度修正
@@ -5203,9 +5212,9 @@ def predict_match(match_num, data):
             # 重新计算scores (比分/HHAD/一致性检查将使用校准后λ)
             scores = compute_scores(lam_h, lam_a, goal_line=handicap, market_goal_line=market_goal_line)
 
-    # ===== Ultra 7.4: 杯赛首回合大比分惩罚 (仅限欧冠/欧罗巴/欧协联等两回合制杯赛) =====
-    # 当首回合分差≥3球时, 落后方λ自动下调30-50%, 置信度封顶★★★★
-    # 联赛不适用, 仅对有主客场制的杯赛生效
+    # ===== Ultra 7.7: 杯赛首回合大比分惩罚 (仅限欧冠/欧罗巴/欧协联等两回合制杯赛) =====
+    # 当首回合分差≥3球时, 落后方λ提升(背水一战强攻), 领先方λ下调(保守轮换)
+    # 置信度封顶★★★★, 联赛不适用, 仅对有主客场制的杯赛生效
     cup_leg_penalty_info = None
     try:
         cup_leg_penalty_info = get_cup_leg_penalty(match_num, league, home_name, away_name)
@@ -5213,7 +5222,7 @@ def predict_match(match_num, data):
             factor = cup_leg_penalty_info['lambda_factor']
             leader_factor = cup_leg_penalty_info.get('leader_factor', 1.0)
             side = cup_leg_penalty_info['trailing_side']
-            # Ultra 7.6: 落后方实证惩罚 + 领先方对称修正(轮换/战意松)
+            # Ultra 7.7: 落后方背水一战加成 + 领先方保守修正
             if side == 'home':
                 lam_h *= factor
                 lam_a *= leader_factor
@@ -5404,19 +5413,53 @@ def predict_match(match_num, data):
         odds=odds
     )
     
-    # 根据历史反馈微调置信度
+    # 根据历史反馈调整置信度 (Ultra 7.7: 硬约束升级)
     if historical_feedback:
-        # 如果历史命中率显著偏低, 降级置信度
-        if historical_feedback.get('league_rate', 100) < 45 and historical_feedback.get('league_samples', 0) >= 5:
+        # 联赛命中率偏低 — 降级HAD+HHAD (阈值放宽: 45→50, 样本5→3)
+        if historical_feedback.get('league_rate', 100) < 50 and historical_feedback.get('league_samples', 0) >= 3:
             had_conf_score = max(1.0, had_conf_score - 0.5)
+            hhad_conf_score = max(1.0, hhad_conf_score - 0.5)
             had_conf = format_stars(had_conf_score)
-        if historical_feedback.get('direction_rate', 100) < 40 and historical_feedback.get('direction_samples', 0) >= 10:
+        # 方向命中率偏低 — 降级HAD+HHAD (阈值放宽: 40→45, 样本10→5)
+        if historical_feedback.get('direction_rate', 100) < 45 and historical_feedback.get('direction_samples', 0) >= 5:
             had_conf_score = max(1.0, had_conf_score - 0.5)
+            hhad_conf_score = max(1.0, hhad_conf_score - 0.5)
             had_conf = format_stars(had_conf_score)
-        # Ultra 7.5: 历史校准警告自动降星 — 高置信度命中率偏低时降星
+        # Ultra 7.5→7.7: 历史校准警告自动降星 — 高置信度命中率偏低时降星
         if historical_feedback.get('calibration_warning'):
             had_conf_score = max(1.0, had_conf_score - 0.5)
+            hhad_conf_score = max(1.0, hhad_conf_score - 0.5)
             had_conf = format_stars(had_conf_score)
+        # Ultra 7.7: 高置信度命中率严重偏低(<45%) — 追加降级+硬封顶
+        _hc_rate = historical_feedback.get('high_conf_rate', 100)
+        _hc_samples = historical_feedback.get('high_conf_samples', 0)
+        if _hc_rate < 45 and _hc_samples >= 3:
+            had_conf_score = max(1.0, had_conf_score - 0.5)
+            hhad_conf_score = max(1.0, hhad_conf_score - 0.5)
+            had_conf = format_stars(had_conf_score)
+            v611_notes.append(f"[历史反馈] 高置信命中率{_hc_rate}%严重偏低, 追加-0.5★")
+        # Ultra 7.7: 高置信度命中率极低(<40%) — 硬封顶★★★½
+        if _hc_rate < 40 and _hc_samples >= 3:
+            had_conf_score = min(had_conf_score, 3.5)
+            hhad_conf_score = min(hhad_conf_score, 3.5)
+            had_conf = format_stars(had_conf_score)
+            v611_notes.append(f"[历史反馈] 高置信命中率{_hc_rate}%极低, 硬封顶★★★½")
+
+    # Ultra 7.7: xG超额表现回归风险 — 超额>+0.5时降级置信度
+    # 实证案例: 波兹南超额+0.86, 次回合0-3惨败 → 高超额=高回归风险
+    _xg_regress_flag = False
+    if _xg_home and _xg_home.get('overperformance', 0) > 0.5:
+        had_conf_score = max(1.0, had_conf_score - 0.5)
+        hhad_conf_score = max(1.0, hhad_conf_score - 0.5)
+        had_conf = format_stars(had_conf_score)
+        v611_notes.append(f"[xG回归] 主队超额{_xg_home['overperformance']:+.2f}>+0.5, 置信度-0.5★")
+        _xg_regress_flag = True
+    if _xg_away and _xg_away.get('overperformance', 0) > 0.5:
+        had_conf_score = max(1.0, had_conf_score - 0.5)
+        hhad_conf_score = max(1.0, hhad_conf_score - 0.5)
+        had_conf = format_stars(had_conf_score)
+        v611_notes.append(f"[xG回归] 客队超额{_xg_away['overperformance']:+.2f}>+0.5, 置信度-0.5★")
+        _xg_regress_flag = True
 
     # Ultra 7.4: 杯赛首回合大比分惩罚 — 置信度封顶★★★★
     if cup_leg_penalty_info and cup_leg_penalty_info.get('applied'):
