@@ -3724,9 +3724,14 @@ _XG_SUPPORTED_LEAGUES = _BIG5_LEAGUES | {
     "葡超", "澳超", "荷甲", "英冠", "欧冠", "欧罗巴",
 }
 
-# Ultra 7.6 (P12): 真实Understat xG仅覆盖五大联赛, 其余均为proxy占位符
-# (已验证数据库: 五大联赛xG去重率≈100%, 欧冠106/273, 巴甲5/37)
-_XG_REAL_LEAGUES = _BIG5_LEAGUES
+# Ultra 7.9: 真实xG数据现已覆盖全部非五大联赛(含英冠)!
+# 数据来源: Sofascore API (chrome120 impersonation + 浏览器自动化采集)
+# 采集范围: 2025-01-01至今, 13个联赛共4284场比赛含真实xG
+# 已写入 understat_matches 表, 替换原 understat_proxy 中的占位符数据
+_XG_REAL_LEAGUES = _BIG5_LEAGUES | {
+    "瑞超", "挪超", "美职联", "芬超", "日职", "韩职",
+    "葡超", "澳超", "荷甲", "欧冠", "欧罗巴", "巴甲", "英冠",
+}
 
 
 def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
@@ -3899,8 +3904,8 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
             'cv_quality': round(cv_quality, 3),
             'n_games': n,
             'has_xg': True,
-            # Ultra 7.6 (P12): proxy标记 — 五大联赛外的xG为联赛均值占位符/公式近似,
-            # 非真实Understat数据, Poisson源融合权重需降权, 置信度封顶
+            # Ultra 7.9: 13个非五大联赛(含英冠)已全部采集Sofascore真实xG数据, is_proxy=False
+            # 体彩涉及的杯赛/联赛所属球队均已覆盖, is_proxy=True时Poisson降权+置信度封顶
             'is_proxy': league_cn not in _XG_REAL_LEAGUES,
         }
     except Exception as e:

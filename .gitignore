@@ -25,3 +25,24 @@ verify_2026072[1235].html
 verify_20260725.pdf
 predictions/verify_*.json
 predictions/historical_odds.db.bak
+
+# --- Ultra 7.8: 历史验证报告/中间产物不入库 ---
+verify_*.html
+verify_*.pdf
+predictions/verify-analysis-*/
+predictions/prediction-analysis-*/
+# 所有历史预测JSON和PDF报告(仅保留最新一期)
+predictions/pred_2026072*.json
+predictions/report_2026072*.pdf
+predictions/report_2026072*.html
+
+# --- 数据库文件(大文件, 不入库) ---
+sporttery.db
+*.db.bak
+
+# --- 临时/调试文件 ---
+downloaded_files/
+solve_waf_*.js
+waf_script_*.js
+analysis_report_*.html
+renderData.json

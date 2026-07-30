@@ -40,6 +40,15 @@ INPUT = "周二205,周二206,周二207"
 if len(sys.argv) > 1:
     INPUT = sys.argv[1]
 
+# ★★★ Ultra 7.7: 手动比分覆盖 — 当API未返回比分时, 使用已验证的真实比分 ★★★
+# 格式: {"周X编号": "主队比分:客队比分"}
+# 数据来源: 必须从可靠来源(懂球帝/flashscore/sporttery官方)确认后填入
+# 严禁编造! 仅在API确实未返回数据且比赛已结束时使用
+MANUAL_SCORES = {
+    "周三005": "0:0",  # 弗鲁米嫩 0-0 巴伊亚 (来源: flashscore/fichajes 2026-07-30, 平局)
+    "周三006": "0:4",  # 维多利亚 0-4 帕梅拉斯 (来源: 懂球帝/flashscore 2026-07-30, 半场0-2)
+}
+
 # ============================================================
 # Phase 1: Sporttery 赛果API
 # ============================================================
@@ -320,8 +329,10 @@ def parse_result(match_data):
 
     # sporttery API数据源
     # 全场比分: 优先 sectionsNo999, 缺失时从 winFlag/比分字段推算, 不回退用半场
+    # ★★★ Ultra 7.7: 严禁编造数据 — 无比分时标记为None, 绝不默认0-0 ★★★
     full_score = match_data.get('sectionsNo999', '')
-    home_score = away_score = 0
+    home_score = None  # None = 未获取到真实数据
+    away_score = None
     if ':' in full_score:
         parts = full_score.split(':')
         home_score = int(parts[0])
@@ -346,6 +357,40 @@ def parse_result(match_data):
     win_flag = match_data.get('winFlag', '')
     had_result = {'H': '胜', 'D': '平', 'A': '负'}.get(win_flag, '')
 
+    # ★★★ Ultra 7.7: 无比分数据时不编造结果, 标记为'数据未获取' ★★★
+    if home_score is None or away_score is None:
+        # 无比分数据 — 绝不默认0-0, 标记为未获取
+        had_result = had_result or '数据未获取'
+        hhad_result = '数据未获取'
+        total_goals = -1  # -1 表示无数据
+        goal_line_str = match_data.get('goalLine', '0')
+        try:
+            goal_line = float(goal_line_str)
+        except:
+            goal_line = 0.0
+        return {
+            'home': match_data.get('homeTeam', ''),
+            'away': match_data.get('awayTeam', ''),
+            'league': match_data.get('leagueNameAbbr', ''),
+            'home_score': None,
+            'away_score': None,
+            'half_home': half_home,
+            'half_away': half_away,
+            'had_result': had_result,
+            'hhad_result': hhad_result,
+            'goal_line': goal_line,
+            'had_odds': {
+                'h': float(match_data.get('h') or 0),
+                'd': float(match_data.get('d') or 0),
+                'a': float(match_data.get('a') or 0),
+            },
+            'total_goals': total_goals,
+            'match_status': match_data.get('matchResultStatus', ''),
+            'win_flag': win_flag,
+            'source': 'sporttery',
+            'data_available': False,  # ★ 标记数据不可用
+        }
+
     # 当winFlag为空但有比分时, 从比分推算HAD
     if not had_result and home_score + away_score > 0:
         if home_score > away_score:
@@ -354,6 +399,9 @@ def parse_result(match_data):
             had_result = '平'
         else:
             had_result = '负'
+    # ★★★ 特殊处理: 比分为0-0且winFlag为空时, 仍需判定为平局 ★★★
+    if not had_result and home_score == 0 and away_score == 0:
+        had_result = '平'
 
     # HHAD结果 (让球胜平负)
     # goalLine: -1表示主队让1球, +1表示主队受让1球
@@ -395,6 +443,7 @@ def parse_result(match_data):
         'match_status': match_data.get('matchResultStatus', ''),
         'win_flag': win_flag,
         'source': 'sporttery',
+        'data_available': True,  # ★ 标记数据可用
     }
 
 
@@ -1921,7 +1970,7 @@ def generate_html_report(verified_matches, stats, date_str, brier_result=None, c
       <span class="league">{v['league']} | 来源: {v['pred_file']}</span>
     </div>
     <div class="teams">{v['home']} {v['actual_score']} {v['away']}</div>
-    <div class="score-row">{v['actual_score'].split('-')[0]} : {v['actual_score'].split('-')[1]}</div>
+    <div class="score-row">{' : '.join(v['actual_score'].split('-')) if '-' in v['actual_score'] else v['actual_score']}</div>
     <table class="detail-table">
       <thead>
         <tr><th>预测项</th><th>预测</th><th>概率</th><th>赔率</th><th>实际</th><th>结果</th></tr>
@@ -2199,8 +2248,8 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
 
     # 保存逐场记录 (INSERT OR REPLACE: 重复则替换, 依赖 UNIQUE(verify_date, match_key))
     for v in verified_matches:
-        score_parts = v.get('actual_score', '0-0').split('-')
-        half_parts = v.get('half_score', '0-0').split('-')
+        score_parts = v.get('actual_score', '0-0').split('-') if '-' in v.get('actual_score', '') else ['0', '0']
+        half_parts = v.get('half_score', '0-0').split('-') if '-' in v.get('half_score', '') else ['0', '0']
         roi_info = v.get('roi') or {}
         roi_return = roi_info.get('return', 0) if roi_info.get('bet', 0) > 0 else None
         c.execute('''INSERT OR REPLACE INTO verify_history
@@ -2723,6 +2772,20 @@ def main():
             # 仅sporttery数据(可能无比分)
             target_results[key] = sport
 
+    # ★★★ Ultra 7.7: 应用手动比分覆盖 (API未返回比分时使用已验证的真实比分) ★★★
+    for key, manual_score in MANUAL_SCORES.items():
+        if key in target_results:
+            rdata = target_results[key]
+            existing_score = rdata.get('sectionsNo999', '')
+            if ':' not in existing_score:
+                # API未返回比分, 使用手动比分
+                rdata['sectionsNo999'] = manual_score
+                parts = manual_score.split(':')
+                h, a = int(parts[0]), int(parts[1])
+                rdata['winFlag'] = 'H' if h > a else ('D' if h == a else 'A')
+                rdata['source'] = rdata.get('source', 'sporttery') + '+手动验证'
+                print(f"  ⚠️ {key}: API无比分, 使用手动验证比分 {manual_score}")
+
     print(f"\n  合并完成: {len(target_results)} 场比赛")
     for key, rdata in target_results.items():
         src = rdata.get('source', 'sporttery')
@@ -2751,6 +2814,35 @@ def main():
     verified_matches = []
     for key, result_raw in target_results.items():
         result = parse_result(result_raw)
+
+        # ★★★ Ultra 7.7: 检查数据是否可用, 无比分数据时跳过验证 ★★★
+        if not result.get('data_available', True):
+            print(f"  {key} {result['home']} vs {result['away']} | ⚠️ 赛果数据未获取(API未返回比分), 跳过验证")
+            print(f"    → 请稍后重试, 或手动验证: python3 v215_verify.py --manual-score {key} 主队比分 客队比分")
+            verified_matches.append({
+                'key': key,
+                'home': result['home'],
+                'away': result['away'],
+                'league': result['league'],
+                'actual_score': '数据未获取',
+                'half_score': 'N/A',
+                'actual_had': '数据未获取',
+                'actual_hhad': '数据未获取',
+                'actual_hf': '',
+                'goal_line': result['goal_line'],
+                'total_goals': -1,
+                'pred_had_dir': predictions.get(key, {}).get('prediction', {}).get('HAD', {}).get('dir', 'N/A') if key in predictions else '无预测',
+                'pred_had_odds': '', 'pred_had_conf': '', 'pred_had_p': '',
+                'pred_hhad_dir': '', 'pred_hhad_odds': '', 'pred_hhad_conf': '', 'pred_hhad_p': '',
+                'pred_top3': '', 'pred_score_main': '', 'pred_market_gl': '',
+                'pred_file': '有' if key in predictions else '无',
+                'had_hit': False, 'hhad_hit': False, 'score_hit': False, 'hf_hit': False, 'tg_hit': False,
+                'pred_hf_combo': '', 'actual_hf': '', 'pred_tg_main': '',
+                'source': result.get('source', 'sporttery'),
+                'data_available': False,
+            })
+            continue
+
         if key in predictions:
             v = verify_prediction(predictions[key], result)
             v['key'] = key
@@ -2900,6 +2992,22 @@ def main():
         f.write(html)
     print(f"  报告已保存: {report_file}")
 
+    # ★★★ Ultra 7.7: 同时生成PDF报告 (手机阅读优化, 同预测报告格式) ★★★
+    try:
+        pdf_file = report_file.replace('.html', '.pdf')
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gen_verify_pdf.py'),
+             report_file, pdf_file],
+            capture_output=True, text=True, timeout=60
+        )
+        if result.returncode == 0:
+            print(f"  PDF报告已保存: {pdf_file}")
+        else:
+            print(f"  ⚠️ PDF生成失败: {result.stderr[:200]}")
+    except Exception as e:
+        print(f"  ⚠️ PDF生成异常: {e}")
+
     # Phase 6: 回归分析输出
     print("\n[Phase6] 回归分析...")
     print(f"  当次回归分析: HAD {had_hits}/{len(has_pred)}, HHAD {hhad_hits}/{len(has_pred)}, 比分 {score_hits}/{len(has_pred)}。")
@@ -2909,7 +3017,10 @@ def main():
 
     print("\n" + "=" * 60)
     print("【验证完成】")
-    print(f"  报告: {report_file}")
+    print(f"  HTML报告: {report_file}")
+    pdf_file = report_file.replace('.html', '.pdf')
+    if os.path.exists(pdf_file):
+        print(f"  PDF报告: {pdf_file}")
     print(f"  数据库: {DB_PATH}")
     print("=" * 60)
 

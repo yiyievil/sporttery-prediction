@@ -218,12 +218,12 @@ def rank_match(key, meta, result):
         ))
     
     # 3. 双选保险
-    dr = cm.get('double_recommend', {})
-    dr_option = dr.get('option', '')
-    dr_odds = dr.get('odds', 0)
-    dr_prob = dr.get('prob', 0)
-    dr_ev = dr.get('ev_pct', 0)
-    dr_dir = dr.get('direction', '')
+    dr = cm.get('double_recommend') or {}
+    dr_option = dr.get('option', '') if dr else ''
+    dr_odds = dr.get('odds', 0) if dr else 0
+    dr_prob = dr.get('prob', 0) if dr else 0
+    dr_ev = dr.get('ev_pct', 0) if dr else 0
+    dr_dir = dr.get('direction', '') if dr else ''
     
     if dr_option:
         dr_key = f'DOUBLE_{dr_dir}'

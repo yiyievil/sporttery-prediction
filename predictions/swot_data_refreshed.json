@@ -1,5 +1,5 @@
 {
- "refreshed_at": "2026-07-29 23:26:18",
+ "refreshed_at": "2026-07-30 10:06:24",
  "source": "swot_auto (leisu为主/stats备用)",
  "matches": {
   "周日210": {
@@ -376,6 +376,86 @@
     "交锋占优: 历史13胜6平4负",
     "联赛排名第1, 处于争冠集团",
     "防守稳固: 场均仅失0.8球"
+   ],
+   "away_weaknesses": [],
+   "trend": {},
+   "swot_url": "",
+   "source": "stats"
+  },
+  "周四001": {
+   "home_strengths": [
+    "近况出色: 近6场4胜1平1负"
+   ],
+   "home_weaknesses": [],
+   "away_strengths": [
+    "近况: 近6场2胜2平2负"
+   ],
+   "away_weaknesses": [],
+   "trend": {},
+   "swot_url": "",
+   "source": "stats"
+  },
+  "周四002": {
+   "home_strengths": [
+    "近况: 近6场2胜1平3负"
+   ],
+   "home_weaknesses": [],
+   "away_strengths": [
+    "近况出色: 近6场5胜0平1负"
+   ],
+   "away_weaknesses": [],
+   "trend": {},
+   "swot_url": "",
+   "source": "stats"
+  },
+  "周四003": {
+   "home_strengths": [
+    "近况: 近6场3胜2平1负"
+   ],
+   "home_weaknesses": [],
+   "away_strengths": [
+    "近况出色: 近6场4胜2平0负"
+   ],
+   "away_weaknesses": [],
+   "trend": {},
+   "swot_url": "",
+   "source": "stats"
+  },
+  "周四004": {
+   "home_strengths": [
+    "近况出色: 近6场4胜1平1负"
+   ],
+   "home_weaknesses": [],
+   "away_strengths": [
+    "近况: 近6场3胜1平2负"
+   ],
+   "away_weaknesses": [],
+   "trend": {},
+   "swot_url": "",
+   "source": "stats"
+  },
+  "周四005": {
+   "home_strengths": [
+    "近况: 近6场3胜1平2负"
+   ],
+   "home_weaknesses": [],
+   "away_strengths": [
+    "近况出色: 近6场4胜0平2负"
+   ],
+   "away_weaknesses": [],
+   "trend": {},
+   "swot_url": "",
+   "source": "stats"
+  },
+  "周四006": {
+   "home_strengths": [
+    "近况: 近6场3胜2平1负",
+    "交锋占优: 历史19胜14平7负"
+   ],
+   "home_weaknesses": [],
+   "away_strengths": [
+    "近况出色: 近6场4胜0平2负",
+    "联赛排名第3, 处于争冠集团"
    ],
    "away_weaknesses": [],
    "trend": {},

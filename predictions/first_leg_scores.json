@@ -1,0 +1,11 @@
+{
+  "_comment": "手动注入杯赛首回合比分 (Ultra 7.8) — SWOT数据无法获取时使用此文件",
+  "_format": "key = '周X-编号' 或球队名, value = {first_leg_home, first_leg_away, home_team, away_team, league}",
+  "_note": "first_leg_home/away 是首回合中本场主队/客队的进球数(不是首回合比赛的主/客队)",
+
+  "周四001": {"first_leg_home": 0, "first_leg_away": 1, "home_team": "中日德兰", "away_team": "贝西克塔", "league": "欧罗巴"},
+  "周四002": {"first_leg_home": 0, "first_leg_away": 2, "home_team": "帕福斯", "away_team": "斯海杜克", "league": "欧罗巴"},
+  "周四003": {"first_leg_home": 1, "first_leg_away": 1, "home_team": "安德莱", "away_team": "哈马比", "league": "欧罗巴"},
+  "周四004": {"first_leg_home": 2, "first_leg_away": 1, "home_team": "费伦茨", "away_team": "特温特", "league": "欧罗巴"},
+  "周四005": {"first_leg_home": 1, "first_leg_away": 2, "home_team": "本菲卡", "away_team": "圣加仑", "league": "欧罗巴"}
+}
