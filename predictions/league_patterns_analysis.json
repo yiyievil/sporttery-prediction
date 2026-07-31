@@ -1,0 +1,4949 @@
+{
+  "analysis_meta": {
+    "title": "联赛进球分布特征 + 主客场优势量化 + 比分分布特征分析",
+    "generated_at": "2026-07-31 15:33:39",
+    "total_matches": 4449,
+    "total_leagues": 42,
+    "date_range": {
+      "start": "2025-01-01",
+      "end": "2026-07-29"
+    }
+  },
+  "part1_goal_distribution": {
+    "英超": {
+      "n": 455,
+      "avg_home_goals": 1.527,
+      "avg_away_goals": 1.295,
+      "avg_total_goals": 2.822,
+      "var_total_goals": 2.463,
+      "std_total_goals": 1.569,
+      "std_home_goals": 1.211,
+      "std_away_goals": 1.118,
+      "goal_distribution": {
+        "0": 0.0593,
+        "1": 0.1473,
+        "2": 0.2308,
+        "3": 0.2484,
+        "4": 0.1692,
+        "5": 0.1011,
+        "6": 0.0286,
+        "7": 0.0154
+      },
+      "small_rate_0_2": 0.4374,
+      "big_rate_3plus": 0.5626,
+      "home_goal_share": 0.5413
+    },
+    "欧冠": {
+      "n": 273,
+      "avg_home_goals": 1.901,
+      "avg_away_goals": 1.377,
+      "avg_total_goals": 3.278,
+      "var_total_goals": 3.783,
+      "std_total_goals": 1.945,
+      "std_home_goals": 1.56,
+      "std_away_goals": 1.348,
+      "goal_distribution": {
+        "0": 0.0586,
+        "1": 0.1245,
+        "2": 0.1758,
+        "3": 0.2527,
+        "4": 0.1319,
+        "5": 0.1282,
+        "6": 0.0659,
+        "7": 0.0623
+      },
+      "small_rate_0_2": 0.359,
+      "big_rate_3plus": 0.641,
+      "home_goal_share": 0.5799
+    },
+    "瑞超": {
+      "n": 257,
+      "avg_home_goals": 1.584,
+      "avg_away_goals": 1.311,
+      "avg_total_goals": 2.895,
+      "var_total_goals": 3.137,
+      "std_total_goals": 1.771,
+      "std_home_goals": 1.353,
+      "std_away_goals": 1.175,
+      "goal_distribution": {
+        "0": 0.0661,
+        "1": 0.1245,
+        "2": 0.2724,
+        "3": 0.2257,
+        "4": 0.1518,
+        "5": 0.0895,
+        "6": 0.0311,
+        "7": 0.0389
+      },
+      "small_rate_0_2": 0.463,
+      "big_rate_3plus": 0.537,
+      "home_goal_share": 0.547
+    },
+    "美职联": {
+      "n": 250,
+      "avg_home_goals": 1.788,
+      "avg_away_goals": 1.496,
+      "avg_total_goals": 3.284,
+      "var_total_goals": 3.571,
+      "std_total_goals": 1.89,
+      "std_home_goals": 1.338,
+      "std_away_goals": 1.378,
+      "goal_distribution": {
+        "0": 0.036,
+        "1": 0.148,
+        "2": 0.176,
+        "3": 0.244,
+        "4": 0.16,
+        "5": 0.092,
+        "6": 0.1,
+        "7": 0.044
+      },
+      "small_rate_0_2": 0.36,
+      "big_rate_3plus": 0.64,
+      "home_goal_share": 0.5445
+    },
+    "挪超": {
+      "n": 236,
+      "avg_home_goals": 1.797,
+      "avg_away_goals": 1.292,
+      "avg_total_goals": 3.089,
+      "var_total_goals": 2.92,
+      "std_total_goals": 1.709,
+      "std_home_goals": 1.535,
+      "std_away_goals": 1.191,
+      "goal_distribution": {
+        "0": 0.0508,
+        "1": 0.1356,
+        "2": 0.2034,
+        "3": 0.2246,
+        "4": 0.1695,
+        "5": 0.1398,
+        "6": 0.0551,
+        "7": 0.0212
+      },
+      "small_rate_0_2": 0.3898,
+      "big_rate_3plus": 0.6102,
+      "home_goal_share": 0.5816
+    },
+    "欧罗巴": {
+      "n": 211,
+      "avg_home_goals": 1.521,
+      "avg_away_goals": 1.118,
+      "avg_total_goals": 2.64,
+      "var_total_goals": 2.448,
+      "std_total_goals": 1.565,
+      "std_home_goals": 1.225,
+      "std_away_goals": 1.067,
+      "goal_distribution": {
+        "0": 0.0616,
+        "1": 0.1991,
+        "2": 0.2275,
+        "3": 0.2512,
+        "4": 0.1374,
+        "5": 0.0758,
+        "6": 0.0284,
+        "7": 0.019
+      },
+      "small_rate_0_2": 0.4882,
+      "big_rate_3plus": 0.5118,
+      "home_goal_share": 0.5763
+    },
+    "意甲": {
+      "n": 205,
+      "avg_home_goals": 1.263,
+      "avg_away_goals": 1.141,
+      "avg_total_goals": 2.405,
+      "var_total_goals": 2.036,
+      "std_total_goals": 1.427,
+      "std_home_goals": 1.143,
+      "std_away_goals": 1.043,
+      "goal_distribution": {
+        "0": 0.0878,
+        "1": 0.2049,
+        "2": 0.2341,
+        "3": 0.2585,
+        "4": 0.1317,
+        "5": 0.0732,
+        "6": 0.0049,
+        "7": 0.0049
+      },
+      "small_rate_0_2": 0.5268,
+      "big_rate_3plus": 0.4732,
+      "home_goal_share": 0.5254
+    },
+    "西甲": {
+      "n": 189,
+      "avg_home_goals": 1.55,
+      "avg_away_goals": 1.111,
+      "avg_total_goals": 2.661,
+      "var_total_goals": 2.351,
+      "std_total_goals": 1.533,
+      "std_home_goals": 1.232,
+      "std_away_goals": 0.945,
+      "goal_distribution": {
+        "0": 0.0423,
+        "1": 0.1852,
+        "2": 0.2698,
+        "3": 0.2857,
+        "4": 0.0794,
+        "5": 0.0899,
+        "6": 0.0317,
+        "7": 0.0159
+      },
+      "small_rate_0_2": 0.4974,
+      "big_rate_3plus": 0.5026,
+      "home_goal_share": 0.5825
+    },
+    "世预赛": {
+      "n": 187,
+      "avg_home_goals": 1.695,
+      "avg_away_goals": 1.037,
+      "avg_total_goals": 2.733,
+      "var_total_goals": 3.608,
+      "std_total_goals": 1.899,
+      "std_home_goals": 1.664,
+      "std_away_goals": 1.199,
+      "goal_distribution": {
+        "0": 0.0909,
+        "1": 0.1872,
+        "2": 0.2567,
+        "3": 0.1497,
+        "4": 0.1497,
+        "5": 0.0856,
+        "6": 0.0428,
+        "7": 0.0374
+      },
+      "small_rate_0_2": 0.5348,
+      "big_rate_3plus": 0.4652,
+      "home_goal_share": 0.6204
+    },
+    "德甲": {
+      "n": 172,
+      "avg_home_goals": 1.738,
+      "avg_away_goals": 1.465,
+      "avg_total_goals": 3.203,
+      "var_total_goals": 3.209,
+      "std_total_goals": 1.791,
+      "std_home_goals": 1.449,
+      "std_away_goals": 1.163,
+      "goal_distribution": {
+        "0": 0.0523,
+        "1": 0.1395,
+        "2": 0.186,
+        "3": 0.1744,
+        "4": 0.2093,
+        "5": 0.1453,
+        "6": 0.0756,
+        "7": 0.0174
+      },
+      "small_rate_0_2": 0.3779,
+      "big_rate_3plus": 0.6221,
+      "home_goal_share": 0.5426
+    },
+    "芬超": {
+      "n": 158,
+      "avg_home_goals": 1.722,
+      "avg_away_goals": 1.38,
+      "avg_total_goals": 3.101,
+      "var_total_goals": 2.851,
+      "std_total_goals": 1.688,
+      "std_home_goals": 1.277,
+      "std_away_goals": 1.173,
+      "goal_distribution": {
+        "0": 0.0443,
+        "1": 0.1329,
+        "2": 0.2215,
+        "3": 0.2152,
+        "4": 0.1646,
+        "5": 0.1456,
+        "6": 0.0443,
+        "7": 0.0316
+      },
+      "small_rate_0_2": 0.3987,
+      "big_rate_3plus": 0.6013,
+      "home_goal_share": 0.5551
+    },
+    "英冠": {
+      "n": 158,
+      "avg_home_goals": 1.316,
+      "avg_away_goals": 1.101,
+      "avg_total_goals": 2.418,
+      "var_total_goals": 2.269,
+      "std_total_goals": 1.506,
+      "std_home_goals": 1.159,
+      "std_away_goals": 1.026,
+      "goal_distribution": {
+        "0": 0.1203,
+        "1": 0.1709,
+        "2": 0.2089,
+        "3": 0.2658,
+        "4": 0.1772,
+        "5": 0.0316,
+        "6": 0.019,
+        "7": 0.0063
+      },
+      "small_rate_0_2": 0.5,
+      "big_rate_3plus": 0.5,
+      "home_goal_share": 0.5445
+    },
+    "国际赛": {
+      "n": 120,
+      "avg_home_goals": 1.617,
+      "avg_away_goals": 1.042,
+      "avg_total_goals": 2.658,
+      "var_total_goals": 2.975,
+      "std_total_goals": 1.725,
+      "std_home_goals": 1.367,
+      "std_away_goals": 1.083,
+      "goal_distribution": {
+        "0": 0.0917,
+        "1": 0.175,
+        "2": 0.225,
+        "3": 0.25,
+        "4": 0.125,
+        "5": 0.0583,
+        "6": 0.0417,
+        "7": 0.0333
+      },
+      "small_rate_0_2": 0.4917,
+      "big_rate_3plus": 0.5083,
+      "home_goal_share": 0.6082
+    },
+    "法甲": {
+      "n": 113,
+      "avg_home_goals": 1.504,
+      "avg_away_goals": 1.257,
+      "avg_total_goals": 2.761,
+      "var_total_goals": 3.208,
+      "std_total_goals": 1.791,
+      "std_home_goals": 1.284,
+      "std_away_goals": 1.275,
+      "goal_distribution": {
+        "0": 0.0619,
+        "1": 0.2035,
+        "2": 0.2389,
+        "3": 0.1858,
+        "4": 0.1593,
+        "5": 0.0885,
+        "6": 0.0265,
+        "7": 0.0354
+      },
+      "small_rate_0_2": 0.5044,
+      "big_rate_3plus": 0.4956,
+      "home_goal_share": 0.5449
+    },
+    "日职": {
+      "n": 106,
+      "avg_home_goals": 1.358,
+      "avg_away_goals": 1.094,
+      "avg_total_goals": 2.453,
+      "var_total_goals": 3.21,
+      "std_total_goals": 1.792,
+      "std_home_goals": 1.238,
+      "std_away_goals": 1.186,
+      "goal_distribution": {
+        "0": 0.1132,
+        "1": 0.2358,
+        "2": 0.2264,
+        "3": 0.1792,
+        "4": 0.1038,
+        "5": 0.0849,
+        "6": 0.0283,
+        "7": 0.0283
+      },
+      "small_rate_0_2": 0.5755,
+      "big_rate_3plus": 0.4245,
+      "home_goal_share": 0.5538
+    },
+    "韩职": {
+      "n": 100,
+      "avg_home_goals": 1.29,
+      "avg_away_goals": 1.28,
+      "avg_total_goals": 2.57,
+      "var_total_goals": 2.085,
+      "std_total_goals": 1.444,
+      "std_home_goals": 0.973,
+      "std_away_goals": 1.05,
+      "goal_distribution": {
+        "0": 0.08,
+        "1": 0.16,
+        "2": 0.26,
+        "3": 0.23,
+        "4": 0.16,
+        "5": 0.1,
+        "6": 0.01,
+        "7": 0.0
+      },
+      "small_rate_0_2": 0.5,
+      "big_rate_3plus": 0.5,
+      "home_goal_share": 0.5019
+    },
+    "葡超": {
+      "n": 93,
+      "avg_home_goals": 1.495,
+      "avg_away_goals": 1.366,
+      "avg_total_goals": 2.86,
+      "var_total_goals": 2.378,
+      "std_total_goals": 1.542,
+      "std_home_goals": 1.132,
+      "std_away_goals": 1.065,
+      "goal_distribution": {
+        "0": 0.043,
+        "1": 0.1398,
+        "2": 0.2796,
+        "3": 0.1828,
+        "4": 0.2473,
+        "5": 0.043,
+        "6": 0.0538,
+        "7": 0.0108
+      },
+      "small_rate_0_2": 0.4624,
+      "big_rate_3plus": 0.5376,
+      "home_goal_share": 0.5226
+    },
+    "澳超": {
+      "n": 88,
+      "avg_home_goals": 1.534,
+      "avg_away_goals": 1.409,
+      "avg_total_goals": 2.943,
+      "var_total_goals": 3.485,
+      "std_total_goals": 1.867,
+      "std_home_goals": 1.27,
+      "std_away_goals": 1.164,
+      "goal_distribution": {
+        "0": 0.0682,
+        "1": 0.1932,
+        "2": 0.1705,
+        "3": 0.1932,
+        "4": 0.2045,
+        "5": 0.0909,
+        "6": 0.0341,
+        "7": 0.0455
+      },
+      "small_rate_0_2": 0.4318,
+      "big_rate_3plus": 0.5682,
+      "home_goal_share": 0.5212
+    },
+    "荷甲": {
+      "n": 80,
+      "avg_home_goals": 1.688,
+      "avg_away_goals": 1.512,
+      "avg_total_goals": 3.2,
+      "var_total_goals": 2.81,
+      "std_total_goals": 1.676,
+      "std_home_goals": 1.463,
+      "std_away_goals": 1.049,
+      "goal_distribution": {
+        "0": 0.0375,
+        "1": 0.1,
+        "2": 0.2625,
+        "3": 0.175,
+        "4": 0.2,
+        "5": 0.15,
+        "6": 0.0375,
+        "7": 0.0375
+      },
+      "small_rate_0_2": 0.4,
+      "big_rate_3plus": 0.6,
+      "home_goal_share": 0.5273
+    },
+    "世界杯": {
+      "n": 79,
+      "avg_home_goals": 1.633,
+      "avg_away_goals": 1.266,
+      "avg_total_goals": 2.899,
+      "var_total_goals": 3.762,
+      "std_total_goals": 1.94,
+      "std_home_goals": 1.528,
+      "std_away_goals": 1.28,
+      "goal_distribution": {
+        "0": 0.1013,
+        "1": 0.1266,
+        "2": 0.2405,
+        "3": 0.2025,
+        "4": 0.1392,
+        "5": 0.0886,
+        "6": 0.0759,
+        "7": 0.0253
+      },
+      "small_rate_0_2": 0.4684,
+      "big_rate_3plus": 0.5316,
+      "home_goal_share": 0.5633
+    },
+    "欧协联": {
+      "n": 72,
+      "avg_home_goals": 1.514,
+      "avg_away_goals": 1.083,
+      "avg_total_goals": 2.597,
+      "var_total_goals": 2.129,
+      "std_total_goals": 1.459,
+      "std_home_goals": 1.167,
+      "std_away_goals": 1.051,
+      "goal_distribution": {
+        "0": 0.0694,
+        "1": 0.2222,
+        "2": 0.1389,
+        "3": 0.3056,
+        "4": 0.1389,
+        "5": 0.125,
+        "6": 0.0,
+        "7": 0.0
+      },
+      "small_rate_0_2": 0.4306,
+      "big_rate_3plus": 0.5694,
+      "home_goal_share": 0.5829
+    },
+    "德乙": {
+      "n": 63,
+      "avg_home_goals": 1.46,
+      "avg_away_goals": 1.397,
+      "avg_total_goals": 2.857,
+      "var_total_goals": 2.567,
+      "std_total_goals": 1.602,
+      "std_home_goals": 1.206,
+      "std_away_goals": 1.077,
+      "goal_distribution": {
+        "0": 0.0317,
+        "1": 0.1587,
+        "2": 0.254,
+        "3": 0.2698,
+        "4": 0.1587,
+        "5": 0.0635,
+        "6": 0.0476,
+        "7": 0.0159
+      },
+      "small_rate_0_2": 0.4444,
+      "big_rate_3plus": 0.5556,
+      "home_goal_share": 0.5111
+    },
+    "沙职": {
+      "n": 59,
+      "avg_home_goals": 1.559,
+      "avg_away_goals": 1.305,
+      "avg_total_goals": 2.864,
+      "var_total_goals": 2.456,
+      "std_total_goals": 1.567,
+      "std_home_goals": 1.168,
+      "std_away_goals": 1.356,
+      "goal_distribution": {
+        "0": 0.0339,
+        "1": 0.1695,
+        "2": 0.2712,
+        "3": 0.1864,
+        "4": 0.1695,
+        "5": 0.1186,
+        "6": 0.0339,
+        "7": 0.0169
+      },
+      "small_rate_0_2": 0.4746,
+      "big_rate_3plus": 0.5254,
+      "home_goal_share": 0.5444
+    },
+    "英足总杯": {
+      "n": 57,
+      "avg_home_goals": 1.667,
+      "avg_away_goals": 1.439,
+      "avg_total_goals": 3.105,
+      "var_total_goals": 2.62,
+      "std_total_goals": 1.619,
+      "std_home_goals": 1.56,
+      "std_away_goals": 1.17,
+      "goal_distribution": {
+        "0": 0.0175,
+        "1": 0.1228,
+        "2": 0.2632,
+        "3": 0.2281,
+        "4": 0.2281,
+        "5": 0.0351,
+        "6": 0.0702,
+        "7": 0.0351
+      },
+      "small_rate_0_2": 0.4035,
+      "big_rate_3plus": 0.5965,
+      "home_goal_share": 0.5367
+    },
+    "亚冠精英": {
+      "n": 57,
+      "avg_home_goals": 1.754,
+      "avg_away_goals": 0.912,
+      "avg_total_goals": 2.667,
+      "var_total_goals": 3.099,
+      "std_total_goals": 1.761,
+      "std_home_goals": 1.49,
+      "std_away_goals": 1.031,
+      "goal_distribution": {
+        "0": 0.1053,
+        "1": 0.2105,
+        "2": 0.1754,
+        "3": 0.1579,
+        "4": 0.2105,
+        "5": 0.0702,
+        "6": 0.0526,
+        "7": 0.0175
+      },
+      "small_rate_0_2": 0.4912,
+      "big_rate_3plus": 0.5088,
+      "home_goal_share": 0.6579
+    },
+    "英甲": {
+      "n": 57,
+      "avg_home_goals": 1.702,
+      "avg_away_goals": 0.807,
+      "avg_total_goals": 2.509,
+      "var_total_goals": 2.46,
+      "std_total_goals": 1.569,
+      "std_home_goals": 1.284,
+      "std_away_goals": 0.999,
+      "goal_distribution": {
+        "0": 0.0877,
+        "1": 0.2105,
+        "2": 0.2281,
+        "3": 0.2281,
+        "4": 0.1053,
+        "5": 0.1053,
+        "6": 0.0351,
+        "7": 0.0
+      },
+      "small_rate_0_2": 0.5263,
+      "big_rate_3plus": 0.4737,
+      "home_goal_share": 0.6783
+    },
+    "法乙": {
+      "n": 54,
+      "avg_home_goals": 1.463,
+      "avg_away_goals": 1.259,
+      "avg_total_goals": 2.722,
+      "var_total_goals": 2.608,
+      "std_total_goals": 1.615,
+      "std_home_goals": 1.287,
+      "std_away_goals": 1.04,
+      "goal_distribution": {
+        "0": 0.0556,
+        "1": 0.1852,
+        "2": 0.2593,
+        "3": 0.2407,
+        "4": 0.0741,
+        "5": 0.1111,
+        "6": 0.0741,
+        "7": 0.0
+      },
+      "small_rate_0_2": 0.5,
+      "big_rate_3plus": 0.5,
+      "home_goal_share": 0.5374
+    },
+    "俱世界杯": {
+      "n": 44,
+      "avg_home_goals": 1.682,
+      "avg_away_goals": 1.273,
+      "avg_total_goals": 2.955,
+      "var_total_goals": 4.089,
+      "std_total_goals": 2.022,
+      "std_home_goals": 1.831,
+      "std_away_goals": 1.303,
+      "goal_distribution": {
+        "0": 0.0682,
+        "1": 0.1364,
+        "2": 0.2727,
+        "3": 0.2045,
+        "4": 0.2045,
+        "5": 0.0,
+        "6": 0.0455,
+        "7": 0.0682
+      },
+      "small_rate_0_2": 0.4773,
+      "big_rate_3plus": 0.5227,
+      "home_goal_share": 0.5692
+    },
+    "荷乙": {
+      "n": 43,
+      "avg_home_goals": 1.605,
+      "avg_away_goals": 1.349,
+      "avg_total_goals": 2.953,
+      "var_total_goals": 2.37,
+      "std_total_goals": 1.539,
+      "std_home_goals": 1.081,
+      "std_away_goals": 1.009,
+      "goal_distribution": {
+        "0": 0.0233,
+        "1": 0.186,
+        "2": 0.186,
+        "3": 0.2558,
+        "4": 0.2093,
+        "5": 0.0465,
+        "6": 0.093,
+        "7": 0.0
+      },
+      "small_rate_0_2": 0.3953,
+      "big_rate_3plus": 0.6047,
+      "home_goal_share": 0.5433
+    },
+    "日乙": {
+      "n": 40,
+      "avg_home_goals": 1.425,
+      "avg_away_goals": 0.975,
+      "avg_total_goals": 2.4,
+      "var_total_goals": 2.29,
+      "std_total_goals": 1.513,
+      "std_home_goals": 1.093,
+      "std_away_goals": 0.935,
+      "goal_distribution": {
+        "0": 0.075,
+        "1": 0.225,
+        "2": 0.275,
+        "3": 0.2,
+        "4": 0.175,
+        "5": 0.0,
+        "6": 0.025,
+        "7": 0.025
+      },
+      "small_rate_0_2": 0.575,
+      "big_rate_3plus": 0.425,
+      "home_goal_share": 0.5937
+    },
+    "巴甲": {
+      "n": 37,
+      "avg_home_goals": 1.838,
+      "avg_away_goals": 1.216,
+      "avg_total_goals": 3.054,
+      "var_total_goals": 2.43,
+      "std_total_goals": 1.559,
+      "std_home_goals": 1.22,
+      "std_away_goals": 1.166,
+      "goal_distribution": {
+        "0": 0.0541,
+        "1": 0.0541,
+        "2": 0.3243,
+        "3": 0.1892,
+        "4": 0.2162,
+        "5": 0.0541,
+        "6": 0.1081,
+        "7": 0.0
+      },
+      "small_rate_0_2": 0.4324,
+      "big_rate_3plus": 0.5676,
+      "home_goal_share": 0.6018
+    },
+    "非洲杯": {
+      "n": 29,
+      "avg_home_goals": 1.31,
+      "avg_away_goals": 1.103,
+      "avg_total_goals": 2.414,
+      "var_total_goals": 2.174,
+      "std_total_goals": 1.474,
+      "std_home_goals": 1.148,
+      "std_away_goals": 1.062,
+      "goal_distribution": {
+        "0": 0.1034,
+        "1": 0.2069,
+        "2": 0.2069,
+        "3": 0.2414,
+        "4": 0.1379,
+        "5": 0.1034,
+        "6": 0.0,
+        "7": 0.0
+      },
+      "small_rate_0_2": 0.5172,
+      "big_rate_3plus": 0.4828,
+      "home_goal_share": 0.5429
+    },
+    "英锦标赛": {
+      "n": 24,
+      "avg_home_goals": 1.208,
+      "avg_away_goals": 1.667,
+      "avg_total_goals": 2.875,
+      "var_total_goals": 3.026,
+      "std_total_goals": 1.74,
+      "std_home_goals": 1.04,
+      "std_away_goals": 1.462,
+      "goal_distribution": {
+        "0": 0.0,
+        "1": 0.2917,
+        "2": 0.125,
+        "3": 0.2917,
+        "4": 0.1667,
+        "5": 0.0417,
+        "6": 0.0417,
+        "7": 0.0417
+      },
+      "small_rate_0_2": 0.4167,
+      "big_rate_3plus": 0.5833,
+      "home_goal_share": 0.4203
+    },
+    "西国王杯": {
+      "n": 23,
+      "avg_home_goals": 1.783,
+      "avg_away_goals": 1.826,
+      "avg_total_goals": 3.609,
+      "var_total_goals": 4.238,
+      "std_total_goals": 2.059,
+      "std_home_goals": 1.502,
+      "std_away_goals": 1.551,
+      "goal_distribution": {
+        "0": 0.0435,
+        "1": 0.1739,
+        "2": 0.1304,
+        "3": 0.087,
+        "4": 0.1739,
+        "5": 0.2609,
+        "6": 0.0435,
+        "7": 0.087
+      },
+      "small_rate_0_2": 0.3478,
+      "big_rate_3plus": 0.6522,
+      "home_goal_share": 0.494
+    },
+    "法国杯": {
+      "n": 22,
+      "avg_home_goals": 1.682,
+      "avg_away_goals": 1.5,
+      "avg_total_goals": 3.182,
+      "var_total_goals": 2.058,
+      "std_total_goals": 1.435,
+      "std_home_goals": 0.873,
+      "std_away_goals": 1.27,
+      "goal_distribution": {
+        "0": 0.0,
+        "1": 0.0909,
+        "2": 0.3182,
+        "3": 0.1818,
+        "4": 0.2273,
+        "5": 0.0909,
+        "6": 0.0909,
+        "7": 0.0
+      },
+      "small_rate_0_2": 0.4091,
+      "big_rate_3plus": 0.5909,
+      "home_goal_share": 0.5286
+    },
+    "荷兰杯": {
+      "n": 21,
+      "avg_home_goals": 1.81,
+      "avg_away_goals": 1.714,
+      "avg_total_goals": 3.524,
+      "var_total_goals": 1.583,
+      "std_total_goals": 1.258,
+      "std_home_goals": 1.295,
+      "std_away_goals": 1.075,
+      "goal_distribution": {
+        "0": 0.0,
+        "1": 0.0476,
+        "2": 0.1905,
+        "3": 0.2381,
+        "4": 0.2857,
+        "5": 0.1905,
+        "6": 0.0476,
+        "7": 0.0
+      },
+      "small_rate_0_2": 0.2381,
+      "big_rate_3plus": 0.7619,
+      "home_goal_share": 0.5135
+    },
+    "金杯赛": {
+      "n": 21,
+      "avg_home_goals": 2.0,
+      "avg_away_goals": 1.0,
+      "avg_total_goals": 3.0,
+      "var_total_goals": 4.19,
+      "std_total_goals": 2.047,
+      "std_home_goals": 1.773,
+      "std_away_goals": 0.873,
+      "goal_distribution": {
+        "0": 0.0476,
+        "1": 0.2381,
+        "2": 0.2381,
+        "3": 0.1429,
+        "4": 0.0476,
+        "5": 0.1429,
+        "6": 0.0476,
+        "7": 0.0952
+      },
+      "small_rate_0_2": 0.5238,
+      "big_rate_3plus": 0.4762,
+      "home_goal_share": 0.6667
+    },
+    "日联赛杯": {
+      "n": 20,
+      "avg_home_goals": 1.4,
+      "avg_away_goals": 1.35,
+      "avg_total_goals": 2.75,
+      "var_total_goals": 2.587,
+      "std_total_goals": 1.609,
+      "std_home_goals": 1.2,
+      "std_away_goals": 1.108,
+      "goal_distribution": {
+        "0": 0.05,
+        "1": 0.2,
+        "2": 0.25,
+        "3": 0.2,
+        "4": 0.1,
+        "5": 0.15,
+        "6": 0.05,
+        "7": 0.0
+      },
+      "small_rate_0_2": 0.5,
+      "big_rate_3plus": 0.5,
+      "home_goal_share": 0.5091
+    },
+    "解放者杯": {
+      "n": 20,
+      "avg_home_goals": 0.9,
+      "avg_away_goals": 1.05,
+      "avg_total_goals": 1.95,
+      "var_total_goals": 1.548,
+      "std_total_goals": 1.244,
+      "std_home_goals": 1.091,
+      "std_away_goals": 0.865,
+      "goal_distribution": {
+        "0": 0.1,
+        "1": 0.25,
+        "2": 0.45,
+        "3": 0.05,
+        "4": 0.1,
+        "5": 0.05,
+        "6": 0.0,
+        "7": 0.0
+      },
+      "small_rate_0_2": 0.8,
+      "big_rate_3plus": 0.2,
+      "home_goal_share": 0.4615
+    },
+    "亚冠乙": {
+      "n": 19,
+      "avg_home_goals": 1.684,
+      "avg_away_goals": 1.316,
+      "avg_total_goals": 3.0,
+      "var_total_goals": 2.737,
+      "std_total_goals": 1.654,
+      "std_home_goals": 1.259,
+      "std_away_goals": 1.558,
+      "goal_distribution": {
+        "0": 0.0526,
+        "1": 0.1053,
+        "2": 0.2105,
+        "3": 0.3684,
+        "4": 0.1053,
+        "5": 0.0526,
+        "6": 0.0526,
+        "7": 0.0526
+      },
+      "small_rate_0_2": 0.3684,
+      "big_rate_3plus": 0.6316,
+      "home_goal_share": 0.5614
+    },
+    "亚洲杯23": {
+      "n": 18,
+      "avg_home_goals": 1.167,
+      "avg_away_goals": 0.889,
+      "avg_total_goals": 2.056,
+      "var_total_goals": 3.164,
+      "std_total_goals": 1.779,
+      "std_home_goals": 0.957,
+      "std_away_goals": 1.1,
+      "goal_distribution": {
+        "0": 0.1667,
+        "1": 0.3333,
+        "2": 0.2222,
+        "3": 0.0556,
+        "4": 0.0556,
+        "5": 0.1111,
+        "6": 0.0556,
+        "7": 0.0
+      },
+      "small_rate_0_2": 0.7222,
+      "big_rate_3plus": 0.2778,
+      "home_goal_share": 0.5676
+    },
+    "世界杯20": {
+      "n": 16,
+      "avg_home_goals": 1.25,
+      "avg_away_goals": 1.062,
+      "avg_total_goals": 2.312,
+      "var_total_goals": 1.465,
+      "std_total_goals": 1.21,
+      "std_home_goals": 0.829,
+      "std_away_goals": 1.088,
+      "goal_distribution": {
+        "0": 0.0625,
+        "1": 0.1875,
+        "2": 0.3125,
+        "3": 0.3125,
+        "4": 0.0625,
+        "5": 0.0625,
+        "6": 0.0,
+        "7": 0.0
+      },
+      "small_rate_0_2": 0.5625,
+      "big_rate_3plus": 0.4375,
+      "home_goal_share": 0.5405
+    }
+  },
+  "part2_home_away_advantage": {
+    "by_league": {
+      "英超": {
+        "n": 455,
+        "home_win_rate": 0.4242,
+        "draw_rate": 0.2527,
+        "away_win_rate": 0.3231,
+        "home_advantage_factor": 1.313,
+        "avg_home_goals": 1.527,
+        "avg_away_goals": 1.295,
+        "goal_diff_home_away": 0.233,
+        "home_goal_boost": 1.18,
+        "draw_share": 0.338
+      },
+      "欧冠": {
+        "n": 273,
+        "home_win_rate": 0.4982,
+        "draw_rate": 0.1832,
+        "away_win_rate": 0.3187,
+        "home_advantage_factor": 1.563,
+        "avg_home_goals": 1.901,
+        "avg_away_goals": 1.377,
+        "goal_diff_home_away": 0.524,
+        "home_goal_boost": 1.38,
+        "draw_share": 0.224
+      },
+      "瑞超": {
+        "n": 257,
+        "home_win_rate": 0.4163,
+        "draw_rate": 0.2412,
+        "away_win_rate": 0.3424,
+        "home_advantage_factor": 1.216,
+        "avg_home_goals": 1.584,
+        "avg_away_goals": 1.311,
+        "goal_diff_home_away": 0.272,
+        "home_goal_boost": 1.208,
+        "draw_share": 0.318
+      },
+      "美职联": {
+        "n": 250,
+        "home_win_rate": 0.46,
+        "draw_rate": 0.216,
+        "away_win_rate": 0.324,
+        "home_advantage_factor": 1.42,
+        "avg_home_goals": 1.788,
+        "avg_away_goals": 1.496,
+        "goal_diff_home_away": 0.292,
+        "home_goal_boost": 1.195,
+        "draw_share": 0.276
+      },
+      "挪超": {
+        "n": 236,
+        "home_win_rate": 0.4746,
+        "draw_rate": 0.1949,
+        "away_win_rate": 0.3305,
+        "home_advantage_factor": 1.436,
+        "avg_home_goals": 1.797,
+        "avg_away_goals": 1.292,
+        "goal_diff_home_away": 0.504,
+        "home_goal_boost": 1.39,
+        "draw_share": 0.242
+      },
+      "欧罗巴": {
+        "n": 211,
+        "home_win_rate": 0.5118,
+        "draw_rate": 0.1754,
+        "away_win_rate": 0.3128,
+        "home_advantage_factor": 1.636,
+        "avg_home_goals": 1.521,
+        "avg_away_goals": 1.118,
+        "goal_diff_home_away": 0.403,
+        "home_goal_boost": 1.36,
+        "draw_share": 0.213
+      },
+      "意甲": {
+        "n": 205,
+        "home_win_rate": 0.3854,
+        "draw_rate": 0.2683,
+        "away_win_rate": 0.3463,
+        "home_advantage_factor": 1.113,
+        "avg_home_goals": 1.263,
+        "avg_away_goals": 1.141,
+        "goal_diff_home_away": 0.122,
+        "home_goal_boost": 1.107,
+        "draw_share": 0.367
+      },
+      "西甲": {
+        "n": 189,
+        "home_win_rate": 0.4444,
+        "draw_rate": 0.3069,
+        "away_win_rate": 0.2487,
+        "home_advantage_factor": 1.787,
+        "avg_home_goals": 1.55,
+        "avg_away_goals": 1.111,
+        "goal_diff_home_away": 0.439,
+        "home_goal_boost": 1.395,
+        "draw_share": 0.443
+      },
+      "世预赛": {
+        "n": 187,
+        "home_win_rate": 0.4813,
+        "draw_rate": 0.246,
+        "away_win_rate": 0.2727,
+        "home_advantage_factor": 1.765,
+        "avg_home_goals": 1.695,
+        "avg_away_goals": 1.037,
+        "goal_diff_home_away": 0.658,
+        "home_goal_boost": 1.634,
+        "draw_share": 0.326
+      },
+      "德甲": {
+        "n": 172,
+        "home_win_rate": 0.3953,
+        "draw_rate": 0.2558,
+        "away_win_rate": 0.3488,
+        "home_advantage_factor": 1.133,
+        "avg_home_goals": 1.738,
+        "avg_away_goals": 1.465,
+        "goal_diff_home_away": 0.273,
+        "home_goal_boost": 1.187,
+        "draw_share": 0.344
+      },
+      "芬超": {
+        "n": 158,
+        "home_win_rate": 0.4873,
+        "draw_rate": 0.2532,
+        "away_win_rate": 0.2595,
+        "home_advantage_factor": 1.878,
+        "avg_home_goals": 1.722,
+        "avg_away_goals": 1.38,
+        "goal_diff_home_away": 0.342,
+        "home_goal_boost": 1.248,
+        "draw_share": 0.339
+      },
+      "英冠": {
+        "n": 158,
+        "home_win_rate": 0.4051,
+        "draw_rate": 0.2975,
+        "away_win_rate": 0.2975,
+        "home_advantage_factor": 1.362,
+        "avg_home_goals": 1.316,
+        "avg_away_goals": 1.101,
+        "goal_diff_home_away": 0.215,
+        "home_goal_boost": 1.195,
+        "draw_share": 0.423
+      },
+      "国际赛": {
+        "n": 120,
+        "home_win_rate": 0.4833,
+        "draw_rate": 0.25,
+        "away_win_rate": 0.2667,
+        "home_advantage_factor": 1.812,
+        "avg_home_goals": 1.617,
+        "avg_away_goals": 1.042,
+        "goal_diff_home_away": 0.575,
+        "home_goal_boost": 1.552,
+        "draw_share": 0.333
+      },
+      "法甲": {
+        "n": 113,
+        "home_win_rate": 0.4602,
+        "draw_rate": 0.2301,
+        "away_win_rate": 0.3097,
+        "home_advantage_factor": 1.486,
+        "avg_home_goals": 1.504,
+        "avg_away_goals": 1.257,
+        "goal_diff_home_away": 0.248,
+        "home_goal_boost": 1.197,
+        "draw_share": 0.299
+      },
+      "日职": {
+        "n": 106,
+        "home_win_rate": 0.4245,
+        "draw_rate": 0.3019,
+        "away_win_rate": 0.2736,
+        "home_advantage_factor": 1.552,
+        "avg_home_goals": 1.358,
+        "avg_away_goals": 1.094,
+        "goal_diff_home_away": 0.264,
+        "home_goal_boost": 1.241,
+        "draw_share": 0.432
+      },
+      "韩职": {
+        "n": 100,
+        "home_win_rate": 0.35,
+        "draw_rate": 0.3,
+        "away_win_rate": 0.35,
+        "home_advantage_factor": 1.0,
+        "avg_home_goals": 1.29,
+        "avg_away_goals": 1.28,
+        "goal_diff_home_away": 0.01,
+        "home_goal_boost": 1.008,
+        "draw_share": 0.429
+      },
+      "葡超": {
+        "n": 93,
+        "home_win_rate": 0.3656,
+        "draw_rate": 0.3441,
+        "away_win_rate": 0.2903,
+        "home_advantage_factor": 1.259,
+        "avg_home_goals": 1.495,
+        "avg_away_goals": 1.366,
+        "goal_diff_home_away": 0.129,
+        "home_goal_boost": 1.094,
+        "draw_share": 0.525
+      },
+      "澳超": {
+        "n": 88,
+        "home_win_rate": 0.3636,
+        "draw_rate": 0.2955,
+        "away_win_rate": 0.3409,
+        "home_advantage_factor": 1.067,
+        "avg_home_goals": 1.534,
+        "avg_away_goals": 1.409,
+        "goal_diff_home_away": 0.125,
+        "home_goal_boost": 1.089,
+        "draw_share": 0.419
+      },
+      "荷甲": {
+        "n": 80,
+        "home_win_rate": 0.4,
+        "draw_rate": 0.2875,
+        "away_win_rate": 0.3125,
+        "home_advantage_factor": 1.28,
+        "avg_home_goals": 1.688,
+        "avg_away_goals": 1.512,
+        "goal_diff_home_away": 0.175,
+        "home_goal_boost": 1.116,
+        "draw_share": 0.404
+      },
+      "世界杯": {
+        "n": 79,
+        "home_win_rate": 0.4177,
+        "draw_rate": 0.3038,
+        "away_win_rate": 0.2785,
+        "home_advantage_factor": 1.5,
+        "avg_home_goals": 1.633,
+        "avg_away_goals": 1.266,
+        "goal_diff_home_away": 0.367,
+        "home_goal_boost": 1.29,
+        "draw_share": 0.436
+      },
+      "欧协联": {
+        "n": 72,
+        "home_win_rate": 0.5556,
+        "draw_rate": 0.1806,
+        "away_win_rate": 0.2639,
+        "home_advantage_factor": 2.105,
+        "avg_home_goals": 1.514,
+        "avg_away_goals": 1.083,
+        "goal_diff_home_away": 0.431,
+        "home_goal_boost": 1.397,
+        "draw_share": 0.22
+      },
+      "德乙": {
+        "n": 63,
+        "home_win_rate": 0.3651,
+        "draw_rate": 0.3016,
+        "away_win_rate": 0.3333,
+        "home_advantage_factor": 1.095,
+        "avg_home_goals": 1.46,
+        "avg_away_goals": 1.397,
+        "goal_diff_home_away": 0.063,
+        "home_goal_boost": 1.045,
+        "draw_share": 0.432
+      },
+      "沙职": {
+        "n": 59,
+        "home_win_rate": 0.4915,
+        "draw_rate": 0.1864,
+        "away_win_rate": 0.322,
+        "home_advantage_factor": 1.526,
+        "avg_home_goals": 1.559,
+        "avg_away_goals": 1.305,
+        "goal_diff_home_away": 0.254,
+        "home_goal_boost": 1.195,
+        "draw_share": 0.229
+      },
+      "英足总杯": {
+        "n": 57,
+        "home_win_rate": 0.386,
+        "draw_rate": 0.2632,
+        "away_win_rate": 0.3509,
+        "home_advantage_factor": 1.1,
+        "avg_home_goals": 1.667,
+        "avg_away_goals": 1.439,
+        "goal_diff_home_away": 0.228,
+        "home_goal_boost": 1.159,
+        "draw_share": 0.357
+      },
+      "亚冠精英": {
+        "n": 57,
+        "home_win_rate": 0.5614,
+        "draw_rate": 0.1754,
+        "away_win_rate": 0.2632,
+        "home_advantage_factor": 2.133,
+        "avg_home_goals": 1.754,
+        "avg_away_goals": 0.912,
+        "goal_diff_home_away": 0.842,
+        "home_goal_boost": 1.923,
+        "draw_share": 0.213
+      },
+      "英甲": {
+        "n": 57,
+        "home_win_rate": 0.5614,
+        "draw_rate": 0.2456,
+        "away_win_rate": 0.193,
+        "home_advantage_factor": 2.909,
+        "avg_home_goals": 1.702,
+        "avg_away_goals": 0.807,
+        "goal_diff_home_away": 0.895,
+        "home_goal_boost": 2.109,
+        "draw_share": 0.326
+      },
+      "法乙": {
+        "n": 54,
+        "home_win_rate": 0.4074,
+        "draw_rate": 0.2778,
+        "away_win_rate": 0.3148,
+        "home_advantage_factor": 1.294,
+        "avg_home_goals": 1.463,
+        "avg_away_goals": 1.259,
+        "goal_diff_home_away": 0.204,
+        "home_goal_boost": 1.162,
+        "draw_share": 0.385
+      },
+      "俱世界杯": {
+        "n": 44,
+        "home_win_rate": 0.4318,
+        "draw_rate": 0.25,
+        "away_win_rate": 0.3182,
+        "home_advantage_factor": 1.357,
+        "avg_home_goals": 1.682,
+        "avg_away_goals": 1.273,
+        "goal_diff_home_away": 0.409,
+        "home_goal_boost": 1.321,
+        "draw_share": 0.333
+      },
+      "荷乙": {
+        "n": 43,
+        "home_win_rate": 0.4186,
+        "draw_rate": 0.2791,
+        "away_win_rate": 0.3023,
+        "home_advantage_factor": 1.385,
+        "avg_home_goals": 1.605,
+        "avg_away_goals": 1.349,
+        "goal_diff_home_away": 0.256,
+        "home_goal_boost": 1.19,
+        "draw_share": 0.387
+      },
+      "日乙": {
+        "n": 40,
+        "home_win_rate": 0.525,
+        "draw_rate": 0.275,
+        "away_win_rate": 0.2,
+        "home_advantage_factor": 2.625,
+        "avg_home_goals": 1.425,
+        "avg_away_goals": 0.975,
+        "goal_diff_home_away": 0.45,
+        "home_goal_boost": 1.462,
+        "draw_share": 0.379
+      },
+      "巴甲": {
+        "n": 37,
+        "home_win_rate": 0.4595,
+        "draw_rate": 0.3784,
+        "away_win_rate": 0.1622,
+        "home_advantage_factor": 2.833,
+        "avg_home_goals": 1.838,
+        "avg_away_goals": 1.216,
+        "goal_diff_home_away": 0.622,
+        "home_goal_boost": 1.511,
+        "draw_share": 0.609
+      },
+      "非洲杯": {
+        "n": 29,
+        "home_win_rate": 0.4483,
+        "draw_rate": 0.2069,
+        "away_win_rate": 0.3448,
+        "home_advantage_factor": 1.3,
+        "avg_home_goals": 1.31,
+        "avg_away_goals": 1.103,
+        "goal_diff_home_away": 0.207,
+        "home_goal_boost": 1.187,
+        "draw_share": 0.261
+      },
+      "英锦标赛": {
+        "n": 24,
+        "home_win_rate": 0.4583,
+        "draw_rate": 0.0417,
+        "away_win_rate": 0.5,
+        "home_advantage_factor": 0.917,
+        "avg_home_goals": 1.208,
+        "avg_away_goals": 1.667,
+        "goal_diff_home_away": -0.458,
+        "home_goal_boost": 0.725,
+        "draw_share": 0.043
+      },
+      "西国王杯": {
+        "n": 23,
+        "home_win_rate": 0.3478,
+        "draw_rate": 0.1739,
+        "away_win_rate": 0.4783,
+        "home_advantage_factor": 0.727,
+        "avg_home_goals": 1.783,
+        "avg_away_goals": 1.826,
+        "goal_diff_home_away": -0.043,
+        "home_goal_boost": 0.976,
+        "draw_share": 0.211
+      },
+      "法国杯": {
+        "n": 22,
+        "home_win_rate": 0.3636,
+        "draw_rate": 0.3636,
+        "away_win_rate": 0.2727,
+        "home_advantage_factor": 1.333,
+        "avg_home_goals": 1.682,
+        "avg_away_goals": 1.5,
+        "goal_diff_home_away": 0.182,
+        "home_goal_boost": 1.121,
+        "draw_share": 0.571
+      },
+      "荷兰杯": {
+        "n": 21,
+        "home_win_rate": 0.3333,
+        "draw_rate": 0.1905,
+        "away_win_rate": 0.4762,
+        "home_advantage_factor": 0.7,
+        "avg_home_goals": 1.81,
+        "avg_away_goals": 1.714,
+        "goal_diff_home_away": 0.095,
+        "home_goal_boost": 1.056,
+        "draw_share": 0.235
+      },
+      "金杯赛": {
+        "n": 21,
+        "home_win_rate": 0.5238,
+        "draw_rate": 0.2381,
+        "away_win_rate": 0.2381,
+        "home_advantage_factor": 2.2,
+        "avg_home_goals": 2.0,
+        "avg_away_goals": 1.0,
+        "goal_diff_home_away": 1.0,
+        "home_goal_boost": 2.0,
+        "draw_share": 0.312
+      },
+      "日联赛杯": {
+        "n": 20,
+        "home_win_rate": 0.45,
+        "draw_rate": 0.2,
+        "away_win_rate": 0.35,
+        "home_advantage_factor": 1.286,
+        "avg_home_goals": 1.4,
+        "avg_away_goals": 1.35,
+        "goal_diff_home_away": 0.05,
+        "home_goal_boost": 1.037,
+        "draw_share": 0.25
+      },
+      "解放者杯": {
+        "n": 20,
+        "home_win_rate": 0.3,
+        "draw_rate": 0.25,
+        "away_win_rate": 0.45,
+        "home_advantage_factor": 0.667,
+        "avg_home_goals": 0.9,
+        "avg_away_goals": 1.05,
+        "goal_diff_home_away": -0.15,
+        "home_goal_boost": 0.857,
+        "draw_share": 0.333
+      },
+      "亚冠乙": {
+        "n": 19,
+        "home_win_rate": 0.4737,
+        "draw_rate": 0.2632,
+        "away_win_rate": 0.2632,
+        "home_advantage_factor": 1.8,
+        "avg_home_goals": 1.684,
+        "avg_away_goals": 1.316,
+        "goal_diff_home_away": 0.368,
+        "home_goal_boost": 1.28,
+        "draw_share": 0.357
+      },
+      "亚洲杯23": {
+        "n": 18,
+        "home_win_rate": 0.4444,
+        "draw_rate": 0.3333,
+        "away_win_rate": 0.2222,
+        "home_advantage_factor": 2.0,
+        "avg_home_goals": 1.167,
+        "avg_away_goals": 0.889,
+        "goal_diff_home_away": 0.278,
+        "home_goal_boost": 1.312,
+        "draw_share": 0.5
+      },
+      "世界杯20": {
+        "n": 16,
+        "home_win_rate": 0.5,
+        "draw_rate": 0.25,
+        "away_win_rate": 0.25,
+        "home_advantage_factor": 2.0,
+        "avg_home_goals": 1.25,
+        "avg_away_goals": 1.062,
+        "goal_diff_home_away": 0.188,
+        "home_goal_boost": 1.176,
+        "draw_share": 0.333
+      }
+    },
+    "yearly_trend": {
+      "2025": {
+        "n": 2962,
+        "home_win_rate": 0.4443,
+        "draw_rate": 0.236,
+        "away_win_rate": 0.3197,
+        "home_advantage_factor": 1.39,
+        "avg_home_goals": 1.59,
+        "avg_away_goals": 1.279
+      },
+      "2026": {
+        "n": 1487,
+        "home_win_rate": 0.4391,
+        "draw_rate": 0.269,
+        "away_win_rate": 0.2919,
+        "home_advantage_factor": 1.505,
+        "avg_home_goals": 1.583,
+        "avg_away_goals": 1.234
+      }
+    }
+  },
+  "part3_score_distribution": {
+    "overall_score_freq": {
+      "1-1": {
+        "n": 527,
+        "pct": 0.1185
+      },
+      "1-0": {
+        "n": 407,
+        "pct": 0.0915
+      },
+      "2-1": {
+        "n": 400,
+        "pct": 0.0899
+      },
+      "1-2": {
+        "n": 318,
+        "pct": 0.0715
+      },
+      "0-1": {
+        "n": 312,
+        "pct": 0.0701
+      },
+      "0-0": {
+        "n": 283,
+        "pct": 0.0636
+      },
+      "2-0": {
+        "n": 282,
+        "pct": 0.0634
+      },
+      "2-2": {
+        "n": 235,
+        "pct": 0.0528
+      },
+      "0-2": {
+        "n": 203,
+        "pct": 0.0456
+      },
+      "3-0": {
+        "n": 190,
+        "pct": 0.0427
+      },
+      "3-1": {
+        "n": 190,
+        "pct": 0.0427
+      },
+      "3-2": {
+        "n": 131,
+        "pct": 0.0294
+      },
+      "1-3": {
+        "n": 131,
+        "pct": 0.0294
+      },
+      "2-3": {
+        "n": 110,
+        "pct": 0.0247
+      },
+      "0-3": {
+        "n": 107,
+        "pct": 0.0241
+      },
+      "4-0": {
+        "n": 95,
+        "pct": 0.0214
+      },
+      "4-1": {
+        "n": 82,
+        "pct": 0.0184
+      },
+      "1-4": {
+        "n": 48,
+        "pct": 0.0108
+      },
+      "0-4": {
+        "n": 46,
+        "pct": 0.0103
+      },
+      "3-3": {
+        "n": 45,
+        "pct": 0.0101
+      },
+      "5-1": {
+        "n": 45,
+        "pct": 0.0101
+      },
+      "2-4": {
+        "n": 36,
+        "pct": 0.0081
+      },
+      "4-2": {
+        "n": 36,
+        "pct": 0.0081
+      },
+      "5-0": {
+        "n": 35,
+        "pct": 0.0079
+      },
+      "4-3": {
+        "n": 16,
+        "pct": 0.0036
+      },
+      "0-5": {
+        "n": 15,
+        "pct": 0.0034
+      },
+      "6-0": {
+        "n": 15,
+        "pct": 0.0034
+      },
+      "3-4": {
+        "n": 13,
+        "pct": 0.0029
+      },
+      "1-5": {
+        "n": 11,
+        "pct": 0.0025
+      },
+      "4-4": {
+        "n": 9,
+        "pct": 0.002
+      }
+    },
+    "league_top_scores": {
+      "英超": {
+        "n": 455,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 52,
+            "pct": 0.1143
+          },
+          {
+            "score": "2-1",
+            "n": 40,
+            "pct": 0.0879
+          },
+          {
+            "score": "0-1",
+            "n": 37,
+            "pct": 0.0813
+          },
+          {
+            "score": "1-2",
+            "n": 34,
+            "pct": 0.0747
+          },
+          {
+            "score": "2-2",
+            "n": 32,
+            "pct": 0.0703
+          },
+          {
+            "score": "1-0",
+            "n": 30,
+            "pct": 0.0659
+          },
+          {
+            "score": "2-0",
+            "n": 29,
+            "pct": 0.0637
+          },
+          {
+            "score": "3-0",
+            "n": 28,
+            "pct": 0.0615
+          },
+          {
+            "score": "0-0",
+            "n": 27,
+            "pct": 0.0593
+          },
+          {
+            "score": "0-2",
+            "n": 24,
+            "pct": 0.0527
+          }
+        ]
+      },
+      "欧冠": {
+        "n": 273,
+        "top_scores": [
+          {
+            "score": "2-1",
+            "n": 25,
+            "pct": 0.0916
+          },
+          {
+            "score": "1-0",
+            "n": 20,
+            "pct": 0.0733
+          },
+          {
+            "score": "1-1",
+            "n": 18,
+            "pct": 0.0659
+          },
+          {
+            "score": "3-0",
+            "n": 18,
+            "pct": 0.0659
+          },
+          {
+            "score": "1-2",
+            "n": 17,
+            "pct": 0.0623
+          },
+          {
+            "score": "2-0",
+            "n": 16,
+            "pct": 0.0586
+          },
+          {
+            "score": "0-0",
+            "n": 16,
+            "pct": 0.0586
+          },
+          {
+            "score": "0-2",
+            "n": 14,
+            "pct": 0.0513
+          },
+          {
+            "score": "0-1",
+            "n": 14,
+            "pct": 0.0513
+          },
+          {
+            "score": "2-2",
+            "n": 11,
+            "pct": 0.0403
+          }
+        ]
+      },
+      "瑞超": {
+        "n": 257,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 31,
+            "pct": 0.1206
+          },
+          {
+            "score": "2-0",
+            "n": 26,
+            "pct": 0.1012
+          },
+          {
+            "score": "1-2",
+            "n": 21,
+            "pct": 0.0817
+          },
+          {
+            "score": "0-1",
+            "n": 18,
+            "pct": 0.07
+          },
+          {
+            "score": "0-0",
+            "n": 17,
+            "pct": 0.0661
+          },
+          {
+            "score": "2-1",
+            "n": 17,
+            "pct": 0.0661
+          },
+          {
+            "score": "1-0",
+            "n": 14,
+            "pct": 0.0545
+          },
+          {
+            "score": "0-2",
+            "n": 13,
+            "pct": 0.0506
+          },
+          {
+            "score": "3-0",
+            "n": 12,
+            "pct": 0.0467
+          },
+          {
+            "score": "1-3",
+            "n": 11,
+            "pct": 0.0428
+          }
+        ]
+      },
+      "美职联": {
+        "n": 250,
+        "top_scores": [
+          {
+            "score": "2-1",
+            "n": 25,
+            "pct": 0.1
+          },
+          {
+            "score": "1-0",
+            "n": 25,
+            "pct": 0.1
+          },
+          {
+            "score": "1-1",
+            "n": 25,
+            "pct": 0.1
+          },
+          {
+            "score": "3-0",
+            "n": 16,
+            "pct": 0.064
+          },
+          {
+            "score": "1-2",
+            "n": 14,
+            "pct": 0.056
+          },
+          {
+            "score": "2-2",
+            "n": 12,
+            "pct": 0.048
+          },
+          {
+            "score": "0-1",
+            "n": 12,
+            "pct": 0.048
+          },
+          {
+            "score": "3-1",
+            "n": 11,
+            "pct": 0.044
+          },
+          {
+            "score": "2-0",
+            "n": 10,
+            "pct": 0.04
+          },
+          {
+            "score": "0-2",
+            "n": 9,
+            "pct": 0.036
+          }
+        ]
+      },
+      "挪超": {
+        "n": 236,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 22,
+            "pct": 0.0932
+          },
+          {
+            "score": "1-0",
+            "n": 18,
+            "pct": 0.0763
+          },
+          {
+            "score": "2-1",
+            "n": 17,
+            "pct": 0.072
+          },
+          {
+            "score": "1-2",
+            "n": 16,
+            "pct": 0.0678
+          },
+          {
+            "score": "0-1",
+            "n": 14,
+            "pct": 0.0593
+          },
+          {
+            "score": "0-2",
+            "n": 13,
+            "pct": 0.0551
+          },
+          {
+            "score": "3-1",
+            "n": 13,
+            "pct": 0.0551
+          },
+          {
+            "score": "2-0",
+            "n": 13,
+            "pct": 0.0551
+          },
+          {
+            "score": "3-0",
+            "n": 12,
+            "pct": 0.0508
+          },
+          {
+            "score": "0-0",
+            "n": 12,
+            "pct": 0.0508
+          }
+        ]
+      },
+      "欧罗巴": {
+        "n": 211,
+        "top_scores": [
+          {
+            "score": "1-0",
+            "n": 25,
+            "pct": 0.1185
+          },
+          {
+            "score": "2-1",
+            "n": 25,
+            "pct": 0.1185
+          },
+          {
+            "score": "2-0",
+            "n": 19,
+            "pct": 0.09
+          },
+          {
+            "score": "1-1",
+            "n": 19,
+            "pct": 0.09
+          },
+          {
+            "score": "1-2",
+            "n": 18,
+            "pct": 0.0853
+          },
+          {
+            "score": "0-1",
+            "n": 17,
+            "pct": 0.0806
+          },
+          {
+            "score": "0-0",
+            "n": 13,
+            "pct": 0.0616
+          },
+          {
+            "score": "0-2",
+            "n": 10,
+            "pct": 0.0474
+          },
+          {
+            "score": "1-3",
+            "n": 9,
+            "pct": 0.0427
+          },
+          {
+            "score": "3-1",
+            "n": 8,
+            "pct": 0.0379
+          }
+        ]
+      },
+      "意甲": {
+        "n": 205,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 27,
+            "pct": 0.1317
+          },
+          {
+            "score": "2-1",
+            "n": 21,
+            "pct": 0.1024
+          },
+          {
+            "score": "1-0",
+            "n": 21,
+            "pct": 0.1024
+          },
+          {
+            "score": "0-1",
+            "n": 21,
+            "pct": 0.1024
+          },
+          {
+            "score": "1-2",
+            "n": 18,
+            "pct": 0.0878
+          },
+          {
+            "score": "0-0",
+            "n": 18,
+            "pct": 0.0878
+          },
+          {
+            "score": "2-0",
+            "n": 13,
+            "pct": 0.0634
+          },
+          {
+            "score": "0-3",
+            "n": 10,
+            "pct": 0.0488
+          },
+          {
+            "score": "2-2",
+            "n": 10,
+            "pct": 0.0488
+          },
+          {
+            "score": "0-2",
+            "n": 8,
+            "pct": 0.039
+          }
+        ]
+      },
+      "西甲": {
+        "n": 189,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 40,
+            "pct": 0.2116
+          },
+          {
+            "score": "1-0",
+            "n": 23,
+            "pct": 0.1217
+          },
+          {
+            "score": "2-1",
+            "n": 20,
+            "pct": 0.1058
+          },
+          {
+            "score": "1-2",
+            "n": 19,
+            "pct": 0.1005
+          },
+          {
+            "score": "0-1",
+            "n": 12,
+            "pct": 0.0635
+          },
+          {
+            "score": "3-0",
+            "n": 9,
+            "pct": 0.0476
+          },
+          {
+            "score": "2-2",
+            "n": 8,
+            "pct": 0.0423
+          },
+          {
+            "score": "0-0",
+            "n": 8,
+            "pct": 0.0423
+          },
+          {
+            "score": "2-0",
+            "n": 8,
+            "pct": 0.0423
+          },
+          {
+            "score": "0-3",
+            "n": 6,
+            "pct": 0.0317
+          }
+        ]
+      },
+      "世预赛": {
+        "n": 187,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 19,
+            "pct": 0.1016
+          },
+          {
+            "score": "2-0",
+            "n": 18,
+            "pct": 0.0963
+          },
+          {
+            "score": "1-0",
+            "n": 18,
+            "pct": 0.0963
+          },
+          {
+            "score": "0-0",
+            "n": 17,
+            "pct": 0.0909
+          },
+          {
+            "score": "0-1",
+            "n": 17,
+            "pct": 0.0909
+          },
+          {
+            "score": "2-1",
+            "n": 13,
+            "pct": 0.0695
+          },
+          {
+            "score": "0-2",
+            "n": 11,
+            "pct": 0.0588
+          },
+          {
+            "score": "2-2",
+            "n": 10,
+            "pct": 0.0535
+          },
+          {
+            "score": "3-0",
+            "n": 9,
+            "pct": 0.0481
+          },
+          {
+            "score": "4-0",
+            "n": 8,
+            "pct": 0.0428
+          }
+        ]
+      },
+      "德甲": {
+        "n": 172,
+        "top_scores": [
+          {
+            "score": "2-2",
+            "n": 15,
+            "pct": 0.0872
+          },
+          {
+            "score": "1-2",
+            "n": 13,
+            "pct": 0.0756
+          },
+          {
+            "score": "0-1",
+            "n": 13,
+            "pct": 0.0756
+          },
+          {
+            "score": "1-1",
+            "n": 13,
+            "pct": 0.0756
+          },
+          {
+            "score": "1-0",
+            "n": 11,
+            "pct": 0.064
+          },
+          {
+            "score": "2-1",
+            "n": 10,
+            "pct": 0.0581
+          },
+          {
+            "score": "2-0",
+            "n": 10,
+            "pct": 0.0581
+          },
+          {
+            "score": "0-2",
+            "n": 9,
+            "pct": 0.0523
+          },
+          {
+            "score": "0-0",
+            "n": 9,
+            "pct": 0.0523
+          },
+          {
+            "score": "1-3",
+            "n": 9,
+            "pct": 0.0523
+          }
+        ]
+      },
+      "芬超": {
+        "n": 158,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 21,
+            "pct": 0.1329
+          },
+          {
+            "score": "2-1",
+            "n": 18,
+            "pct": 0.1139
+          },
+          {
+            "score": "1-0",
+            "n": 14,
+            "pct": 0.0886
+          },
+          {
+            "score": "3-2",
+            "n": 13,
+            "pct": 0.0823
+          },
+          {
+            "score": "2-2",
+            "n": 10,
+            "pct": 0.0633
+          },
+          {
+            "score": "3-1",
+            "n": 8,
+            "pct": 0.0506
+          },
+          {
+            "score": "1-2",
+            "n": 8,
+            "pct": 0.0506
+          },
+          {
+            "score": "0-1",
+            "n": 7,
+            "pct": 0.0443
+          },
+          {
+            "score": "2-0",
+            "n": 7,
+            "pct": 0.0443
+          },
+          {
+            "score": "0-0",
+            "n": 7,
+            "pct": 0.0443
+          }
+        ]
+      },
+      "英冠": {
+        "n": 158,
+        "top_scores": [
+          {
+            "score": "2-1",
+            "n": 20,
+            "pct": 0.1266
+          },
+          {
+            "score": "0-0",
+            "n": 19,
+            "pct": 0.1203
+          },
+          {
+            "score": "1-1",
+            "n": 18,
+            "pct": 0.1139
+          },
+          {
+            "score": "1-2",
+            "n": 15,
+            "pct": 0.0949
+          },
+          {
+            "score": "0-1",
+            "n": 14,
+            "pct": 0.0886
+          },
+          {
+            "score": "1-0",
+            "n": 13,
+            "pct": 0.0823
+          },
+          {
+            "score": "2-2",
+            "n": 9,
+            "pct": 0.057
+          },
+          {
+            "score": "2-0",
+            "n": 9,
+            "pct": 0.057
+          },
+          {
+            "score": "3-1",
+            "n": 7,
+            "pct": 0.0443
+          },
+          {
+            "score": "0-2",
+            "n": 6,
+            "pct": 0.038
+          }
+        ]
+      },
+      "国际赛": {
+        "n": 120,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 15,
+            "pct": 0.125
+          },
+          {
+            "score": "2-1",
+            "n": 13,
+            "pct": 0.1083
+          },
+          {
+            "score": "0-0",
+            "n": 11,
+            "pct": 0.0917
+          },
+          {
+            "score": "1-0",
+            "n": 11,
+            "pct": 0.0917
+          },
+          {
+            "score": "0-1",
+            "n": 10,
+            "pct": 0.0833
+          },
+          {
+            "score": "1-2",
+            "n": 10,
+            "pct": 0.0833
+          },
+          {
+            "score": "2-0",
+            "n": 9,
+            "pct": 0.075
+          },
+          {
+            "score": "3-0",
+            "n": 7,
+            "pct": 0.0583
+          },
+          {
+            "score": "3-1",
+            "n": 5,
+            "pct": 0.0417
+          },
+          {
+            "score": "2-2",
+            "n": 4,
+            "pct": 0.0333
+          }
+        ]
+      },
+      "法甲": {
+        "n": 113,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 16,
+            "pct": 0.1416
+          },
+          {
+            "score": "1-0",
+            "n": 15,
+            "pct": 0.1327
+          },
+          {
+            "score": "2-1",
+            "n": 9,
+            "pct": 0.0796
+          },
+          {
+            "score": "3-1",
+            "n": 9,
+            "pct": 0.0796
+          },
+          {
+            "score": "0-1",
+            "n": 8,
+            "pct": 0.0708
+          },
+          {
+            "score": "1-2",
+            "n": 7,
+            "pct": 0.0619
+          },
+          {
+            "score": "0-0",
+            "n": 7,
+            "pct": 0.0619
+          },
+          {
+            "score": "1-3",
+            "n": 6,
+            "pct": 0.0531
+          },
+          {
+            "score": "0-2",
+            "n": 6,
+            "pct": 0.0531
+          },
+          {
+            "score": "2-0",
+            "n": 5,
+            "pct": 0.0442
+          }
+        ]
+      },
+      "日职": {
+        "n": 106,
+        "top_scores": [
+          {
+            "score": "1-0",
+            "n": 14,
+            "pct": 0.1321
+          },
+          {
+            "score": "0-0",
+            "n": 12,
+            "pct": 0.1132
+          },
+          {
+            "score": "1-1",
+            "n": 12,
+            "pct": 0.1132
+          },
+          {
+            "score": "0-1",
+            "n": 11,
+            "pct": 0.1038
+          },
+          {
+            "score": "2-0",
+            "n": 8,
+            "pct": 0.0755
+          },
+          {
+            "score": "2-1",
+            "n": 8,
+            "pct": 0.0755
+          },
+          {
+            "score": "2-2",
+            "n": 6,
+            "pct": 0.0566
+          },
+          {
+            "score": "0-2",
+            "n": 4,
+            "pct": 0.0377
+          },
+          {
+            "score": "3-0",
+            "n": 4,
+            "pct": 0.0377
+          },
+          {
+            "score": "1-2",
+            "n": 4,
+            "pct": 0.0377
+          }
+        ]
+      },
+      "韩职": {
+        "n": 100,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 19,
+            "pct": 0.19
+          },
+          {
+            "score": "1-2",
+            "n": 11,
+            "pct": 0.11
+          },
+          {
+            "score": "1-0",
+            "n": 9,
+            "pct": 0.09
+          },
+          {
+            "score": "2-1",
+            "n": 9,
+            "pct": 0.09
+          },
+          {
+            "score": "0-0",
+            "n": 8,
+            "pct": 0.08
+          },
+          {
+            "score": "0-1",
+            "n": 7,
+            "pct": 0.07
+          },
+          {
+            "score": "1-3",
+            "n": 6,
+            "pct": 0.06
+          },
+          {
+            "score": "2-3",
+            "n": 5,
+            "pct": 0.05
+          },
+          {
+            "score": "3-1",
+            "n": 5,
+            "pct": 0.05
+          },
+          {
+            "score": "2-0",
+            "n": 4,
+            "pct": 0.04
+          }
+        ]
+      },
+      "葡超": {
+        "n": 93,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 18,
+            "pct": 0.1935
+          },
+          {
+            "score": "1-2",
+            "n": 9,
+            "pct": 0.0968
+          },
+          {
+            "score": "3-1",
+            "n": 8,
+            "pct": 0.086
+          },
+          {
+            "score": "2-1",
+            "n": 8,
+            "pct": 0.086
+          },
+          {
+            "score": "1-0",
+            "n": 8,
+            "pct": 0.086
+          },
+          {
+            "score": "2-2",
+            "n": 7,
+            "pct": 0.0753
+          },
+          {
+            "score": "0-1",
+            "n": 5,
+            "pct": 0.0538
+          },
+          {
+            "score": "0-2",
+            "n": 4,
+            "pct": 0.043
+          },
+          {
+            "score": "2-0",
+            "n": 4,
+            "pct": 0.043
+          },
+          {
+            "score": "0-0",
+            "n": 4,
+            "pct": 0.043
+          }
+        ]
+      },
+      "澳超": {
+        "n": 88,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 10,
+            "pct": 0.1136
+          },
+          {
+            "score": "0-1",
+            "n": 9,
+            "pct": 0.1023
+          },
+          {
+            "score": "2-2",
+            "n": 9,
+            "pct": 0.1023
+          },
+          {
+            "score": "1-0",
+            "n": 8,
+            "pct": 0.0909
+          },
+          {
+            "score": "0-0",
+            "n": 6,
+            "pct": 0.0682
+          },
+          {
+            "score": "1-3",
+            "n": 5,
+            "pct": 0.0568
+          },
+          {
+            "score": "1-2",
+            "n": 5,
+            "pct": 0.0568
+          },
+          {
+            "score": "3-0",
+            "n": 5,
+            "pct": 0.0568
+          },
+          {
+            "score": "3-2",
+            "n": 4,
+            "pct": 0.0455
+          },
+          {
+            "score": "2-1",
+            "n": 4,
+            "pct": 0.0455
+          }
+        ]
+      },
+      "荷甲": {
+        "n": 80,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 11,
+            "pct": 0.1375
+          },
+          {
+            "score": "0-2",
+            "n": 8,
+            "pct": 0.1
+          },
+          {
+            "score": "2-1",
+            "n": 8,
+            "pct": 0.1
+          },
+          {
+            "score": "2-2",
+            "n": 7,
+            "pct": 0.0875
+          },
+          {
+            "score": "3-2",
+            "n": 5,
+            "pct": 0.0625
+          },
+          {
+            "score": "0-1",
+            "n": 4,
+            "pct": 0.05
+          },
+          {
+            "score": "1-0",
+            "n": 4,
+            "pct": 0.05
+          },
+          {
+            "score": "3-1",
+            "n": 3,
+            "pct": 0.0375
+          },
+          {
+            "score": "1-2",
+            "n": 3,
+            "pct": 0.0375
+          },
+          {
+            "score": "0-0",
+            "n": 3,
+            "pct": 0.0375
+          }
+        ]
+      },
+      "世界杯": {
+        "n": 79,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 11,
+            "pct": 0.1392
+          },
+          {
+            "score": "2-1",
+            "n": 8,
+            "pct": 0.1013
+          },
+          {
+            "score": "0-0",
+            "n": 8,
+            "pct": 0.1013
+          },
+          {
+            "score": "2-0",
+            "n": 6,
+            "pct": 0.0759
+          },
+          {
+            "score": "0-1",
+            "n": 6,
+            "pct": 0.0759
+          },
+          {
+            "score": "1-0",
+            "n": 4,
+            "pct": 0.0506
+          },
+          {
+            "score": "2-2",
+            "n": 4,
+            "pct": 0.0506
+          },
+          {
+            "score": "0-3",
+            "n": 3,
+            "pct": 0.038
+          },
+          {
+            "score": "3-0",
+            "n": 3,
+            "pct": 0.038
+          },
+          {
+            "score": "1-3",
+            "n": 3,
+            "pct": 0.038
+          }
+        ]
+      },
+      "欧协联": {
+        "n": 72,
+        "top_scores": [
+          {
+            "score": "2-1",
+            "n": 10,
+            "pct": 0.1389
+          },
+          {
+            "score": "1-0",
+            "n": 9,
+            "pct": 0.125
+          },
+          {
+            "score": "0-1",
+            "n": 7,
+            "pct": 0.0972
+          },
+          {
+            "score": "2-0",
+            "n": 6,
+            "pct": 0.0833
+          },
+          {
+            "score": "0-0",
+            "n": 5,
+            "pct": 0.0694
+          },
+          {
+            "score": "1-2",
+            "n": 5,
+            "pct": 0.0694
+          },
+          {
+            "score": "2-2",
+            "n": 4,
+            "pct": 0.0556
+          },
+          {
+            "score": "0-3",
+            "n": 4,
+            "pct": 0.0556
+          },
+          {
+            "score": "3-2",
+            "n": 4,
+            "pct": 0.0556
+          },
+          {
+            "score": "3-1",
+            "n": 4,
+            "pct": 0.0556
+          }
+        ]
+      },
+      "德乙": {
+        "n": 63,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 9,
+            "pct": 0.1429
+          },
+          {
+            "score": "1-2",
+            "n": 8,
+            "pct": 0.127
+          },
+          {
+            "score": "2-2",
+            "n": 7,
+            "pct": 0.1111
+          },
+          {
+            "score": "1-0",
+            "n": 7,
+            "pct": 0.1111
+          },
+          {
+            "score": "0-2",
+            "n": 5,
+            "pct": 0.0794
+          },
+          {
+            "score": "2-1",
+            "n": 5,
+            "pct": 0.0794
+          },
+          {
+            "score": "0-1",
+            "n": 3,
+            "pct": 0.0476
+          },
+          {
+            "score": "3-1",
+            "n": 2,
+            "pct": 0.0317
+          },
+          {
+            "score": "3-2",
+            "n": 2,
+            "pct": 0.0317
+          },
+          {
+            "score": "5-1",
+            "n": 2,
+            "pct": 0.0317
+          }
+        ]
+      },
+      "沙职": {
+        "n": 59,
+        "top_scores": [
+          {
+            "score": "1-0",
+            "n": 7,
+            "pct": 0.1186
+          },
+          {
+            "score": "1-1",
+            "n": 7,
+            "pct": 0.1186
+          },
+          {
+            "score": "2-0",
+            "n": 6,
+            "pct": 0.1017
+          },
+          {
+            "score": "1-2",
+            "n": 5,
+            "pct": 0.0847
+          },
+          {
+            "score": "3-2",
+            "n": 4,
+            "pct": 0.0678
+          },
+          {
+            "score": "2-1",
+            "n": 4,
+            "pct": 0.0678
+          },
+          {
+            "score": "0-2",
+            "n": 3,
+            "pct": 0.0508
+          },
+          {
+            "score": "0-1",
+            "n": 3,
+            "pct": 0.0508
+          },
+          {
+            "score": "3-1",
+            "n": 3,
+            "pct": 0.0508
+          },
+          {
+            "score": "4-0",
+            "n": 2,
+            "pct": 0.0339
+          }
+        ]
+      },
+      "英足总杯": {
+        "n": 57,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 9,
+            "pct": 0.1579
+          },
+          {
+            "score": "0-1",
+            "n": 5,
+            "pct": 0.0877
+          },
+          {
+            "score": "2-1",
+            "n": 5,
+            "pct": 0.0877
+          },
+          {
+            "score": "2-2",
+            "n": 4,
+            "pct": 0.0702
+          },
+          {
+            "score": "3-1",
+            "n": 3,
+            "pct": 0.0526
+          },
+          {
+            "score": "3-0",
+            "n": 3,
+            "pct": 0.0526
+          },
+          {
+            "score": "2-0",
+            "n": 3,
+            "pct": 0.0526
+          },
+          {
+            "score": "1-2",
+            "n": 3,
+            "pct": 0.0526
+          },
+          {
+            "score": "1-3",
+            "n": 3,
+            "pct": 0.0526
+          },
+          {
+            "score": "0-2",
+            "n": 3,
+            "pct": 0.0526
+          }
+        ]
+      },
+      "亚冠精英": {
+        "n": 57,
+        "top_scores": [
+          {
+            "score": "1-0",
+            "n": 8,
+            "pct": 0.1404
+          },
+          {
+            "score": "2-0",
+            "n": 6,
+            "pct": 0.1053
+          },
+          {
+            "score": "0-0",
+            "n": 6,
+            "pct": 0.1053
+          },
+          {
+            "score": "3-1",
+            "n": 5,
+            "pct": 0.0877
+          },
+          {
+            "score": "1-2",
+            "n": 5,
+            "pct": 0.0877
+          },
+          {
+            "score": "0-1",
+            "n": 4,
+            "pct": 0.0702
+          },
+          {
+            "score": "1-1",
+            "n": 3,
+            "pct": 0.0526
+          },
+          {
+            "score": "4-0",
+            "n": 3,
+            "pct": 0.0526
+          },
+          {
+            "score": "4-2",
+            "n": 3,
+            "pct": 0.0526
+          },
+          {
+            "score": "2-3",
+            "n": 2,
+            "pct": 0.0351
+          }
+        ]
+      },
+      "英甲": {
+        "n": 57,
+        "top_scores": [
+          {
+            "score": "1-0",
+            "n": 10,
+            "pct": 0.1754
+          },
+          {
+            "score": "1-1",
+            "n": 8,
+            "pct": 0.1404
+          },
+          {
+            "score": "3-0",
+            "n": 6,
+            "pct": 0.1053
+          },
+          {
+            "score": "0-0",
+            "n": 5,
+            "pct": 0.0877
+          },
+          {
+            "score": "4-0",
+            "n": 4,
+            "pct": 0.0702
+          },
+          {
+            "score": "2-1",
+            "n": 4,
+            "pct": 0.0702
+          },
+          {
+            "score": "2-3",
+            "n": 3,
+            "pct": 0.0526
+          },
+          {
+            "score": "2-0",
+            "n": 3,
+            "pct": 0.0526
+          },
+          {
+            "score": "1-2",
+            "n": 3,
+            "pct": 0.0526
+          },
+          {
+            "score": "4-2",
+            "n": 2,
+            "pct": 0.0351
+          }
+        ]
+      },
+      "法乙": {
+        "n": 54,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 10,
+            "pct": 0.1852
+          },
+          {
+            "score": "1-0",
+            "n": 7,
+            "pct": 0.1296
+          },
+          {
+            "score": "1-2",
+            "n": 5,
+            "pct": 0.0926
+          },
+          {
+            "score": "0-1",
+            "n": 3,
+            "pct": 0.0556
+          },
+          {
+            "score": "0-0",
+            "n": 3,
+            "pct": 0.0556
+          },
+          {
+            "score": "0-3",
+            "n": 3,
+            "pct": 0.0556
+          },
+          {
+            "score": "2-1",
+            "n": 3,
+            "pct": 0.0556
+          },
+          {
+            "score": "0-2",
+            "n": 3,
+            "pct": 0.0556
+          },
+          {
+            "score": "3-0",
+            "n": 2,
+            "pct": 0.037
+          },
+          {
+            "score": "3-3",
+            "n": 2,
+            "pct": 0.037
+          }
+        ]
+      },
+      "俱世界杯": {
+        "n": 44,
+        "top_scores": [
+          {
+            "score": "2-1",
+            "n": 5,
+            "pct": 0.1136
+          },
+          {
+            "score": "2-0",
+            "n": 5,
+            "pct": 0.1136
+          },
+          {
+            "score": "1-1",
+            "n": 4,
+            "pct": 0.0909
+          },
+          {
+            "score": "1-0",
+            "n": 3,
+            "pct": 0.0682
+          },
+          {
+            "score": "2-2",
+            "n": 3,
+            "pct": 0.0682
+          },
+          {
+            "score": "0-2",
+            "n": 3,
+            "pct": 0.0682
+          },
+          {
+            "score": "0-0",
+            "n": 3,
+            "pct": 0.0682
+          },
+          {
+            "score": "0-1",
+            "n": 3,
+            "pct": 0.0682
+          },
+          {
+            "score": "1-2",
+            "n": 2,
+            "pct": 0.0455
+          },
+          {
+            "score": "4-0",
+            "n": 2,
+            "pct": 0.0455
+          }
+        ]
+      },
+      "荷乙": {
+        "n": 43,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 6,
+            "pct": 0.1395
+          },
+          {
+            "score": "2-1",
+            "n": 5,
+            "pct": 0.1163
+          },
+          {
+            "score": "1-0",
+            "n": 5,
+            "pct": 0.1163
+          },
+          {
+            "score": "3-1",
+            "n": 4,
+            "pct": 0.093
+          },
+          {
+            "score": "1-2",
+            "n": 4,
+            "pct": 0.093
+          },
+          {
+            "score": "2-2",
+            "n": 4,
+            "pct": 0.093
+          },
+          {
+            "score": "0-1",
+            "n": 3,
+            "pct": 0.0698
+          },
+          {
+            "score": "2-4",
+            "n": 2,
+            "pct": 0.0465
+          },
+          {
+            "score": "3-0",
+            "n": 2,
+            "pct": 0.0465
+          },
+          {
+            "score": "0-2",
+            "n": 2,
+            "pct": 0.0465
+          }
+        ]
+      },
+      "日乙": {
+        "n": 40,
+        "top_scores": [
+          {
+            "score": "1-0",
+            "n": 8,
+            "pct": 0.2
+          },
+          {
+            "score": "1-1",
+            "n": 5,
+            "pct": 0.125
+          },
+          {
+            "score": "2-1",
+            "n": 5,
+            "pct": 0.125
+          },
+          {
+            "score": "2-0",
+            "n": 3,
+            "pct": 0.075
+          },
+          {
+            "score": "2-2",
+            "n": 3,
+            "pct": 0.075
+          },
+          {
+            "score": "0-2",
+            "n": 3,
+            "pct": 0.075
+          },
+          {
+            "score": "0-0",
+            "n": 3,
+            "pct": 0.075
+          },
+          {
+            "score": "3-1",
+            "n": 2,
+            "pct": 0.05
+          },
+          {
+            "score": "1-2",
+            "n": 2,
+            "pct": 0.05
+          },
+          {
+            "score": "1-3",
+            "n": 2,
+            "pct": 0.05
+          }
+        ]
+      },
+      "巴甲": {
+        "n": 37,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 7,
+            "pct": 0.1892
+          },
+          {
+            "score": "2-0",
+            "n": 5,
+            "pct": 0.1351
+          },
+          {
+            "score": "2-1",
+            "n": 3,
+            "pct": 0.0811
+          },
+          {
+            "score": "2-2",
+            "n": 3,
+            "pct": 0.0811
+          },
+          {
+            "score": "1-2",
+            "n": 2,
+            "pct": 0.0541
+          },
+          {
+            "score": "3-1",
+            "n": 2,
+            "pct": 0.0541
+          },
+          {
+            "score": "3-3",
+            "n": 2,
+            "pct": 0.0541
+          },
+          {
+            "score": "0-0",
+            "n": 2,
+            "pct": 0.0541
+          },
+          {
+            "score": "3-0",
+            "n": 2,
+            "pct": 0.0541
+          },
+          {
+            "score": "0-4",
+            "n": 2,
+            "pct": 0.0541
+          }
+        ]
+      },
+      "非洲杯": {
+        "n": 29,
+        "top_scores": [
+          {
+            "score": "1-0",
+            "n": 5,
+            "pct": 0.1724
+          },
+          {
+            "score": "1-1",
+            "n": 3,
+            "pct": 0.1034
+          },
+          {
+            "score": "0-0",
+            "n": 3,
+            "pct": 0.1034
+          },
+          {
+            "score": "0-2",
+            "n": 3,
+            "pct": 0.1034
+          },
+          {
+            "score": "3-0",
+            "n": 2,
+            "pct": 0.069
+          },
+          {
+            "score": "1-2",
+            "n": 2,
+            "pct": 0.069
+          },
+          {
+            "score": "3-1",
+            "n": 2,
+            "pct": 0.069
+          },
+          {
+            "score": "2-1",
+            "n": 2,
+            "pct": 0.069
+          },
+          {
+            "score": "2-3",
+            "n": 2,
+            "pct": 0.069
+          },
+          {
+            "score": "4-0",
+            "n": 1,
+            "pct": 0.0345
+          }
+        ]
+      },
+      "英锦标赛": {
+        "n": 24,
+        "top_scores": [
+          {
+            "score": "1-0",
+            "n": 4,
+            "pct": 0.1667
+          },
+          {
+            "score": "0-1",
+            "n": 3,
+            "pct": 0.125
+          },
+          {
+            "score": "2-1",
+            "n": 3,
+            "pct": 0.125
+          },
+          {
+            "score": "3-1",
+            "n": 3,
+            "pct": 0.125
+          },
+          {
+            "score": "0-2",
+            "n": 2,
+            "pct": 0.0833
+          },
+          {
+            "score": "0-3",
+            "n": 2,
+            "pct": 0.0833
+          },
+          {
+            "score": "1-2",
+            "n": 2,
+            "pct": 0.0833
+          },
+          {
+            "score": "1-5",
+            "n": 1,
+            "pct": 0.0417
+          },
+          {
+            "score": "1-3",
+            "n": 1,
+            "pct": 0.0417
+          },
+          {
+            "score": "3-2",
+            "n": 1,
+            "pct": 0.0417
+          }
+        ]
+      },
+      "西国王杯": {
+        "n": 23,
+        "top_scores": [
+          {
+            "score": "0-1",
+            "n": 3,
+            "pct": 0.1304
+          },
+          {
+            "score": "2-3",
+            "n": 3,
+            "pct": 0.1304
+          },
+          {
+            "score": "0-5",
+            "n": 2,
+            "pct": 0.087
+          },
+          {
+            "score": "2-2",
+            "n": 2,
+            "pct": 0.087
+          },
+          {
+            "score": "2-0",
+            "n": 2,
+            "pct": 0.087
+          },
+          {
+            "score": "4-4",
+            "n": 1,
+            "pct": 0.0435
+          },
+          {
+            "score": "3-4",
+            "n": 1,
+            "pct": 0.0435
+          },
+          {
+            "score": "1-2",
+            "n": 1,
+            "pct": 0.0435
+          },
+          {
+            "score": "1-0",
+            "n": 1,
+            "pct": 0.0435
+          },
+          {
+            "score": "0-0",
+            "n": 1,
+            "pct": 0.0435
+          }
+        ]
+      },
+      "法国杯": {
+        "n": 22,
+        "top_scores": [
+          {
+            "score": "1-1",
+            "n": 5,
+            "pct": 0.2273
+          },
+          {
+            "score": "2-2",
+            "n": 3,
+            "pct": 0.1364
+          },
+          {
+            "score": "2-4",
+            "n": 2,
+            "pct": 0.0909
+          },
+          {
+            "score": "2-0",
+            "n": 2,
+            "pct": 0.0909
+          },
+          {
+            "score": "3-0",
+            "n": 2,
+            "pct": 0.0909
+          },
+          {
+            "score": "2-3",
+            "n": 1,
+            "pct": 0.0455
+          },
+          {
+            "score": "3-1",
+            "n": 1,
+            "pct": 0.0455
+          },
+          {
+            "score": "1-0",
+            "n": 1,
+            "pct": 0.0455
+          },
+          {
+            "score": "3-2",
+            "n": 1,
+            "pct": 0.0455
+          },
+          {
+            "score": "2-1",
+            "n": 1,
+            "pct": 0.0455
+          }
+        ]
+      },
+      "荷兰杯": {
+        "n": 21,
+        "top_scores": [
+          {
+            "score": "1-2",
+            "n": 4,
+            "pct": 0.1905
+          },
+          {
+            "score": "2-2",
+            "n": 2,
+            "pct": 0.0952
+          },
+          {
+            "score": "1-3",
+            "n": 2,
+            "pct": 0.0952
+          },
+          {
+            "score": "1-1",
+            "n": 2,
+            "pct": 0.0952
+          },
+          {
+            "score": "3-1",
+            "n": 2,
+            "pct": 0.0952
+          },
+          {
+            "score": "2-3",
+            "n": 2,
+            "pct": 0.0952
+          },
+          {
+            "score": "2-1",
+            "n": 1,
+            "pct": 0.0476
+          },
+          {
+            "score": "4-1",
+            "n": 1,
+            "pct": 0.0476
+          },
+          {
+            "score": "1-0",
+            "n": 1,
+            "pct": 0.0476
+          },
+          {
+            "score": "2-0",
+            "n": 1,
+            "pct": 0.0476
+          }
+        ]
+      },
+      "金杯赛": {
+        "n": 21,
+        "top_scores": [
+          {
+            "score": "0-1",
+            "n": 4,
+            "pct": 0.1905
+          },
+          {
+            "score": "2-1",
+            "n": 3,
+            "pct": 0.1429
+          },
+          {
+            "score": "1-1",
+            "n": 3,
+            "pct": 0.1429
+          },
+          {
+            "score": "2-0",
+            "n": 2,
+            "pct": 0.0952
+          },
+          {
+            "score": "1-0",
+            "n": 1,
+            "pct": 0.0476
+          },
+          {
+            "score": "2-2",
+            "n": 1,
+            "pct": 0.0476
+          },
+          {
+            "score": "4-3",
+            "n": 1,
+            "pct": 0.0476
+          },
+          {
+            "score": "5-0",
+            "n": 1,
+            "pct": 0.0476
+          },
+          {
+            "score": "5-2",
+            "n": 1,
+            "pct": 0.0476
+          },
+          {
+            "score": "6-0",
+            "n": 1,
+            "pct": 0.0476
+          }
+        ]
+      },
+      "日联赛杯": {
+        "n": 20,
+        "top_scores": [
+          {
+            "score": "1-0",
+            "n": 3,
+            "pct": 0.15
+          },
+          {
+            "score": "0-2",
+            "n": 2,
+            "pct": 0.1
+          },
+          {
+            "score": "2-1",
+            "n": 2,
+            "pct": 0.1
+          },
+          {
+            "score": "1-1",
+            "n": 2,
+            "pct": 0.1
+          },
+          {
+            "score": "0-3",
+            "n": 1,
+            "pct": 0.05
+          },
+          {
+            "score": "4-1",
+            "n": 1,
+            "pct": 0.05
+          },
+          {
+            "score": "2-0",
+            "n": 1,
+            "pct": 0.05
+          },
+          {
+            "score": "2-2",
+            "n": 1,
+            "pct": 0.05
+          },
+          {
+            "score": "4-2",
+            "n": 1,
+            "pct": 0.05
+          },
+          {
+            "score": "2-3",
+            "n": 1,
+            "pct": 0.05
+          }
+        ]
+      },
+      "解放者杯": {
+        "n": 20,
+        "top_scores": [
+          {
+            "score": "0-2",
+            "n": 4,
+            "pct": 0.2
+          },
+          {
+            "score": "1-1",
+            "n": 3,
+            "pct": 0.15
+          },
+          {
+            "score": "0-1",
+            "n": 3,
+            "pct": 0.15
+          },
+          {
+            "score": "0-0",
+            "n": 2,
+            "pct": 0.1
+          },
+          {
+            "score": "2-0",
+            "n": 2,
+            "pct": 0.1
+          },
+          {
+            "score": "1-0",
+            "n": 2,
+            "pct": 0.1
+          },
+          {
+            "score": "1-2",
+            "n": 1,
+            "pct": 0.05
+          },
+          {
+            "score": "4-1",
+            "n": 1,
+            "pct": 0.05
+          },
+          {
+            "score": "3-1",
+            "n": 1,
+            "pct": 0.05
+          },
+          {
+            "score": "1-3",
+            "n": 1,
+            "pct": 0.05
+          }
+        ]
+      },
+      "亚冠乙": {
+        "n": 19,
+        "top_scores": [
+          {
+            "score": "2-1",
+            "n": 4,
+            "pct": 0.2105
+          },
+          {
+            "score": "1-1",
+            "n": 3,
+            "pct": 0.1579
+          },
+          {
+            "score": "1-2",
+            "n": 2,
+            "pct": 0.1053
+          },
+          {
+            "score": "3-0",
+            "n": 1,
+            "pct": 0.0526
+          },
+          {
+            "score": "2-3",
+            "n": 1,
+            "pct": 0.0526
+          },
+          {
+            "score": "4-0",
+            "n": 1,
+            "pct": 0.0526
+          },
+          {
+            "score": "0-0",
+            "n": 1,
+            "pct": 0.0526
+          },
+          {
+            "score": "2-2",
+            "n": 1,
+            "pct": 0.0526
+          },
+          {
+            "score": "0-7",
+            "n": 1,
+            "pct": 0.0526
+          },
+          {
+            "score": "0-1",
+            "n": 1,
+            "pct": 0.0526
+          }
+        ]
+      },
+      "亚洲杯23": {
+        "n": 18,
+        "top_scores": [
+          {
+            "score": "1-0",
+            "n": 4,
+            "pct": 0.2222
+          },
+          {
+            "score": "0-0",
+            "n": 3,
+            "pct": 0.1667
+          },
+          {
+            "score": "3-2",
+            "n": 2,
+            "pct": 0.1111
+          },
+          {
+            "score": "2-0",
+            "n": 2,
+            "pct": 0.1111
+          },
+          {
+            "score": "1-1",
+            "n": 2,
+            "pct": 0.1111
+          },
+          {
+            "score": "0-1",
+            "n": 2,
+            "pct": 0.1111
+          },
+          {
+            "score": "2-4",
+            "n": 1,
+            "pct": 0.0556
+          },
+          {
+            "score": "1-2",
+            "n": 1,
+            "pct": 0.0556
+          },
+          {
+            "score": "2-2",
+            "n": 1,
+            "pct": 0.0556
+          }
+        ]
+      },
+      "世界杯20": {
+        "n": 16,
+        "top_scores": [
+          {
+            "score": "2-1",
+            "n": 3,
+            "pct": 0.1875
+          },
+          {
+            "score": "1-0",
+            "n": 3,
+            "pct": 0.1875
+          },
+          {
+            "score": "1-1",
+            "n": 2,
+            "pct": 0.125
+          },
+          {
+            "score": "0-2",
+            "n": 2,
+            "pct": 0.125
+          },
+          {
+            "score": "0-0",
+            "n": 1,
+            "pct": 0.0625
+          },
+          {
+            "score": "1-2",
+            "n": 1,
+            "pct": 0.0625
+          },
+          {
+            "score": "2-2",
+            "n": 1,
+            "pct": 0.0625
+          },
+          {
+            "score": "2-0",
+            "n": 1,
+            "pct": 0.0625
+          },
+          {
+            "score": "1-4",
+            "n": 1,
+            "pct": 0.0625
+          },
+          {
+            "score": "3-0",
+            "n": 1,
+            "pct": 0.0625
+          }
+        ]
+      }
+    },
+    "half_time_stats": {
+      "overall_half_lead": {
+        "home_lead": 0.3522,
+        "draw": 0.3949,
+        "away_lead": 0.2529
+      },
+      "ht_ft_patterns": {
+        "HH": {
+          "n": 1231,
+          "pct": 0.2767
+        },
+        "AA": {
+          "n": 782,
+          "pct": 0.1758
+        },
+        "DD": {
+          "n": 653,
+          "pct": 0.1468
+        },
+        "DH": {
+          "n": 611,
+          "pct": 0.1373
+        },
+        "DA": {
+          "n": 493,
+          "pct": 0.1108
+        },
+        "HD": {
+          "n": 230,
+          "pct": 0.0517
+        },
+        "AD": {
+          "n": 216,
+          "pct": 0.0486
+        },
+        "AH": {
+          "n": 127,
+          "pct": 0.0285
+        },
+        "HA": {
+          "n": 106,
+          "pct": 0.0238
+        }
+      },
+      "ht_conditional": {
+        "H": {
+          "total": 1567,
+          "to_H": 0.7856,
+          "to_D": 0.1468,
+          "to_A": 0.0676
+        },
+        "D": {
+          "total": 1757,
+          "to_H": 0.3478,
+          "to_D": 0.3717,
+          "to_A": 0.2806
+        },
+        "A": {
+          "total": 1125,
+          "to_H": 0.1129,
+          "to_D": 0.192,
+          "to_A": 0.6951
+        }
+      },
+      "league_half_lead": {
+        "英超": {
+          "n": 455,
+          "half_home_lead_rate": 0.389,
+          "half_draw_rate": 0.3648,
+          "half_away_lead_rate": 0.2462
+        },
+        "欧冠": {
+          "n": 273,
+          "half_home_lead_rate": 0.4139,
+          "half_draw_rate": 0.37,
+          "half_away_lead_rate": 0.2161
+        },
+        "瑞超": {
+          "n": 257,
+          "half_home_lead_rate": 0.3268,
+          "half_draw_rate": 0.4047,
+          "half_away_lead_rate": 0.2685
+        },
+        "美职联": {
+          "n": 250,
+          "half_home_lead_rate": 0.384,
+          "half_draw_rate": 0.312,
+          "half_away_lead_rate": 0.304
+        },
+        "挪超": {
+          "n": 236,
+          "half_home_lead_rate": 0.3983,
+          "half_draw_rate": 0.3093,
+          "half_away_lead_rate": 0.2924
+        },
+        "欧罗巴": {
+          "n": 211,
+          "half_home_lead_rate": 0.346,
+          "half_draw_rate": 0.4028,
+          "half_away_lead_rate": 0.2512
+        },
+        "意甲": {
+          "n": 205,
+          "half_home_lead_rate": 0.2537,
+          "half_draw_rate": 0.4537,
+          "half_away_lead_rate": 0.2927
+        },
+        "西甲": {
+          "n": 189,
+          "half_home_lead_rate": 0.3545,
+          "half_draw_rate": 0.4286,
+          "half_away_lead_rate": 0.2169
+        },
+        "世预赛": {
+          "n": 187,
+          "half_home_lead_rate": 0.3957,
+          "half_draw_rate": 0.385,
+          "half_away_lead_rate": 0.2193
+        },
+        "德甲": {
+          "n": 172,
+          "half_home_lead_rate": 0.3198,
+          "half_draw_rate": 0.3663,
+          "half_away_lead_rate": 0.314
+        },
+        "芬超": {
+          "n": 158,
+          "half_home_lead_rate": 0.3924,
+          "half_draw_rate": 0.3861,
+          "half_away_lead_rate": 0.2215
+        },
+        "英冠": {
+          "n": 158,
+          "half_home_lead_rate": 0.3608,
+          "half_draw_rate": 0.443,
+          "half_away_lead_rate": 0.1962
+        },
+        "国际赛": {
+          "n": 120,
+          "half_home_lead_rate": 0.35,
+          "half_draw_rate": 0.4583,
+          "half_away_lead_rate": 0.1917
+        },
+        "法甲": {
+          "n": 113,
+          "half_home_lead_rate": 0.354,
+          "half_draw_rate": 0.4248,
+          "half_away_lead_rate": 0.2212
+        },
+        "日职": {
+          "n": 106,
+          "half_home_lead_rate": 0.3113,
+          "half_draw_rate": 0.5189,
+          "half_away_lead_rate": 0.1698
+        },
+        "韩职": {
+          "n": 100,
+          "half_home_lead_rate": 0.2,
+          "half_draw_rate": 0.52,
+          "half_away_lead_rate": 0.28
+        },
+        "葡超": {
+          "n": 93,
+          "half_home_lead_rate": 0.2688,
+          "half_draw_rate": 0.4301,
+          "half_away_lead_rate": 0.3011
+        },
+        "澳超": {
+          "n": 88,
+          "half_home_lead_rate": 0.3295,
+          "half_draw_rate": 0.375,
+          "half_away_lead_rate": 0.2955
+        },
+        "荷甲": {
+          "n": 80,
+          "half_home_lead_rate": 0.35,
+          "half_draw_rate": 0.35,
+          "half_away_lead_rate": 0.3
+        },
+        "世界杯": {
+          "n": 79,
+          "half_home_lead_rate": 0.3038,
+          "half_draw_rate": 0.4051,
+          "half_away_lead_rate": 0.2911
+        },
+        "欧协联": {
+          "n": 72,
+          "half_home_lead_rate": 0.3194,
+          "half_draw_rate": 0.4028,
+          "half_away_lead_rate": 0.2778
+        },
+        "德乙": {
+          "n": 63,
+          "half_home_lead_rate": 0.3492,
+          "half_draw_rate": 0.4127,
+          "half_away_lead_rate": 0.2381
+        },
+        "沙职": {
+          "n": 59,
+          "half_home_lead_rate": 0.2542,
+          "half_draw_rate": 0.4576,
+          "half_away_lead_rate": 0.2881
+        },
+        "英足总杯": {
+          "n": 57,
+          "half_home_lead_rate": 0.3509,
+          "half_draw_rate": 0.3333,
+          "half_away_lead_rate": 0.3158
+        },
+        "亚冠精英": {
+          "n": 57,
+          "half_home_lead_rate": 0.4211,
+          "half_draw_rate": 0.386,
+          "half_away_lead_rate": 0.193
+        },
+        "英甲": {
+          "n": 57,
+          "half_home_lead_rate": 0.4737,
+          "half_draw_rate": 0.3684,
+          "half_away_lead_rate": 0.1579
+        },
+        "法乙": {
+          "n": 54,
+          "half_home_lead_rate": 0.3889,
+          "half_draw_rate": 0.3704,
+          "half_away_lead_rate": 0.2407
+        },
+        "俱世界杯": {
+          "n": 44,
+          "half_home_lead_rate": 0.3636,
+          "half_draw_rate": 0.2727,
+          "half_away_lead_rate": 0.3636
+        },
+        "荷乙": {
+          "n": 43,
+          "half_home_lead_rate": 0.3023,
+          "half_draw_rate": 0.5116,
+          "half_away_lead_rate": 0.186
+        },
+        "日乙": {
+          "n": 40,
+          "half_home_lead_rate": 0.25,
+          "half_draw_rate": 0.475,
+          "half_away_lead_rate": 0.275
+        },
+        "巴甲": {
+          "n": 37,
+          "half_home_lead_rate": 0.5135,
+          "half_draw_rate": 0.3514,
+          "half_away_lead_rate": 0.1351
+        },
+        "非洲杯": {
+          "n": 29,
+          "half_home_lead_rate": 0.3448,
+          "half_draw_rate": 0.4483,
+          "half_away_lead_rate": 0.2069
+        },
+        "英锦标赛": {
+          "n": 24,
+          "half_home_lead_rate": 0.125,
+          "half_draw_rate": 0.5,
+          "half_away_lead_rate": 0.375
+        },
+        "西国王杯": {
+          "n": 23,
+          "half_home_lead_rate": 0.3043,
+          "half_draw_rate": 0.3043,
+          "half_away_lead_rate": 0.3913
+        },
+        "法国杯": {
+          "n": 22,
+          "half_home_lead_rate": 0.3636,
+          "half_draw_rate": 0.4091,
+          "half_away_lead_rate": 0.2273
+        },
+        "荷兰杯": {
+          "n": 21,
+          "half_home_lead_rate": 0.4286,
+          "half_draw_rate": 0.2381,
+          "half_away_lead_rate": 0.3333
+        },
+        "金杯赛": {
+          "n": 21,
+          "half_home_lead_rate": 0.4286,
+          "half_draw_rate": 0.381,
+          "half_away_lead_rate": 0.1905
+        },
+        "日联赛杯": {
+          "n": 20,
+          "half_home_lead_rate": 0.3,
+          "half_draw_rate": 0.3,
+          "half_away_lead_rate": 0.4
+        },
+        "解放者杯": {
+          "n": 20,
+          "half_home_lead_rate": 0.15,
+          "half_draw_rate": 0.55,
+          "half_away_lead_rate": 0.3
+        },
+        "亚冠乙": {
+          "n": 19,
+          "half_home_lead_rate": 0.5263,
+          "half_draw_rate": 0.3158,
+          "half_away_lead_rate": 0.1579
+        },
+        "亚洲杯23": {
+          "n": 18,
+          "half_home_lead_rate": 0.3333,
+          "half_draw_rate": 0.6111,
+          "half_away_lead_rate": 0.0556
+        },
+        "世界杯20": {
+          "n": 16,
+          "half_home_lead_rate": 0.3125,
+          "half_draw_rate": 0.5,
+          "half_away_lead_rate": 0.1875
+        }
+      }
+    },
+    "reversal_stats": {
+      "overall": {
+        "total_trailing": 2692,
+        "unbeaten_rate": 0.2522,
+        "full_reversal_rate": 0.0866,
+        "home_trailing": {
+          "n": 1125,
+          "unbeaten_rate": 0.3049,
+          "reversal_rate": 0.1129
+        },
+        "away_trailing": {
+          "n": 1567,
+          "unbeaten_rate": 0.2144,
+          "reversal_rate": 0.0676
+        }
+      },
+      "by_league": {
+        "英超": {
+          "n": 455,
+          "total_trailing": 289,
+          "overall_unbeaten_rate": 0.2664,
+          "overall_reversal_rate": 0.0969,
+          "home_trailing": {
+            "n": 112,
+            "unbeaten_rate": 0.2589,
+            "reversal_rate": 0.1071
+          },
+          "away_trailing": {
+            "n": 177,
+            "unbeaten_rate": 0.2712,
+            "reversal_rate": 0.0904
+          }
+        },
+        "欧冠": {
+          "n": 273,
+          "total_trailing": 172,
+          "overall_unbeaten_rate": 0.2209,
+          "overall_reversal_rate": 0.1221,
+          "home_trailing": {
+            "n": 59,
+            "unbeaten_rate": 0.2881,
+            "reversal_rate": 0.1864
+          },
+          "away_trailing": {
+            "n": 113,
+            "unbeaten_rate": 0.1858,
+            "reversal_rate": 0.0885
+          }
+        },
+        "瑞超": {
+          "n": 257,
+          "total_trailing": 153,
+          "overall_unbeaten_rate": 0.268,
+          "overall_reversal_rate": 0.085,
+          "home_trailing": {
+            "n": 69,
+            "unbeaten_rate": 0.3333,
+            "reversal_rate": 0.1304
+          },
+          "away_trailing": {
+            "n": 84,
+            "unbeaten_rate": 0.2143,
+            "reversal_rate": 0.0476
+          }
+        },
+        "美职联": {
+          "n": 250,
+          "total_trailing": 172,
+          "overall_unbeaten_rate": 0.2791,
+          "overall_reversal_rate": 0.0814,
+          "home_trailing": {
+            "n": 76,
+            "unbeaten_rate": 0.3421,
+            "reversal_rate": 0.0921
+          },
+          "away_trailing": {
+            "n": 96,
+            "unbeaten_rate": 0.2292,
+            "reversal_rate": 0.0729
+          }
+        },
+        "挪超": {
+          "n": 236,
+          "total_trailing": 163,
+          "overall_unbeaten_rate": 0.1902,
+          "overall_reversal_rate": 0.0798,
+          "home_trailing": {
+            "n": 69,
+            "unbeaten_rate": 0.2609,
+            "reversal_rate": 0.087
+          },
+          "away_trailing": {
+            "n": 94,
+            "unbeaten_rate": 0.1383,
+            "reversal_rate": 0.0745
+          }
+        },
+        "欧罗巴": {
+          "n": 211,
+          "total_trailing": 126,
+          "overall_unbeaten_rate": 0.1746,
+          "overall_reversal_rate": 0.0714,
+          "home_trailing": {
+            "n": 53,
+            "unbeaten_rate": 0.283,
+            "reversal_rate": 0.1132
+          },
+          "away_trailing": {
+            "n": 73,
+            "unbeaten_rate": 0.0959,
+            "reversal_rate": 0.0411
+          }
+        },
+        "意甲": {
+          "n": 205,
+          "total_trailing": 112,
+          "overall_unbeaten_rate": 0.25,
+          "overall_reversal_rate": 0.1071,
+          "home_trailing": {
+            "n": 60,
+            "unbeaten_rate": 0.3,
+            "reversal_rate": 0.1167
+          },
+          "away_trailing": {
+            "n": 52,
+            "unbeaten_rate": 0.1923,
+            "reversal_rate": 0.0962
+          }
+        },
+        "西甲": {
+          "n": 189,
+          "total_trailing": 108,
+          "overall_unbeaten_rate": 0.3241,
+          "overall_reversal_rate": 0.0741,
+          "home_trailing": {
+            "n": 41,
+            "unbeaten_rate": 0.4878,
+            "reversal_rate": 0.0732
+          },
+          "away_trailing": {
+            "n": 67,
+            "unbeaten_rate": 0.2239,
+            "reversal_rate": 0.0746
+          }
+        },
+        "世预赛": {
+          "n": 187,
+          "total_trailing": 115,
+          "overall_unbeaten_rate": 0.2261,
+          "overall_reversal_rate": 0.0609,
+          "home_trailing": {
+            "n": 41,
+            "unbeaten_rate": 0.3171,
+            "reversal_rate": 0.0732
+          },
+          "away_trailing": {
+            "n": 74,
+            "unbeaten_rate": 0.1757,
+            "reversal_rate": 0.0541
+          }
+        },
+        "德甲": {
+          "n": 172,
+          "total_trailing": 109,
+          "overall_unbeaten_rate": 0.2752,
+          "overall_reversal_rate": 0.0642,
+          "home_trailing": {
+            "n": 54,
+            "unbeaten_rate": 0.3333,
+            "reversal_rate": 0.0926
+          },
+          "away_trailing": {
+            "n": 55,
+            "unbeaten_rate": 0.2182,
+            "reversal_rate": 0.0364
+          }
+        },
+        "芬超": {
+          "n": 158,
+          "total_trailing": 97,
+          "overall_unbeaten_rate": 0.2577,
+          "overall_reversal_rate": 0.1031,
+          "home_trailing": {
+            "n": 35,
+            "unbeaten_rate": 0.2857,
+            "reversal_rate": 0.1429
+          },
+          "away_trailing": {
+            "n": 62,
+            "unbeaten_rate": 0.2419,
+            "reversal_rate": 0.0806
+          }
+        },
+        "英冠": {
+          "n": 158,
+          "total_trailing": 88,
+          "overall_unbeaten_rate": 0.2955,
+          "overall_reversal_rate": 0.1023,
+          "home_trailing": {
+            "n": 31,
+            "unbeaten_rate": 0.2903,
+            "reversal_rate": 0.129
+          },
+          "away_trailing": {
+            "n": 57,
+            "unbeaten_rate": 0.2982,
+            "reversal_rate": 0.0877
+          }
+        },
+        "国际赛": {
+          "n": 120,
+          "total_trailing": 65,
+          "overall_unbeaten_rate": 0.2,
+          "overall_reversal_rate": 0.0615,
+          "home_trailing": {
+            "n": 23,
+            "unbeaten_rate": 0.3043,
+            "reversal_rate": 0.087
+          },
+          "away_trailing": {
+            "n": 42,
+            "unbeaten_rate": 0.1429,
+            "reversal_rate": 0.0476
+          }
+        },
+        "法甲": {
+          "n": 113,
+          "total_trailing": 65,
+          "overall_unbeaten_rate": 0.2615,
+          "overall_reversal_rate": 0.0769,
+          "home_trailing": {
+            "n": 25,
+            "unbeaten_rate": 0.48,
+            "reversal_rate": 0.16
+          },
+          "away_trailing": {
+            "n": 40,
+            "unbeaten_rate": 0.125,
+            "reversal_rate": 0.025
+          }
+        },
+        "日职": {
+          "n": 106,
+          "total_trailing": 51,
+          "overall_unbeaten_rate": 0.2353,
+          "overall_reversal_rate": 0.0784,
+          "home_trailing": {
+            "n": 18,
+            "unbeaten_rate": 0.1667,
+            "reversal_rate": 0.1111
+          },
+          "away_trailing": {
+            "n": 33,
+            "unbeaten_rate": 0.2727,
+            "reversal_rate": 0.0606
+          }
+        },
+        "韩职": {
+          "n": 100,
+          "total_trailing": 48,
+          "overall_unbeaten_rate": 0.2292,
+          "overall_reversal_rate": 0.0625,
+          "home_trailing": {
+            "n": 28,
+            "unbeaten_rate": 0.3214,
+            "reversal_rate": 0.1071
+          },
+          "away_trailing": {
+            "n": 20,
+            "unbeaten_rate": 0.1,
+            "reversal_rate": 0.0
+          }
+        },
+        "葡超": {
+          "n": 93,
+          "total_trailing": 53,
+          "overall_unbeaten_rate": 0.2642,
+          "overall_reversal_rate": 0.0,
+          "home_trailing": {
+            "n": 28,
+            "unbeaten_rate": 0.3214,
+            "reversal_rate": 0.0
+          },
+          "away_trailing": {
+            "n": 25,
+            "unbeaten_rate": 0.2,
+            "reversal_rate": 0.0
+          }
+        },
+        "澳超": {
+          "n": 88,
+          "total_trailing": 55,
+          "overall_unbeaten_rate": 0.2909,
+          "overall_reversal_rate": 0.0545,
+          "home_trailing": {
+            "n": 26,
+            "unbeaten_rate": 0.3462,
+            "reversal_rate": 0.0769
+          },
+          "away_trailing": {
+            "n": 29,
+            "unbeaten_rate": 0.2414,
+            "reversal_rate": 0.0345
+          }
+        },
+        "荷甲": {
+          "n": 80,
+          "total_trailing": 52,
+          "overall_unbeaten_rate": 0.2885,
+          "overall_reversal_rate": 0.0962,
+          "home_trailing": {
+            "n": 24,
+            "unbeaten_rate": 0.375,
+            "reversal_rate": 0.1667
+          },
+          "away_trailing": {
+            "n": 28,
+            "unbeaten_rate": 0.2143,
+            "reversal_rate": 0.0357
+          }
+        },
+        "世界杯": {
+          "n": 79,
+          "total_trailing": 47,
+          "overall_unbeaten_rate": 0.3191,
+          "overall_reversal_rate": 0.1277,
+          "home_trailing": {
+            "n": 23,
+            "unbeaten_rate": 0.3913,
+            "reversal_rate": 0.2174
+          },
+          "away_trailing": {
+            "n": 24,
+            "unbeaten_rate": 0.25,
+            "reversal_rate": 0.0417
+          }
+        },
+        "欧协联": {
+          "n": 72,
+          "total_trailing": 43,
+          "overall_unbeaten_rate": 0.2558,
+          "overall_reversal_rate": 0.186,
+          "home_trailing": {
+            "n": 20,
+            "unbeaten_rate": 0.4,
+            "reversal_rate": 0.3
+          },
+          "away_trailing": {
+            "n": 23,
+            "unbeaten_rate": 0.1304,
+            "reversal_rate": 0.087
+          }
+        },
+        "德乙": {
+          "n": 63,
+          "total_trailing": 37,
+          "overall_unbeaten_rate": 0.2973,
+          "overall_reversal_rate": 0.1081,
+          "home_trailing": {
+            "n": 15,
+            "unbeaten_rate": 0.2,
+            "reversal_rate": 0.1333
+          },
+          "away_trailing": {
+            "n": 22,
+            "unbeaten_rate": 0.3636,
+            "reversal_rate": 0.0909
+          }
+        },
+        "沙职": {
+          "n": 59,
+          "total_trailing": 32,
+          "overall_unbeaten_rate": 0.2812,
+          "overall_reversal_rate": 0.0938,
+          "home_trailing": {
+            "n": 17,
+            "unbeaten_rate": 0.2941,
+            "reversal_rate": 0.1765
+          },
+          "away_trailing": {
+            "n": 15,
+            "unbeaten_rate": 0.2667,
+            "reversal_rate": 0.0
+          }
+        },
+        "英足总杯": {
+          "n": 57,
+          "total_trailing": 38,
+          "overall_unbeaten_rate": 0.3421,
+          "overall_reversal_rate": 0.1316,
+          "home_trailing": {
+            "n": 18,
+            "unbeaten_rate": 0.3889,
+            "reversal_rate": 0.1667
+          },
+          "away_trailing": {
+            "n": 20,
+            "unbeaten_rate": 0.3,
+            "reversal_rate": 0.1
+          }
+        },
+        "亚冠精英": {
+          "n": 57,
+          "total_trailing": 35,
+          "overall_unbeaten_rate": 0.1429,
+          "overall_reversal_rate": 0.0286,
+          "home_trailing": {
+            "n": 11,
+            "unbeaten_rate": 0.1818,
+            "reversal_rate": 0.0
+          },
+          "away_trailing": {
+            "n": 24,
+            "unbeaten_rate": 0.125,
+            "reversal_rate": 0.0417
+          }
+        },
+        "英甲": {
+          "n": 57,
+          "total_trailing": 36,
+          "overall_unbeaten_rate": 0.2222,
+          "overall_reversal_rate": 0.1111,
+          "home_trailing": {
+            "n": 9,
+            "unbeaten_rate": 0.3333,
+            "reversal_rate": 0.1111
+          },
+          "away_trailing": {
+            "n": 27,
+            "unbeaten_rate": 0.1852,
+            "reversal_rate": 0.1111
+          }
+        },
+        "法乙": {
+          "n": 54,
+          "total_trailing": 34,
+          "overall_unbeaten_rate": 0.2059,
+          "overall_reversal_rate": 0.0294,
+          "home_trailing": {
+            "n": 13,
+            "unbeaten_rate": 0.1538,
+            "reversal_rate": 0.0769
+          },
+          "away_trailing": {
+            "n": 21,
+            "unbeaten_rate": 0.2381,
+            "reversal_rate": 0.0
+          }
+        },
+        "俱世界杯": {
+          "n": 44,
+          "total_trailing": 32,
+          "overall_unbeaten_rate": 0.2188,
+          "overall_reversal_rate": 0.0625,
+          "home_trailing": {
+            "n": 16,
+            "unbeaten_rate": 0.25,
+            "reversal_rate": 0.125
+          },
+          "away_trailing": {
+            "n": 16,
+            "unbeaten_rate": 0.1875,
+            "reversal_rate": 0.0
+          }
+        },
+        "荷乙": {
+          "n": 43,
+          "total_trailing": 21,
+          "overall_unbeaten_rate": 0.2381,
+          "overall_reversal_rate": 0.0,
+          "home_trailing": {
+            "n": 8,
+            "unbeaten_rate": 0.25,
+            "reversal_rate": 0.0
+          },
+          "away_trailing": {
+            "n": 13,
+            "unbeaten_rate": 0.2308,
+            "reversal_rate": 0.0
+          }
+        },
+        "日乙": {
+          "n": 40,
+          "total_trailing": 21,
+          "overall_unbeaten_rate": 0.4286,
+          "overall_reversal_rate": 0.1905,
+          "home_trailing": {
+            "n": 11,
+            "unbeaten_rate": 0.5455,
+            "reversal_rate": 0.2727
+          },
+          "away_trailing": {
+            "n": 10,
+            "unbeaten_rate": 0.3,
+            "reversal_rate": 0.1
+          }
+        },
+        "巴甲": {
+          "n": 37,
+          "total_trailing": 24,
+          "overall_unbeaten_rate": 0.4167,
+          "overall_reversal_rate": 0.0417,
+          "home_trailing": {
+            "n": 5,
+            "unbeaten_rate": 0.4,
+            "reversal_rate": 0.0
+          },
+          "away_trailing": {
+            "n": 19,
+            "unbeaten_rate": 0.4211,
+            "reversal_rate": 0.0526
+          }
+        },
+        "非洲杯": {
+          "n": 29,
+          "total_trailing": 16,
+          "overall_unbeaten_rate": 0.0625,
+          "overall_reversal_rate": 0.0625,
+          "home_trailing": {
+            "n": 6,
+            "unbeaten_rate": 0.0,
+            "reversal_rate": 0.0
+          },
+          "away_trailing": {
+            "n": 10,
+            "unbeaten_rate": 0.1,
+            "reversal_rate": 0.1
+          }
+        },
+        "英锦标赛": {
+          "n": 24,
+          "total_trailing": 12,
+          "overall_unbeaten_rate": 0.1667,
+          "overall_reversal_rate": 0.1667,
+          "home_trailing": {
+            "n": 9,
+            "unbeaten_rate": 0.2222,
+            "reversal_rate": 0.2222
+          },
+          "away_trailing": {
+            "n": 3,
+            "unbeaten_rate": 0.0,
+            "reversal_rate": 0.0
+          }
+        },
+        "西国王杯": {
+          "n": 23,
+          "total_trailing": 16,
+          "overall_unbeaten_rate": 0.3125,
+          "overall_reversal_rate": 0.125,
+          "home_trailing": {
+            "n": 9,
+            "unbeaten_rate": 0.2222,
+            "reversal_rate": 0.1111
+          },
+          "away_trailing": {
+            "n": 7,
+            "unbeaten_rate": 0.4286,
+            "reversal_rate": 0.1429
+          }
+        },
+        "法国杯": {
+          "n": 22,
+          "total_trailing": 13,
+          "overall_unbeaten_rate": 0.4615,
+          "overall_reversal_rate": 0.2308,
+          "home_trailing": {
+            "n": 5,
+            "unbeaten_rate": 0.6,
+            "reversal_rate": 0.2
+          },
+          "away_trailing": {
+            "n": 8,
+            "unbeaten_rate": 0.375,
+            "reversal_rate": 0.25
+          }
+        },
+        "荷兰杯": {
+          "n": 21,
+          "total_trailing": 16,
+          "overall_unbeaten_rate": 0.375,
+          "overall_reversal_rate": 0.25,
+          "home_trailing": {
+            "n": 7,
+            "unbeaten_rate": 0.2857,
+            "reversal_rate": 0.1429
+          },
+          "away_trailing": {
+            "n": 9,
+            "unbeaten_rate": 0.4444,
+            "reversal_rate": 0.3333
+          }
+        },
+        "金杯赛": {
+          "n": 21,
+          "total_trailing": 13,
+          "overall_unbeaten_rate": 0.1538,
+          "overall_reversal_rate": 0.0,
+          "home_trailing": {
+            "n": 4,
+            "unbeaten_rate": 0.0,
+            "reversal_rate": 0.0
+          },
+          "away_trailing": {
+            "n": 9,
+            "unbeaten_rate": 0.2222,
+            "reversal_rate": 0.0
+          }
+        },
+        "日联赛杯": {
+          "n": 20,
+          "total_trailing": 14,
+          "overall_unbeaten_rate": 0.2143,
+          "overall_reversal_rate": 0.1429,
+          "home_trailing": {
+            "n": 8,
+            "unbeaten_rate": 0.25,
+            "reversal_rate": 0.125
+          },
+          "away_trailing": {
+            "n": 6,
+            "unbeaten_rate": 0.1667,
+            "reversal_rate": 0.1667
+          }
+        },
+        "解放者杯": {
+          "n": 20,
+          "total_trailing": 9,
+          "overall_unbeaten_rate": 0.1111,
+          "overall_reversal_rate": 0.0,
+          "home_trailing": {
+            "n": 6,
+            "unbeaten_rate": 0.0,
+            "reversal_rate": 0.0
+          },
+          "away_trailing": {
+            "n": 3,
+            "unbeaten_rate": 0.3333,
+            "reversal_rate": 0.0
+          }
+        },
+        "亚冠乙": {
+          "n": 19,
+          "total_trailing": 13,
+          "overall_unbeaten_rate": 0.2308,
+          "overall_reversal_rate": 0.1538,
+          "home_trailing": {
+            "n": 3,
+            "unbeaten_rate": 0.3333,
+            "reversal_rate": 0.0
+          },
+          "away_trailing": {
+            "n": 10,
+            "unbeaten_rate": 0.2,
+            "reversal_rate": 0.2
+          }
+        },
+        "亚洲杯23": {
+          "n": 18,
+          "total_trailing": 7,
+          "overall_unbeaten_rate": 0.2857,
+          "overall_reversal_rate": 0.0,
+          "home_trailing": {
+            "n": 1,
+            "unbeaten_rate": 1.0,
+            "reversal_rate": 0.0
+          },
+          "away_trailing": {
+            "n": 6,
+            "unbeaten_rate": 0.1667,
+            "reversal_rate": 0.0
+          }
+        },
+        "世界杯20": {
+          "n": 16,
+          "total_trailing": 8,
+          "overall_unbeaten_rate": 0.0,
+          "overall_reversal_rate": 0.0,
+          "home_trailing": {
+            "n": 3,
+            "unbeaten_rate": 0.0,
+            "reversal_rate": 0.0
+          },
+          "away_trailing": {
+            "n": 5,
+            "unbeaten_rate": 0.0,
+            "reversal_rate": 0.0
+          }
+        }
+      }
+    }
+  }
+}

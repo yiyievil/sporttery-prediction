@@ -1,0 +1,477 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "generated_at": "2026-07-31 15:35:27",
+    "description": "让球盘（HHAD）穿盘/输盘规律 + 亚盘变动分析",
+    "total_sample": 4412
+  },
+  "hhad_analysis": {
+    "overall_hhad": {
+      "sample": 4412,
+      "win": {
+        "n": 1471,
+        "pct": 0.3334
+      },
+      "push": {
+        "n": 586,
+        "pct": 0.1328
+      },
+      "loss": {
+        "n": 2355,
+        "pct": 0.5338
+      }
+    },
+    "implied_vs_actual": {
+      "win_cover": {
+        "actual_freq": 0.3334,
+        "avg_implied_prob": 0.3642,
+        "bias_pp": -3.1
+      },
+      "push": {
+        "actual_freq": 0.1328,
+        "avg_implied_prob": 0.2253,
+        "bias_pp": -9.2
+      },
+      "loss": {
+        "actual_freq": 0.5338,
+        "avg_implied_prob": 0.4105,
+        "bias_pp": 12.3
+      }
+    },
+    "by_goal_line": {
+      "-1.0": {
+        "desc": "主让1球",
+        "n": 2645,
+        "win": {
+          "n": 335,
+          "pct": 0.1267
+        },
+        "push": {
+          "n": 357,
+          "pct": 0.135
+        },
+        "loss": {
+          "n": 1953,
+          "pct": 0.7384
+        },
+        "win_rate": 0.1267
+      },
+      "1.0": {
+        "desc": "主受让1球",
+        "n": 1383,
+        "win": {
+          "n": 1043,
+          "pct": 0.7542
+        },
+        "push": {
+          "n": 190,
+          "pct": 0.1374
+        },
+        "loss": {
+          "n": 150,
+          "pct": 0.1085
+        },
+        "win_rate": 0.7542
+      },
+      "-2.0": {
+        "desc": "主让2球",
+        "n": 267,
+        "win": {
+          "n": 20,
+          "pct": 0.0749
+        },
+        "push": {
+          "n": 32,
+          "pct": 0.1199
+        },
+        "loss": {
+          "n": 215,
+          "pct": 0.8052
+        },
+        "win_rate": 0.0749
+      },
+      "2.0": {
+        "desc": "主受让2球",
+        "n": 65,
+        "win": {
+          "n": 56,
+          "pct": 0.8615
+        },
+        "push": {
+          "n": 6,
+          "pct": 0.0923
+        },
+        "loss": {
+          "n": 3,
+          "pct": 0.0462
+        },
+        "win_rate": 0.8615
+      },
+      "-3.0": {
+        "desc": "主让3球",
+        "n": 28,
+        "win": {
+          "n": 3,
+          "pct": 0.1071
+        },
+        "push": {
+          "n": 1,
+          "pct": 0.0357
+        },
+        "loss": {
+          "n": 24,
+          "pct": 0.8571
+        },
+        "win_rate": 0.1071
+      }
+    },
+    "by_league": {
+      "英超": {
+        "n": 455,
+        "win_rate": 0.3516,
+        "push_rate": 0.1582,
+        "loss_rate": 0.4901
+      },
+      "欧冠": {
+        "n": 273,
+        "win_rate": 0.3736,
+        "push_rate": 0.1245,
+        "loss_rate": 0.5018
+      },
+      "美职联": {
+        "n": 250,
+        "win_rate": 0.208,
+        "push_rate": 0.128,
+        "loss_rate": 0.664
+      },
+      "瑞超": {
+        "n": 248,
+        "win_rate": 0.3589,
+        "push_rate": 0.1452,
+        "loss_rate": 0.496
+      },
+      "挪超": {
+        "n": 231,
+        "win_rate": 0.3463,
+        "push_rate": 0.1645,
+        "loss_rate": 0.4892
+      },
+      "欧罗巴": {
+        "n": 211,
+        "win_rate": 0.3318,
+        "push_rate": 0.1801,
+        "loss_rate": 0.4882
+      },
+      "意甲": {
+        "n": 205,
+        "win_rate": 0.3561,
+        "push_rate": 0.122,
+        "loss_rate": 0.522
+      },
+      "西甲": {
+        "n": 189,
+        "win_rate": 0.3757,
+        "push_rate": 0.0635,
+        "loss_rate": 0.5608
+      },
+      "世预赛": {
+        "n": 187,
+        "win_rate": 0.4011,
+        "push_rate": 0.1176,
+        "loss_rate": 0.4813
+      },
+      "德甲": {
+        "n": 172,
+        "win_rate": 0.3488,
+        "push_rate": 0.1337,
+        "loss_rate": 0.5174
+      },
+      "英冠": {
+        "n": 158,
+        "win_rate": 0.2405,
+        "push_rate": 0.1203,
+        "loss_rate": 0.6392
+      },
+      "芬超": {
+        "n": 147,
+        "win_rate": 0.3333,
+        "push_rate": 0.1429,
+        "loss_rate": 0.5238
+      },
+      "国际赛": {
+        "n": 120,
+        "win_rate": 0.3167,
+        "push_rate": 0.1,
+        "loss_rate": 0.5833
+      },
+      "法甲": {
+        "n": 113,
+        "win_rate": 0.3274,
+        "push_rate": 0.0973,
+        "loss_rate": 0.5752
+      },
+      "日职": {
+        "n": 106,
+        "win_rate": 0.2547,
+        "push_rate": 0.1132,
+        "loss_rate": 0.6321
+      },
+      "韩职": {
+        "n": 100,
+        "win_rate": 0.36,
+        "push_rate": 0.1,
+        "loss_rate": 0.54
+      },
+      "葡超": {
+        "n": 93,
+        "win_rate": 0.2903,
+        "push_rate": 0.129,
+        "loss_rate": 0.5806
+      },
+      "澳超": {
+        "n": 88,
+        "win_rate": 0.2955,
+        "push_rate": 0.1136,
+        "loss_rate": 0.5909
+      },
+      "荷甲": {
+        "n": 80,
+        "win_rate": 0.3125,
+        "push_rate": 0.125,
+        "loss_rate": 0.5625
+      },
+      "世界杯": {
+        "n": 79,
+        "win_rate": 0.3418,
+        "push_rate": 0.1519,
+        "loss_rate": 0.5063
+      },
+      "欧协联": {
+        "n": 72,
+        "win_rate": 0.3472,
+        "push_rate": 0.0972,
+        "loss_rate": 0.5556
+      },
+      "德乙": {
+        "n": 63,
+        "win_rate": 0.2698,
+        "push_rate": 0.0952,
+        "loss_rate": 0.6349
+      },
+      "沙职": {
+        "n": 59,
+        "win_rate": 0.4407,
+        "push_rate": 0.1864,
+        "loss_rate": 0.3729
+      },
+      "英足总杯": {
+        "n": 57,
+        "win_rate": 0.3158,
+        "push_rate": 0.1228,
+        "loss_rate": 0.5614
+      },
+      "亚冠精英": {
+        "n": 57,
+        "win_rate": 0.386,
+        "push_rate": 0.2105,
+        "loss_rate": 0.4035
+      },
+      "英甲": {
+        "n": 57,
+        "win_rate": 0.3158,
+        "push_rate": 0.1053,
+        "loss_rate": 0.5789
+      },
+      "法乙": {
+        "n": 54,
+        "win_rate": 0.3519,
+        "push_rate": 0.0926,
+        "loss_rate": 0.5556
+      },
+      "俱世界杯": {
+        "n": 44,
+        "win_rate": 0.4545,
+        "push_rate": 0.1818,
+        "loss_rate": 0.3636
+      },
+      "荷乙": {
+        "n": 43,
+        "win_rate": 0.2791,
+        "push_rate": 0.1628,
+        "loss_rate": 0.5581
+      },
+      "日乙": {
+        "n": 40,
+        "win_rate": 0.3,
+        "push_rate": 0.1,
+        "loss_rate": 0.6
+      },
+      "非洲杯": {
+        "n": 29,
+        "win_rate": 0.4828,
+        "push_rate": 0.1724,
+        "loss_rate": 0.3448
+      },
+      "巴甲": {
+        "n": 25,
+        "win_rate": 0.2,
+        "push_rate": 0.2,
+        "loss_rate": 0.6
+      },
+      "英锦标赛": {
+        "n": 24,
+        "win_rate": 0.2917,
+        "push_rate": 0.0833,
+        "loss_rate": 0.625
+      },
+      "西国王杯": {
+        "n": 23,
+        "win_rate": 0.3478,
+        "push_rate": 0.2174,
+        "loss_rate": 0.4348
+      },
+      "法国杯": {
+        "n": 22,
+        "win_rate": 0.3182,
+        "push_rate": 0.1364,
+        "loss_rate": 0.5455
+      },
+      "荷兰杯": {
+        "n": 21,
+        "win_rate": 0.4286,
+        "push_rate": 0.1429,
+        "loss_rate": 0.4286
+      },
+      "金杯赛": {
+        "n": 21,
+        "win_rate": 0.4286,
+        "push_rate": 0.0476,
+        "loss_rate": 0.5238
+      },
+      "日联赛杯": {
+        "n": 20,
+        "win_rate": 0.45,
+        "push_rate": 0.2,
+        "loss_rate": 0.35
+      },
+      "解放者杯": {
+        "n": 20,
+        "win_rate": 0.2,
+        "push_rate": 0.2,
+        "loss_rate": 0.6
+      }
+    },
+    "by_odds_range": {
+      "1.0-1.5": {
+        "n": 227,
+        "avg_odds_h": 1.426,
+        "win_rate": 0.815,
+        "push_rate": 0.0925,
+        "loss_rate": 0.0925,
+        "avg_implied_win": 0.6816,
+        "avg_implied_push": 0.1902,
+        "avg_implied_loss": 0.1282,
+        "bias_win_pp": 13.3
+      },
+      "1.5-2.0": {
+        "n": 1092,
+        "avg_odds_h": 1.735,
+        "win_rate": 0.6145,
+        "push_rate": 0.1438,
+        "loss_rate": 0.2418,
+        "avg_implied_win": 0.5513,
+        "avg_implied_push": 0.2195,
+        "avg_implied_loss": 0.2291,
+        "bias_win_pp": 6.3
+      },
+      "2.0-3.0": {
+        "n": 1412,
+        "avg_odds_h": 2.455,
+        "win_rate": 0.3244,
+        "push_rate": 0.165,
+        "loss_rate": 0.5106,
+        "avg_implied_win": 0.3724,
+        "avg_implied_push": 0.2406,
+        "avg_implied_loss": 0.387,
+        "bias_win_pp": -4.8
+      },
+      "3.0+": {
+        "n": 1681,
+        "avg_odds_h": 4.281,
+        "win_rate": 0.0934,
+        "push_rate": 0.1041,
+        "loss_rate": 0.8025,
+        "avg_implied_win": 0.1929,
+        "avg_implied_push": 0.221,
+        "avg_implied_loss": 0.5861,
+        "bias_win_pp": -10.0
+      }
+    }
+  },
+  "yazhi_analysis": {
+    "sample": 4412,
+    "direction_counts": {
+      "deepen": 0,
+      "shallow": 0,
+      "unchanged": 4412
+    },
+    "direction_analysis": {
+      "unchanged": {
+        "n": 4412,
+        "win": {
+          "n": 1471,
+          "pct": 0.3334
+        },
+        "push": {
+          "n": 586,
+          "pct": 0.1328
+        },
+        "loss": {
+          "n": 2355,
+          "pct": 0.5338
+        },
+        "win_rate": 0.3334
+      }
+    },
+    "magnitude_analysis": {
+      "不变": {
+        "n": 4412,
+        "win_rate": 0.3334,
+        "push_rate": 0.1328,
+        "loss_rate": 0.5338
+      }
+    },
+    "odds_change": {
+      "home_up": 2218,
+      "home_down": 1811,
+      "away_up": 1579,
+      "away_down": 2096
+    },
+    "combo_analysis": {
+      "unchanged_odds_down": {
+        "n": 1801,
+        "win_rate": 0.3309,
+        "push_rate": 0.1405,
+        "loss_rate": 0.5286
+      },
+      "unchanged_odds_unchanged": {
+        "n": 400,
+        "win_rate": 0.2975,
+        "push_rate": 0.13,
+        "loss_rate": 0.5725
+      },
+      "unchanged_odds_up": {
+        "n": 2211,
+        "win_rate": 0.3419,
+        "push_rate": 0.1271,
+        "loss_rate": 0.531
+      }
+    },
+    "overall_direction": {
+      "deepen_win_rate": 0,
+      "shallow_win_rate": 0,
+      "unchanged_win_rate": 0.3334,
+      "deepen_advantage_pp": 0
+    }
+  }
+}

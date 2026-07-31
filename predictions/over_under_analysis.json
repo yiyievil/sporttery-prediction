@@ -1,0 +1,487 @@
+{
+  "generated_at": "2026-07-31 15:33:22",
+  "description": "大小球盘口(Over/Under 2.5)准确性分析",
+  "data_source": "historical_matches.sp_daxiao_init / sp_daxiao_final",
+  "overall": {
+    "total_matches": 4412,
+    "accuracy": 0.5811,
+    "correct": 2564,
+    "over_predictions": 2870,
+    "under_predictions": 1542,
+    "actual_over": 2410,
+    "actual_under": 2002,
+    "actual_over_rate": 0.5462,
+    "actual_under_rate": 0.4538,
+    "avg_over_implied": 0.552,
+    "avg_under_implied": 0.448,
+    "over_bias_pp": -0.6,
+    "under_bias_pp": 0.6,
+    "brier_score": 0.2393
+  },
+  "by_handicap": {
+    "中性盘口(3.0)": {
+      "n": 3319,
+      "accuracy": 0.5866,
+      "correct": 1947,
+      "over_predictions": 1812,
+      "under_predictions": 1507,
+      "actual_over_rate": 0.5381,
+      "avg_over_implied": 0.5396,
+      "avg_under_implied": 0.4604,
+      "over_bias_pp": -0.1,
+      "under_bias_pp": 0.1,
+      "avg_s3_odds": 3.7
+    },
+    "大球热门(2.5)": {
+      "n": 1056,
+      "accuracy": 0.5587,
+      "correct": 590,
+      "over_predictions": 1032,
+      "under_predictions": 24,
+      "actual_over_rate": 0.5701,
+      "avg_over_implied": 0.5858,
+      "avg_under_implied": 0.4142,
+      "over_bias_pp": -1.6,
+      "under_bias_pp": 1.6,
+      "avg_s3_odds": 3.42
+    },
+    "小球热门(3.5)": {
+      "n": 37,
+      "accuracy": 0.7297,
+      "correct": 27,
+      "over_predictions": 26,
+      "under_predictions": 11,
+      "actual_over_rate": 0.5946,
+      "avg_over_implied": 0.7001,
+      "avg_under_implied": 0.2999,
+      "over_bias_pp": -10.5,
+      "under_bias_pp": 10.5,
+      "avg_s3_odds": 5.66
+    }
+  },
+  "by_league": {
+    "英超": {
+      "n": 455,
+      "accuracy": 0.567,
+      "actual_over_rate": 0.5626,
+      "avg_over_implied": 0.5675,
+      "avg_under_implied": 0.4325,
+      "over_bias_pp": -0.5,
+      "under_bias_pp": 0.5
+    },
+    "欧冠": {
+      "n": 273,
+      "accuracy": 0.6374,
+      "actual_over_rate": 0.641,
+      "avg_over_implied": 0.6305,
+      "avg_under_implied": 0.3695,
+      "over_bias_pp": 1.1,
+      "under_bias_pp": -1.1
+    },
+    "美职联": {
+      "n": 250,
+      "accuracy": 0.644,
+      "actual_over_rate": 0.64,
+      "avg_over_implied": 0.6176,
+      "avg_under_implied": 0.3824,
+      "over_bias_pp": 2.2,
+      "under_bias_pp": -2.2
+    },
+    "瑞超": {
+      "n": 248,
+      "accuracy": 0.5524,
+      "actual_over_rate": 0.5363,
+      "avg_over_implied": 0.544,
+      "avg_under_implied": 0.456,
+      "over_bias_pp": -0.8,
+      "under_bias_pp": 0.8
+    },
+    "挪超": {
+      "n": 231,
+      "accuracy": 0.6407,
+      "actual_over_rate": 0.6061,
+      "avg_over_implied": 0.6261,
+      "avg_under_implied": 0.3739,
+      "over_bias_pp": -2.0,
+      "under_bias_pp": 2.0
+    },
+    "欧罗巴": {
+      "n": 211,
+      "accuracy": 0.5213,
+      "actual_over_rate": 0.5118,
+      "avg_over_implied": 0.5563,
+      "avg_under_implied": 0.4437,
+      "over_bias_pp": -4.4,
+      "under_bias_pp": 4.4
+    },
+    "意甲": {
+      "n": 205,
+      "accuracy": 0.5122,
+      "actual_over_rate": 0.4732,
+      "avg_over_implied": 0.4673,
+      "avg_under_implied": 0.5327,
+      "over_bias_pp": 0.6,
+      "under_bias_pp": -0.6
+    },
+    "西甲": {
+      "n": 189,
+      "accuracy": 0.5873,
+      "actual_over_rate": 0.5026,
+      "avg_over_implied": 0.4751,
+      "avg_under_implied": 0.5249,
+      "over_bias_pp": 2.8,
+      "under_bias_pp": -2.8
+    },
+    "世预赛": {
+      "n": 187,
+      "accuracy": 0.5615,
+      "actual_over_rate": 0.4652,
+      "avg_over_implied": 0.5237,
+      "avg_under_implied": 0.4763,
+      "over_bias_pp": -5.8,
+      "under_bias_pp": 5.8
+    },
+    "德甲": {
+      "n": 172,
+      "accuracy": 0.6453,
+      "actual_over_rate": 0.6221,
+      "avg_over_implied": 0.6146,
+      "avg_under_implied": 0.3854,
+      "over_bias_pp": 0.8,
+      "under_bias_pp": -0.8
+    },
+    "英冠": {
+      "n": 158,
+      "accuracy": 0.557,
+      "actual_over_rate": 0.5,
+      "avg_over_implied": 0.4631,
+      "avg_under_implied": 0.5369,
+      "over_bias_pp": 3.7,
+      "under_bias_pp": -3.7
+    },
+    "芬超": {
+      "n": 147,
+      "accuracy": 0.5782,
+      "actual_over_rate": 0.5918,
+      "avg_over_implied": 0.6063,
+      "avg_under_implied": 0.3937,
+      "over_bias_pp": -1.5,
+      "under_bias_pp": 1.5
+    },
+    "国际赛": {
+      "n": 120,
+      "accuracy": 0.6667,
+      "actual_over_rate": 0.5083,
+      "avg_over_implied": 0.5186,
+      "avg_under_implied": 0.4814,
+      "over_bias_pp": -1.0,
+      "under_bias_pp": 1.0
+    },
+    "法甲": {
+      "n": 113,
+      "accuracy": 0.5575,
+      "actual_over_rate": 0.4956,
+      "avg_over_implied": 0.559,
+      "avg_under_implied": 0.441,
+      "over_bias_pp": -6.3,
+      "under_bias_pp": 6.3
+    },
+    "日职": {
+      "n": 106,
+      "accuracy": 0.5283,
+      "actual_over_rate": 0.4245,
+      "avg_over_implied": 0.4624,
+      "avg_under_implied": 0.5376,
+      "over_bias_pp": -3.8,
+      "under_bias_pp": 3.8
+    },
+    "韩职": {
+      "n": 100,
+      "accuracy": 0.52,
+      "actual_over_rate": 0.5,
+      "avg_over_implied": 0.4488,
+      "avg_under_implied": 0.5512,
+      "over_bias_pp": 5.1,
+      "under_bias_pp": -5.1
+    },
+    "葡超": {
+      "n": 93,
+      "accuracy": 0.6667,
+      "actual_over_rate": 0.5376,
+      "avg_over_implied": 0.4874,
+      "avg_under_implied": 0.5126,
+      "over_bias_pp": 5.0,
+      "under_bias_pp": -5.0
+    },
+    "澳超": {
+      "n": 88,
+      "accuracy": 0.5568,
+      "actual_over_rate": 0.5682,
+      "avg_over_implied": 0.6235,
+      "avg_under_implied": 0.3765,
+      "over_bias_pp": -5.5,
+      "under_bias_pp": 5.5
+    },
+    "荷甲": {
+      "n": 80,
+      "accuracy": 0.6,
+      "actual_over_rate": 0.6,
+      "avg_over_implied": 0.6467,
+      "avg_under_implied": 0.3533,
+      "over_bias_pp": -4.7,
+      "under_bias_pp": 4.7
+    },
+    "世界杯": {
+      "n": 79,
+      "accuracy": 0.6203,
+      "actual_over_rate": 0.5316,
+      "avg_over_implied": 0.4996,
+      "avg_under_implied": 0.5004,
+      "over_bias_pp": 3.2,
+      "under_bias_pp": -3.2
+    },
+    "欧协联": {
+      "n": 72,
+      "accuracy": 0.4583,
+      "actual_over_rate": 0.5694,
+      "avg_over_implied": 0.5514,
+      "avg_under_implied": 0.4486,
+      "over_bias_pp": 1.8,
+      "under_bias_pp": -1.8
+    },
+    "德乙": {
+      "n": 63,
+      "accuracy": 0.5556,
+      "actual_over_rate": 0.5556,
+      "avg_over_implied": 0.6082,
+      "avg_under_implied": 0.3918,
+      "over_bias_pp": -5.3,
+      "under_bias_pp": 5.3
+    },
+    "沙职": {
+      "n": 59,
+      "accuracy": 0.4746,
+      "actual_over_rate": 0.5254,
+      "avg_over_implied": 0.6294,
+      "avg_under_implied": 0.3706,
+      "over_bias_pp": -10.4,
+      "under_bias_pp": 10.4
+    },
+    "英足总杯": {
+      "n": 57,
+      "accuracy": 0.6316,
+      "actual_over_rate": 0.5965,
+      "avg_over_implied": 0.5791,
+      "avg_under_implied": 0.4209,
+      "over_bias_pp": 1.7,
+      "under_bias_pp": -1.7
+    },
+    "亚冠精英": {
+      "n": 57,
+      "accuracy": 0.5965,
+      "actual_over_rate": 0.5088,
+      "avg_over_implied": 0.5995,
+      "avg_under_implied": 0.4005,
+      "over_bias_pp": -9.1,
+      "under_bias_pp": 9.1
+    },
+    "英甲": {
+      "n": 57,
+      "accuracy": 0.5789,
+      "actual_over_rate": 0.4737,
+      "avg_over_implied": 0.4892,
+      "avg_under_implied": 0.5108,
+      "over_bias_pp": -1.5,
+      "under_bias_pp": 1.5
+    },
+    "法乙": {
+      "n": 54,
+      "accuracy": 0.4815,
+      "actual_over_rate": 0.5,
+      "avg_over_implied": 0.4582,
+      "avg_under_implied": 0.5418,
+      "over_bias_pp": 4.2,
+      "under_bias_pp": -4.2
+    },
+    "俱世界杯": {
+      "n": 44,
+      "accuracy": 0.5909,
+      "actual_over_rate": 0.5227,
+      "avg_over_implied": 0.5627,
+      "avg_under_implied": 0.4373,
+      "over_bias_pp": -4.0,
+      "under_bias_pp": 4.0
+    },
+    "荷乙": {
+      "n": 43,
+      "accuracy": 0.6047,
+      "actual_over_rate": 0.6047,
+      "avg_over_implied": 0.6469,
+      "avg_under_implied": 0.3531,
+      "over_bias_pp": -4.2,
+      "under_bias_pp": 4.2
+    },
+    "日乙": {
+      "n": 40,
+      "accuracy": 0.5,
+      "actual_over_rate": 0.425,
+      "avg_over_implied": 0.4381,
+      "avg_under_implied": 0.5619,
+      "over_bias_pp": -1.3,
+      "under_bias_pp": 1.3
+    },
+    "非洲杯": {
+      "n": 29,
+      "accuracy": 0.5517,
+      "actual_over_rate": 0.4828,
+      "avg_over_implied": 0.3862,
+      "avg_under_implied": 0.6138,
+      "over_bias_pp": 9.7,
+      "under_bias_pp": -9.7
+    },
+    "巴甲": {
+      "n": 25,
+      "accuracy": 0.48,
+      "actual_over_rate": 0.52,
+      "avg_over_implied": 0.4736,
+      "avg_under_implied": 0.5264,
+      "over_bias_pp": 4.6,
+      "under_bias_pp": -4.6
+    },
+    "英锦标赛": {
+      "n": 24,
+      "accuracy": 0.5833,
+      "actual_over_rate": 0.5833,
+      "avg_over_implied": 0.5792,
+      "avg_under_implied": 0.4208,
+      "over_bias_pp": 0.4,
+      "under_bias_pp": -0.4
+    },
+    "西国王杯": {
+      "n": 23,
+      "accuracy": 0.6522,
+      "actual_over_rate": 0.6522,
+      "avg_over_implied": 0.4946,
+      "avg_under_implied": 0.5054,
+      "over_bias_pp": 15.8,
+      "under_bias_pp": -15.8
+    },
+    "法国杯": {
+      "n": 22,
+      "accuracy": 0.5909,
+      "actual_over_rate": 0.5909,
+      "avg_over_implied": 0.5325,
+      "avg_under_implied": 0.4675,
+      "over_bias_pp": 5.8,
+      "under_bias_pp": -5.8
+    },
+    "荷兰杯": {
+      "n": 21,
+      "accuracy": 0.7143,
+      "actual_over_rate": 0.7619,
+      "avg_over_implied": 0.6567,
+      "avg_under_implied": 0.3433,
+      "over_bias_pp": 10.5,
+      "under_bias_pp": -10.5
+    },
+    "金杯赛": {
+      "n": 21,
+      "accuracy": 0.5714,
+      "actual_over_rate": 0.4762,
+      "avg_over_implied": 0.4939,
+      "avg_under_implied": 0.5061,
+      "over_bias_pp": -1.8,
+      "under_bias_pp": 1.8
+    },
+    "日联赛杯": {
+      "n": 20,
+      "accuracy": 0.55,
+      "actual_over_rate": 0.5,
+      "avg_over_implied": 0.4404,
+      "avg_under_implied": 0.5596,
+      "over_bias_pp": 6.0,
+      "under_bias_pp": -6.0
+    },
+    "解放者杯": {
+      "n": 20,
+      "accuracy": 0.85,
+      "actual_over_rate": 0.2,
+      "avg_over_implied": 0.4349,
+      "avg_under_implied": 0.5651,
+      "over_bias_pp": -23.5,
+      "under_bias_pp": 23.5
+    }
+  },
+  "init_final_movement": {
+    "total_with_both": 4412,
+    "movement_direction_analysis": {
+      "avg_init_over_prob": 0.552,
+      "avg_final_over_prob": 0.5598,
+      "avg_change_pp": 0.78,
+      "up_cases": {
+        "count": 1995,
+        "pct": 45.2,
+        "correct_when_over": 1173,
+        "wrong_when_under": 822,
+        "accuracy": 58.8
+      },
+      "down_cases": {
+        "count": 1154,
+        "pct": 26.2,
+        "correct_when_under": 598,
+        "wrong_when_over": 556,
+        "accuracy": 51.8
+      },
+      "stable_cases": {
+        "count": 1263,
+        "pct": 28.6
+      }
+    },
+    "signal_strength": {
+      "1-3pp": {
+        "n": 1600,
+        "accuracy": 55.2
+      },
+      "3-5pp": {
+        "n": 848,
+        "accuracy": 58.4
+      },
+      "5-10pp": {
+        "n": 650,
+        "accuracy": 56.0
+      },
+      "10pp+": {
+        "n": 51,
+        "accuracy": 56.9
+      }
+    },
+    "by_handicap_movement": {
+      "中性盘口(3.0)": {
+        "n": 3319,
+        "avg_init_over": 0.5396,
+        "avg_final_over": 0.5465,
+        "avg_change_pp": 0.69,
+        "actual_over_rate": 0.5381
+      },
+      "大球热门(2.5)": {
+        "n": 1056,
+        "avg_init_over": 0.5858,
+        "avg_final_over": 0.5965,
+        "avg_change_pp": 1.07,
+        "actual_over_rate": 0.5701
+      },
+      "小球热门(3.5)": {
+        "n": 37,
+        "avg_init_over": 0.7001,
+        "avg_final_over": 0.7025,
+        "avg_change_pp": 0.24,
+        "actual_over_rate": 0.5946
+      }
+    },
+    "init_vs_final_accuracy": {
+      "init_accuracy": 0.5811,
+      "final_accuracy": 0.5866,
+      "improvement_pp": 0.54
+    }
+  }
+}
