@@ -283,7 +283,7 @@ TEAM_NAME_ALIASES = {
     '埃格纳蒂亚': ['埃格纳蒂亚', 'Egnatia'],
     '沙姆洛克': ['沙姆洛克', '沙姆洛克流浪', 'Shamrock Rovers'],
     '阿拉特亚美尼亚': ['阿拉特亚美尼亚', 'Alashkert'],
-    '博德闪耀': ['博德闪耀', 'Bodø/Glimt', '波杜基林特'],
+    # 注: '博德闪耀' 已在上面 挪威超 分组中定义 (值相同), 此处删除重复键
     '加拉塔萨': ['加拉塔萨', '加拉塔萨雷', 'Galatasaray'],
     '埃因霍温': ['埃因霍温', 'PSV', '飞燕诺'],
     '布鲁日': ['布鲁日', 'Club Brugge'],
@@ -408,24 +408,27 @@ def _fetch_with_retry(url, max_retries=2, timeout=10):
         except requests.exceptions.ProxyError:
             # 代理阻止 (常见于live.nowscore.com/data/路径)
             # Ultra-Opt: ProxyError时立即改用直连 (trust_env=False, 绕过系统代理)
-            if attempt >= max_retries - 2:
-                try:
-                    if direct_session is None:
-                        direct_session = requests.Session()
-                        direct_session.headers.update(NOWSCORE_HEADERS)
-                        direct_session.trust_env = False
-                    r = direct_session.get(url, timeout=timeout, allow_redirects=True)
-                    if r.status_code == 200:
-                        if 'Path404' in r.url or '找不到页面' in r.text[:500]:
-                            return None
-                        return r.text
-                except Exception:
-                    pass
+            # M12: 原 `if attempt >= max_retries - 2:` 在 max_retries=2 时恒真, 已删除该判断直接直连
+            try:
+                if direct_session is None:
+                    direct_session = requests.Session()
+                    direct_session.headers.update(NOWSCORE_HEADERS)
+                    direct_session.trust_env = False
+                r = direct_session.get(url, timeout=timeout, allow_redirects=True)
+                if r.status_code == 200:
+                    if 'Path404' in r.url or '找不到页面' in r.text[:500]:
+                        return None
+                    return r.text
+            except Exception as e:
+                print(f"  [WARN] {url} ProxyError后直连失败: {e}")
             if attempt < max_retries - 1:
                 time.sleep(1 * (attempt + 1))
             else:
                 return None
-        except Exception:
+        except Exception as e:
+            # M12: 打印一次错误摘要 (最后一次尝试时输出), 不再完全静默
+            if attempt == max_retries - 1:
+                print(f"  [WARN] {url} 请求失败: {e}")
             if attempt < max_retries - 1:
                 time.sleep(1 * (attempt + 1))  # 指数退避
             else:
@@ -519,13 +522,22 @@ def fetch_all_schedules():
 def load_match_id_map():
     """加载matchID映射文件 (浏览器预取)
     
+    M9: 带TTL时效检查 — 文件修改时间超过1小时视为过期, 忽略并返回None,
+    避免复用旧赛程的matchID导致盘口错配。
     返回: {sporttery_key: nowscore_matchID} 或None
     """
     map_file = os.path.join(BROWSER_CACHE_DIR, 'match_id_map.json')
-    if os.path.exists(map_file):
+    if not os.path.exists(map_file):
+        return None
+    try:
+        if time.time() - os.path.getmtime(map_file) > 3600:
+            print("  [WARN] match_id_map.json 超过1小时未更新, 忽略缓存")
+            return None
         with open(map_file, 'r', encoding='utf-8') as f:
             return json.load(f)
-    return None
+    except Exception as e:
+        print(f"  [WARN] match_id_map.json 读取失败: {e}")
+        return None
 
 
 def parse_schedule(sc1_text):
@@ -1055,34 +1067,38 @@ def convert_nowscore_to_500_format(nowscore_odds, match_id=None):
             latest = data_rows[0]
             initial = data_rows[-1]
             
-            result['ouzhi'] = {
-                'latest_w': float(latest[2]),
-                'latest_d': float(latest[3]),
-                'latest_l': float(latest[4]),
-                'init_w': float(initial[2]),
-                'init_d': float(initial[3]),
-                'init_l': float(initial[4]),
-                'count': len(data_rows),
-                'change_w': float(latest[2]) - float(initial[2]),
-                'is_return_rate': False,
-            }
-            
-            result['init_ouzhi'] = {
-                'avg_initial': (float(initial[2]), float(initial[3]), float(initial[4])),
-                'avg_instant': (float(latest[2]), float(latest[3]), float(latest[4])),
-                'initial': {
-                    'w': float(initial[2]),
-                    'd': float(initial[3]),
-                    'l': float(initial[4]),
-                },
-                'instant': {
-                    'w': float(latest[2]),
-                    'd': float(latest[3]),
-                    'l': float(latest[4]),
-                },
-                'num_valid': len(data_rows),
-                'change_w': float(latest[2]) - float(initial[2]),
-            }
+            # M8: 欧赔float转换加保护, 任一值非数字则跳过该段 (参考 _parse_handicap 防护风格)
+            try:
+                result['ouzhi'] = {
+                    'latest_w': float(latest[2]),
+                    'latest_d': float(latest[3]),
+                    'latest_l': float(latest[4]),
+                    'init_w': float(initial[2]),
+                    'init_d': float(initial[3]),
+                    'init_l': float(initial[4]),
+                    'count': len(data_rows),
+                    'change_w': float(latest[2]) - float(initial[2]),
+                    'is_return_rate': False,
+                }
+                
+                result['init_ouzhi'] = {
+                    'avg_initial': (float(initial[2]), float(initial[3]), float(initial[4])),
+                    'avg_instant': (float(latest[2]), float(latest[3]), float(latest[4])),
+                    'initial': {
+                        'w': float(initial[2]),
+                        'd': float(initial[3]),
+                        'l': float(initial[4]),
+                    },
+                    'instant': {
+                        'w': float(latest[2]),
+                        'd': float(latest[3]),
+                        'l': float(latest[4]),
+                    },
+                    'num_valid': len(data_rows),
+                    'change_w': float(latest[2]) - float(initial[2]),
+                }
+            except (TypeError, ValueError):
+                pass
     
     # ===== Asian Handicap (亚盘) =====
     asian = nowscore_odds.get('asian', [])
@@ -1095,29 +1111,33 @@ def convert_nowscore_to_500_format(nowscore_odds, match_id=None):
             latest_handicap = _parse_handicap(latest[3])
             init_handicap = _parse_handicap(initial[3])
             
-            result['yazhi'] = {
-                'handicap': latest_handicap,
-                'home_odds': float(latest[2]),
-                'away_odds': float(latest[4]),
-                'init_handicap': init_handicap,
-                'init_home_odds': float(initial[2]),
-                'init_away_odds': float(initial[4]),
-                'count': len(data_rows),
-            }
-            
-            result['init_yazhi'] = {
-                'instant': {
-                    'handicap_mode': latest_handicap,
-                    'over_avg': float(latest[2]),
-                    'under_avg': float(latest[4]),
-                },
-                'initial': {
-                    'handicap_mode': init_handicap,
-                    'over_avg': float(initial[2]),
-                    'under_avg': float(initial[4]),
-                },
-                'num_valid': len(data_rows),
-            }
+            # M8: 亚盘水位float转换加保护, 失败则跳过该段
+            try:
+                result['yazhi'] = {
+                    'handicap': latest_handicap,
+                    'home_odds': float(latest[2]),
+                    'away_odds': float(latest[4]),
+                    'init_handicap': init_handicap,
+                    'init_home_odds': float(initial[2]),
+                    'init_away_odds': float(initial[4]),
+                    'count': len(data_rows),
+                }
+                
+                result['init_yazhi'] = {
+                    'instant': {
+                        'handicap_mode': latest_handicap,
+                        'over_avg': float(latest[2]),
+                        'under_avg': float(latest[4]),
+                    },
+                    'initial': {
+                        'handicap_mode': init_handicap,
+                        'over_avg': float(initial[2]),
+                        'under_avg': float(initial[4]),
+                    },
+                    'num_valid': len(data_rows),
+                }
+            except (TypeError, ValueError):
+                pass
     
     # ===== Over/Under (大小球) =====
     ou = nowscore_odds.get('overunder', [])
@@ -1127,44 +1147,49 @@ def convert_nowscore_to_500_format(nowscore_odds, match_id=None):
             latest = data_rows[0]
             initial = data_rows[-1]
             
-            # 解析goal line (如 "2.5", "2/2.5")
-            gl_str = latest[3]
-            gl_parts = gl_str.split('/')
-            if len(gl_parts) == 2:
-                goal_line = (float(gl_parts[0]) + float(gl_parts[1])) / 2
-            else:
-                goal_line = float(gl_str)
-            
-            init_gl_str = initial[3]
-            init_gl_parts = init_gl_str.split('/')
-            if len(init_gl_parts) == 2:
-                init_goal_line = (float(init_gl_parts[0]) + float(init_gl_parts[1])) / 2
-            else:
-                init_goal_line = float(init_gl_str)
-            
-            result['daxiao'] = {
-                'goal_line': goal_line,
-                'source': f'nowscore Crown(id={match_id})',
-                'all_goal_lines': [float(r[3].split('/')[0]) if '/' in r[3] else float(r[3]) for r in data_rows],
-                'num_bookmakers': len(data_rows),
-                'initial_goal_line': init_goal_line,
-                'over_odds': float(latest[2]),
-                'under_odds': float(latest[4]),
-            }
-            
-            result['init_daxiao'] = {
-                'initial': {
-                    'goal_line_mode': init_goal_line,
-                    'over_avg': float(initial[2]),
-                    'under_avg': float(initial[4]),
-                },
-                'instant': {
-                    'goal_line_mode': goal_line,
-                    'over_avg': float(latest[2]),
-                    'under_avg': float(latest[4]),
-                },
-                'num_valid': len(data_rows),
-            }
+            # M8: goal_line/水位float解析加保护 (如 "2.5", "2/2.5"),
+            #     任一转换失败则跳过该段 (参考 _parse_handicap 防护风格)
+            try:
+                # 解析goal line (如 "2.5", "2/2.5")
+                gl_str = latest[3]
+                gl_parts = gl_str.split('/')
+                if len(gl_parts) == 2:
+                    goal_line = (float(gl_parts[0]) + float(gl_parts[1])) / 2
+                else:
+                    goal_line = float(gl_str)
+                
+                init_gl_str = initial[3]
+                init_gl_parts = init_gl_str.split('/')
+                if len(init_gl_parts) == 2:
+                    init_goal_line = (float(init_gl_parts[0]) + float(init_gl_parts[1])) / 2
+                else:
+                    init_goal_line = float(init_gl_str)
+                
+                result['daxiao'] = {
+                    'goal_line': goal_line,
+                    'source': f'nowscore Crown(id={match_id})',
+                    'all_goal_lines': [float(r[3].split('/')[0]) if '/' in r[3] else float(r[3]) for r in data_rows],
+                    'num_bookmakers': len(data_rows),
+                    'initial_goal_line': init_goal_line,
+                    'over_odds': float(latest[2]),
+                    'under_odds': float(latest[4]),
+                }
+                
+                result['init_daxiao'] = {
+                    'initial': {
+                        'goal_line_mode': init_goal_line,
+                        'over_avg': float(initial[2]),
+                        'under_avg': float(initial[4]),
+                    },
+                    'instant': {
+                        'goal_line_mode': goal_line,
+                        'over_avg': float(latest[2]),
+                        'under_avg': float(latest[4]),
+                    },
+                    'num_valid': len(data_rows),
+                }
+            except (TypeError, ValueError):
+                pass
     
     # ===== shuju (近况+统计, nowscore不提供, 仅填充avg_odds) =====
     if 'ouzhi' in result:

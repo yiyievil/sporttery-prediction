@@ -71,12 +71,20 @@ FIRST_LEG = {
     },
 }
 
-for k, v in FIRST_LEG.items():
-    v['trend'] = None
-    v['swot_url'] = ''
-    data['matches'][k] = v
+def main():
+    with open(PATH, 'r', encoding='utf-8') as f:
+        data = json.load(f)
 
-data['refreshed_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-with open(PATH, 'w', encoding='utf-8') as f:
-    json.dump(data, f, ensure_ascii=False, indent=1)
-print('injected:', list(FIRST_LEG.keys()))
+    for k, v in FIRST_LEG.items():
+        v['trend'] = {}
+        v['swot_url'] = ''
+        data['matches'][k] = v
+
+    data['refreshed_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with open(PATH, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+    print('injected:', list(FIRST_LEG.keys()))
+
+
+if __name__ == '__main__':
+    main()

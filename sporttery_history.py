@@ -101,7 +101,8 @@ def scan(only_league=None):
                      m.get('sectionsNo999'), m.get('sectionsNo1'), m.get('winFlag'), m.get('goalLine'),
                      _f(m.get('h')), _f(m.get('d')), _f(m.get('a')), m.get('poolStatus')))
                 n_new += 1
-            if page >= (v.get('pages') or 1):
+            # S5: 兼容 totalPage/pages 两种字段名, 并int()保护
+            if page >= int(v.get('totalPage') or v.get('pages') or 1):
                 break
             page += 1
         if only_league:

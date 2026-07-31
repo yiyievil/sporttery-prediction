@@ -15,6 +15,8 @@ import json
 import subprocess
 import os
 import time
+import shutil
+import tempfile
 from datetime import datetime
 
 HEADERS = {
@@ -56,24 +58,28 @@ def solve_waf(session, url):
     arg1 = renderData.get('l1', '')[10:60]
     print(f"  WAF arg1: {arg1}")
 
-    # 保存脚本
-    scripts = re.findall(r'<script[^>]*>(.*?)</script>', resp.text, re.DOTALL)
-    for i, script in enumerate(scripts):
-        path = os.path.join(WORK_DIR, f'waf_script_{i}.js')
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write(script)
+    # 保存脚本与renderData到临时目录, 用后清理 (M22: 不再写入工作目录)
+    tmp_dir = tempfile.mkdtemp(prefix='waf_solver_')
+    try:
+        scripts = re.findall(r'<script[^>]*>(.*?)</script>', resp.text, re.DOTALL)
+        for i, script in enumerate(scripts):
+            path = os.path.join(tmp_dir, f'waf_script_{i}.js')
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(script)
 
-    # 保存renderData
-    rd_path = os.path.join(WORK_DIR, 'renderData.json')
-    with open(rd_path, 'w', encoding='utf-8') as f:
-        json.dump(renderData, f)
+        # 保存renderData
+        rd_path = os.path.join(tmp_dir, 'renderData.json')
+        with open(rd_path, 'w', encoding='utf-8') as f:
+            json.dump(renderData, f)
 
-    # 3. 用Node.js/jsdom执行WAF脚本
-    result = subprocess.run(
-        ['node', SOLVER_JS, rd_path],
-        capture_output=True, text=True, timeout=15,
-        cwd=WORK_DIR
-    )
+        # 3. 用Node.js/jsdom执行WAF脚本
+        result = subprocess.run(
+            ['node', SOLVER_JS, rd_path],
+            capture_output=True, text=True, timeout=15,
+            cwd=WORK_DIR
+        )
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
     cookie = result.stdout.strip()
     if not cookie or len(cookie) < 10:
@@ -254,16 +260,6 @@ def fetch_swot_batch_fast(swot_urls, match_keys=None):
             first_key = match_keys[0] if match_keys else "url_0"
             results[first_key] = parse_swot_from_html(html, first_url)
             print(f"  ✅ {first_key}: 已获取")
-        elif status == 'ok_no_waf' and not html:
-            # 可能是返回了WAF页面但已经被cookie解决
-            resp = session.get(first_url, timeout=15)
-            if 'children good' in resp.text or '有利情报' in resp.text:
-                first_key = match_keys[0] if match_keys else "url_0"
-                results[first_key] = parse_swot_from_html(resp.text, first_url)
-                print(f"  ✅ {first_key}: 已获取")
-            else:
-                print(f"  ⚠️ {first_key}: 页面内容不明确")
-                results[first_key] = parse_swot_from_html(resp.text, first_url)
     else:
         # WAF解决失败, 尝试直接获取 (可能部分页面不需要WAF)
         print(f"  ⚠️ WAF解决: {status}, 尝试直接获取...")
@@ -336,7 +332,8 @@ def fetch_swot_batch_fast(swot_urls, match_keys=None):
     print(f"✅ SWOT快速获取完成!")
     print(f"  成功: {output['success_count']}/{len(swot_urls)}")
     print(f"  耗时: {elapsed:.1f}秒 (对比之前: ~900秒/15分钟)")
-    print(f"  提速: {900/elapsed:.0f}x")
+    if elapsed > 0:
+        print(f"  提速: {900/elapsed:.0f}x")
     print(f"  输出: {SWOT_OUTPUT}")
     print(f"{'='*60}")
 

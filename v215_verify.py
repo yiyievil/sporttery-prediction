@@ -28,7 +28,7 @@ Ultra 6.0 保留:
   - 统计显著性检验 (二项检验)
   - 历史规律反馈闭环 (验证→预测)
 """
-import json, re, time, os, sys, sqlite3, math
+import json, re, time, os, sys, sqlite3, math, html
 from datetime import datetime, timedelta
 import requests
 from v215_e2e import stars_to_score
@@ -220,6 +220,7 @@ def fetch_500_results(match_keys):
         # 比分格式: |3|-|0| (管道符分隔)
         # 在goalLine (如(-1)/(+2)等) 后面找比分
         # 支持: 单位整数(-1/+1), 多位整数(-2/+2), 小数(-1.5/+0.5)
+        gl_match_tmp = None  # 备用模式3的goalLine锚点(用于换算半场比分搜索偏移)
         score_match = re.search(r'\([+\-]\d+(?:\.\d)?\).*?\|(\d+)\|-?\|(\d+)\|', clean)
         if not score_match:
             # 备用: 找 |数字|-|数字| 模式
@@ -256,14 +257,18 @@ def fetch_500_results(match_keys):
         gl_str_match = re.search(r'\(([+\-]\d+(?:\.\d)?)\)', clean)
         goal_line = float(gl_str_match.group(1)) if gl_str_match else 0.0
 
-        # 半场比分: 在全场比分后面, 格式 "X - Y" (空格分隔)
-        # 找第二个 "数字 - 数字" 模式
-        all_scores = re.findall(r'(\d+)\s*-\s*(\d+)', clean)
+        # 半场比分: 在全场比分(goalLine之后)附近定位, 避免命中日期(如 07-24)
+        # M18修复: 原 re.findall(r'(\d+)\s*-\s*(\d+)', clean) 会命中日期格式;
+        # 现改为在全场比分结束后的小窗口内搜索, 优先 "X:Y" 格式, 其次严格 "X - Y"(带空格)
         half_home = half_away = 0
-        if len(all_scores) >= 2:
-            # 第一个是全场比分(日期07-24不算因为那是-不是-空格)
-            # 找 "X - Y" 格式(空格分隔的是半场比分)
-            half_match = re.search(r'(\d+)\s+-\s+(\d+)', clean)
+        if score_match:
+            # 备用模式3的score_match偏移是相对after_gl的, 需加回goalLine起始偏移
+            half_abs_end = score_match.end() + (gl_match_tmp.start() if gl_match_tmp else 0)
+            half_region = clean[half_abs_end:half_abs_end + 300]
+            half_match = re.search(r'(\d+)\s*:\s*(\d+)', half_region)
+            if not half_match:
+                # 严格模式: 破折号两侧必须有空格, 排除 "07-24" 这类日期
+                half_match = re.search(r'(\d+)\s+-\s+(\d+)', half_region)
             if half_match:
                 half_home = int(half_match.group(1))
                 half_away = int(half_match.group(2))
@@ -1916,27 +1921,28 @@ def generate_html_report(verified_matches, stats, date_str, brier_result=None, c
         if pb_option_display:
             pb_class = 'hit' if pb_hit_flag else 'miss'
             pb_text = '命中' if pb_hit_flag else '未中'
-            pb_cell = f'<td class="{pb_class}">{pb_option_display} {pb_text}</td>'
+            # L8: 对插入HTML的队名/方向做转义, 防止特殊字符破坏结构
+            pb_cell = f'<td class="{pb_class}">{html.escape(str(pb_option_display))} {pb_text}</td>'
         else:
             pb_cell = '<td>-</td>'
         rows_html.append(f"""
         <tr>
-          <td><span class="tag tag-blue">{v['key']}</span></td>
-          <td>{v['home']} vs {v['away']}</td>
-          <td class="score">{v['actual_score']}</td>
-          <td>{v['actual_had']}</td>
-          <td class="{had_class}">{v['pred_had_dir']}</td>
+          <td><span class="tag tag-blue">{html.escape(str(v['key']))}</span></td>
+          <td>{html.escape(str(v['home']))} vs {html.escape(str(v['away']))}</td>
+          <td class="score">{html.escape(str(v['actual_score']))}</td>
+          <td>{html.escape(str(v['actual_had']))}</td>
+          <td class="{had_class}">{html.escape(str(v['pred_had_dir']))}</td>
           <td class="{had_class}">{'命中' if v['had_hit'] else '未中'}</td>
-          <td>{v['actual_hhad']}</td>
-          <td class="{hhad_class}">{v['pred_hhad_dir']}</td>
+          <td>{html.escape(str(v['actual_hhad']))}</td>
+          <td class="{hhad_class}">{html.escape(str(v['pred_hhad_dir']))}</td>
           <td class="{hhad_class}">{'命中' if v['hhad_hit'] else '未中'}</td>
-          <td>{actual_tg}球</td>
-          <td class="{tg_class}">{pred_tg}</td>
+          <td>{html.escape(str(actual_tg))}球</td>
+          <td class="{tg_class}">{html.escape(str(pred_tg))}</td>
           <td class="{tg_class}">{tg_str}</td>
-          <td>{actual_hf}</td>
-          <td class="{hf_class}">{pred_hf}</td>
+          <td>{html.escape(str(actual_hf))}</td>
+          <td class="{hf_class}">{html.escape(str(pred_hf))}</td>
           <td class="{hf_class}">{hf_str}</td>
-          <td>{difficulty_display}</td>
+          <td>{html.escape(str(difficulty_display))}</td>
           {pb_cell}
         </tr>""")
 
@@ -2299,6 +2305,7 @@ def init_db():
     """初始化SQLite回归数据库"""
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout=5000")
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS verify_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2379,11 +2386,16 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
     未传入时回退到本地计算(向后兼容)。
     """
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout=5000")
     c = conn.cursor()
     now = time.strftime('%Y-%m-%d %H:%M:%S')
 
     # 保存逐场记录 (INSERT OR REPLACE: 重复则替换, 依赖 UNIQUE(verify_date, match_key))
     for v in verified_matches:
+        # M13: 赛果未获取(占位值)的记录跳过入库 —
+        # 否则 actual_score='数据未获取' 被split成['0','0']伪造0-0, total_goals=-1计入均值
+        if not v.get('data_available', True) or v.get('actual_score') == '数据未获取':
+            continue
         score_parts = v.get('actual_score', '0-0').split('-') if '-' in v.get('actual_score', '') else ['0', '0']
         half_parts = v.get('half_score', '0-0').split('-') if '-' in v.get('half_score', '') else ['0', '0']
         roi_info = v.get('roi') or {}
@@ -2473,7 +2485,10 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
     had_rate = had_hits / has_pred * 100 if has_pred else 0
     hhad_rate = hhad_hits / has_pred * 100 if has_pred else 0
     score_rate = score_hits / has_pred * 100 if has_pred else 0
-    total_goals_list = [v.get('total_goals', 0) for v in verified_matches]
+    # M13: 计算均值时同样排除赛果未获取的记录(total_goals=-1)
+    valid_stats = [v for v in verified_matches
+                   if v.get('data_available', True) and v.get('actual_score') != '数据未获取']
+    total_goals_list = [v.get('total_goals', 0) for v in valid_stats]
     avg_goals = sum(total_goals_list) / len(total_goals_list) if total_goals_list else 0
     over25 = sum(1 for g in total_goals_list if g >= 3)
     under25 = sum(1 for g in total_goals_list if g <= 2)
@@ -2533,6 +2548,7 @@ def get_historical_stats():
     if not os.path.exists(DB_PATH):
         return None
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout=5000")
     c = conn.cursor()
 
     # 累计统计
@@ -2651,6 +2667,7 @@ def get_prediction_feedback(league=None, had_dir=None, conf_score=None, odds_ran
         return None
 
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout=5000")
     c = conn.cursor()
 
     result = {'sample_size': 0, 'overall_rate': 0, 'recommendation': ''}
@@ -2977,7 +2994,7 @@ def main():
         # ★★★ Ultra 7.7: 检查数据是否可用, 无比分数据时跳过验证 ★★★
         if not result.get('data_available', True):
             print(f"  {key} {result['home']} vs {result['away']} | ⚠️ 赛果数据未获取(API未返回比分), 跳过验证")
-            print(f"    → 请稍后重试, 或手动验证: python3 v215_verify.py --manual-score {key} 主队比分 客队比分")
+            print(f"    → 请稍后重试; 若比赛已结束, 可在脚本顶部 MANUAL_SCORES 字典中填写确认比分后重跑验证")
             verified_matches.append({
                 'key': key,
                 'home': result['home'],
@@ -3050,6 +3067,15 @@ def main():
                 'had_odds': result['had_odds'],
                 'source': result.get('source', 'sporttery'),
             })
+
+    # M13: 赛果未获取的占位记录不参与统计/入库 —
+    # 排除后不污染命中率(total=分母), 不将 total_goals=-1 计入均值, 不伪造0-0入库
+    valid_matches = [v for v in verified_matches
+                     if v.get('data_available', True) and v.get('actual_score') != '数据未获取']
+    skipped_no_data = len(verified_matches) - len(valid_matches)
+    verified_matches = valid_matches
+    if skipped_no_data:
+        print(f"  ⚠️ 已排除 {skipped_no_data} 场赛果未获取的占位记录(不参与统计/入库)")
 
     # 统计
     total = len(verified_matches)
@@ -3195,6 +3221,7 @@ def settle_sim_bets(verified_matches):
     import json as _json
 
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout=5000")
     c = conn.cursor()
 
     # 获取所有待结算投注
@@ -3221,7 +3248,14 @@ def settle_sim_bets(verified_matches):
 
     for bet in pending_bets:
         bet_id, bet_type, stake, multiplier, total_odds, potential_payout, matches_json = bet
-        matches = _json.loads(matches_json)
+
+        # L3: matches_json解析防护 — 解析失败保留pending并跳过该注
+        try:
+            matches = _json.loads(matches_json)
+        except Exception as _je:
+            print(f"  ⚠️ {bet_id} matches_json解析失败, 保留待结算: {_je}")
+            still_pending += 1
+            continue
 
         # 检查每场比赛是否都有赛果
         all_resolved = True
@@ -3230,8 +3264,9 @@ def settle_sim_bets(verified_matches):
         for m in matches:
             key = m['key']
             v = verified_map.get(key)
-            if not v or not v['actual_had']:
-                # 该场比赛还没有赛果
+            # S6: '数据未获取'占位值truthy, 不能仅靠not判断 — 显式识别占位值
+            if not v or v.get('actual_had') in ('', '数据未获取', None):
+                # 该场比赛还没有赛果(或赛果为占位值)
                 all_resolved = False
                 break
 
@@ -3240,9 +3275,13 @@ def settle_sim_bets(verified_matches):
             market = m['market']
 
             if market == 'HHAD':
-                actual = v['actual_hhad']
+                actual = v.get('actual_hhad', '')
+                # S6: HHAD玩法需检查actual_hhad是否缺失
+                if actual in ('', '数据未获取', None):
+                    all_resolved = False
+                    break
             else:
-                actual = v['actual_had']
+                actual = v.get('actual_had', '')
 
             hits.append(bet_dir == actual)
 
@@ -3255,7 +3294,7 @@ def settle_sim_bets(verified_matches):
 
         # M串N 容错串关结算 (借鉴 SportteryAPI parlay.ts):
         # 奖金 = Σ 命中组合 (2元×Π赔率×倍数), 单票封顶500万
-        _mp = _re.match(r'^(\d+)串(\d+)$', bet_type or '')
+        _mp = re.match(r'^(\d+)串(\d+)$', bet_type or '')
         if _mp and _mp.group(2) != '1':
             from itertools import combinations as _comb
             _M = int(_mp.group(1))
@@ -3321,6 +3360,7 @@ def settle_sim_bets(verified_matches):
 def show_sim_stats():
     """显示模拟投注累计统计"""
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout=5000")
     c = conn.cursor()
     c.execute("SELECT status, COUNT(*), SUM(stake), SUM(actual_payout), SUM(profit) FROM sim_bets GROUP BY status")
     rows = c.fetchall()

@@ -15,11 +15,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER
 from reportlab.lib import colors
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, LongTable,
-    PageBreak, KeepTogether
 )
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -369,9 +368,9 @@ def build_stat_grid(stats, styles):
         # 判断颜色
         val_clean = value.replace('%', '').replace('-', '').replace('/', '')
         try:
-            num = float(val_clean)
-        except:
-            num = -1
+            v = float(val_clean)
+        except (ValueError, TypeError):
+            v = None  # 非数值 (如 N/A) 不触发颜色判断
 
         bg_color = BG_CARD
         text_color = ACCENT_BLUE
@@ -388,7 +387,7 @@ def build_stat_grid(stats, styles):
         elif 'ROI' in label and '-' in value:
             bg_color = BG_MISS
             text_color = ACCENT_RED
-        elif 'ROI' in label and ('+' in value or float(val_clean) > 0 if val_clean else False):
+        elif 'ROI' in label and ('+' in value or (v is not None and v > 0)):
             bg_color = BG_HIT
             text_color = ACCENT_GREEN
 

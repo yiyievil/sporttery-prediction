@@ -64,43 +64,49 @@ def brier(pred, actual_idx):
 def logloss(pred, actual_idx):
     return -math.log(max(pred[actual_idx], 1e-9))
 
-conn = sqlite3.connect(DB)
-c = conn.cursor()
-c.execute('''SELECT market_p_w,market_p_d,market_p_l, power_p_w,power_p_d,power_p_l,
-                    poisson_p_w,poisson_p_d,poisson_p_l, elo_p_w,elo_p_d,elo_p_l, result
-             FROM match_four_source
-             WHERE result IS NOT NULL AND market_p_w IS NOT NULL AND power_p_w IS NOT NULL
-               AND poisson_p_w IS NOT NULL AND elo_p_w IS NOT NULL''')
-rows = c.fetchall()
-conn.close()
-R2I = {'W': 0, 'D': 1, 'L': 2}
-n_draw = sum(1 for r in rows if r[12] == 'D')
-print(f"样本: {len(rows)}场, 实际平局率: {n_draw/len(rows)*100:.1f}%\n")
 
-variants = [('A 现状(几何+方向)', False, False),
-            ('B P9(混合+方向)', True, False),
-            ('C P10(几何+JS)', False, True),
-            ('D P9+P10(混合+JS)', True, True)]
+def main():
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute('''SELECT market_p_w,market_p_d,market_p_l, power_p_w,power_p_d,power_p_l,
+                        poisson_p_w,poisson_p_d,poisson_p_l, elo_p_w,elo_p_d,elo_p_l, result
+                 FROM match_four_source
+                 WHERE result IS NOT NULL AND market_p_w IS NOT NULL AND power_p_w IS NOT NULL
+                   AND poisson_p_w IS NOT NULL AND elo_p_w IS NOT NULL''')
+    rows = c.fetchall()
+    conn.close()
+    R2I = {'W': 0, 'D': 1, 'L': 2}
+    n_draw = sum(1 for r in rows if r[12] == 'D')
+    print(f"样本: {len(rows)}场, 实际平局率: {n_draw/len(rows)*100:.1f}%\n")
 
-print(f"{'变体':<22}{'Brier':>8}{'LogLoss':>9}{'准确率':>8}{'预测平局率':>10}{'市场基准差':>10}")
-for name, hybrid, js_mode in variants:
+    variants = [('A 现状(几何+方向)', False, False),
+                ('B P9(混合+方向)', True, False),
+                ('C P10(几何+JS)', False, True),
+                ('D P9+P10(混合+JS)', True, True)]
+
+    print(f"{'变体':<22}{'Brier':>8}{'LogLoss':>9}{'准确率':>8}{'预测平局率':>10}{'市场基准差':>10}")
+    for name, hybrid, js_mode in variants:
+        tb = tl = 0.0; hit = 0; pd_sum = 0.0
+        for r in rows:
+            probs = [[r[0],r[1],r[2]],[r[3],r[4],r[5]],[r[6],r[7],r[8]],[r[9],r[10],r[11]]]
+            ai = R2I[r[12]]
+            fused, _ = fuse_variant(probs, hybrid, js_mode)
+            tb += brier(fused, ai); tl += logloss(fused, ai)
+            if fused.index(max(fused)) == ai: hit += 1
+            pd_sum += fused[1]
+        N = len(rows)
+        print(f"{name:<22}{tb/N:>8.4f}{tl/N:>9.4f}{hit/N*100:>7.1f}%{pd_sum/N*100:>9.1f}%{(pd_sum/N - n_draw/N)*100:>+9.1f}pp")
+
+    # 市场源单独基准
     tb = tl = 0.0; hit = 0; pd_sum = 0.0
     for r in rows:
-        probs = [[r[0],r[1],r[2]],[r[3],r[4],r[5]],[r[6],r[7],r[8]],[r[9],r[10],r[11]]]
-        ai = R2I[r[12]]
-        fused, _ = fuse_variant(probs, hybrid, js_mode)
-        tb += brier(fused, ai); tl += logloss(fused, ai)
-        if fused.index(max(fused)) == ai: hit += 1
-        pd_sum += fused[1]
+        p = [r[0],r[1],r[2]]; ai = R2I[r[12]]
+        tb += brier(p, ai); tl += logloss(p, ai)
+        if p.index(max(p)) == ai: hit += 1
+        pd_sum += p[1]
     N = len(rows)
-    print(f"{name:<22}{tb/N:>8.4f}{tl/N:>9.4f}{hit/N*100:>7.1f}%{pd_sum/N*100:>9.1f}%{(pd_sum/N - n_draw/N)*100:>+9.1f}pp")
+    print(f"{'市场源单独(基准)':<22}{tb/N:>8.4f}{tl/N:>9.4f}{hit/N*100:>7.1f}%{pd_sum/N*100:>9.1f}%{(pd_sum/N - n_draw/N)*100:>+9.1f}pp")
 
-# 市场源单独基准
-tb = tl = 0.0; hit = 0; pd_sum = 0.0
-for r in rows:
-    p = [r[0],r[1],r[2]]; ai = R2I[r[12]]
-    tb += brier(p, ai); tl += logloss(p, ai)
-    if p.index(max(p)) == ai: hit += 1
-    pd_sum += p[1]
-N = len(rows)
-print(f"{'市场源单独(基准)':<22}{tb/N:>8.4f}{tl/N:>9.4f}{hit/N*100:>7.1f}%{pd_sum/N*100:>9.1f}%{(pd_sum/N - n_draw/N)*100:>+9.1f}pp")
+
+if __name__ == '__main__':
+    main()

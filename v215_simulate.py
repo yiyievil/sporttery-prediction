@@ -187,7 +187,13 @@ def load_predictions(pred_file):
             else:
                 market = 'HAD'
             conf = pb_conf
-            bet_dir = option.replace('HAD', '').replace('HHAD', '').replace('双选', '')
+            # 修复: 按前缀精确剥离玩法标记, 避免 'HHAD让胜'.replace('HAD','') 误删中间子串 → 'H让胜'
+            if option.startswith('HHAD'):
+                bet_dir = option[4:].replace('双选', '')
+            elif option.startswith('HAD'):
+                bet_dir = option[3:].replace('双选', '')
+            else:
+                bet_dir = option.replace('双选', '')
         else:
             # 回退: 取HHAD方向 (通常置信度更高)
             option = f"HHAD{hhad_dir}"
@@ -359,7 +365,8 @@ def save_bet(parlay, pred_file, pred_meta):
     """保存模拟投注到数据库"""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    now = datetime.now().strftime('%Y%m%d_%H%M%S')
+    # L5: 加微秒时间戳, 避免同秒内多次投注产生相同 bet_id 碰撞
+    now = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
     import random as _rnd
     bet_id = f'SIM_{now}_{_rnd.randint(100, 999)}'
 
@@ -479,16 +486,30 @@ def run_simulation(date_arg=None, weekday=None):
         print("  ⚠️ 未找到预测文件")
         return
 
-    pred_file = str(files[0])
-    print(f"  📂 加载预测: {os.path.basename(pred_file)}")
-
     # 2. 加载预测, 提取候选场次
-    candidates, pred_meta = load_predictions(pred_file)
-    print(f"  📊 可投注场次: {len(candidates)}场")
+    # M15修复: 最新文件 results 可能为空(无候选场次), 依次回退到更早的预测文件
+    pred_file = None
+    candidates = []
+    pred_meta = {}
+    for f in files:
+        try:
+            cands, meta = load_predictions(str(f))
+        except Exception as e:
+            print(f"  ⚠️ 加载失败(跳过): {os.path.basename(f)} - {e}")
+            continue
+        if cands:
+            pred_file = str(f)
+            candidates = cands
+            pred_meta = meta
+            break
+        print(f"  ⚠️ {os.path.basename(f)} 无候选场次, 回退检查更早的预测文件...")
 
-    if not candidates:
-        print("  ⚠️ 无符合条件的场次 (需 ★★+)")
+    if pred_file is None or not candidates:
+        print("  ⚠️ 所有预测文件均无可投注场次 (需 ★★+)")
         return
+
+    print(f"  📂 加载预测: {os.path.basename(pred_file)}")
+    print(f"  📊 可投注场次: {len(candidates)}场")
 
     for c in candidates:
         sg = ' [单关]' if c.get('betting_single') else ''
@@ -517,12 +538,19 @@ def run_simulation(date_arg=None, weekday=None):
     print_bet_card(bet_id, parlay, pred_file)
 
     # 6. 容错串关 (M串N, 容1错): 按覆盖规则触发
+    # M14修复: 每条规则必须用 candidates[:need_legs] 计算 min_star —
+    # 原代码用 candidates[:legs] 取样本, 与 build_coverage_parlay 实际使用的
+    # candidates[:need_legs] 不一致, 导致触发条件(最低星级)失真
     legs = parlay['legs']
-    min_star = min(m.get('star_score', 0) if 'star_score' in m else 0
-                   for m in candidates[:legs]) if legs else 0
     for need_legs, need_star, cov_type in COVERAGE_RULES:
-        if legs >= need_legs and min_star >= need_star:
-            cov = build_coverage_parlay(candidates[:need_legs], cov_type)
+        if legs < need_legs:
+            continue
+        sample = candidates[:need_legs]
+        if not sample:
+            continue
+        min_star = min(m.get('star_score', 0) for m in sample)
+        if min_star >= need_star:
+            cov = build_coverage_parlay(sample, cov_type)
             if cov:
                 cov_id = save_bet(cov, pred_file, pred_meta)
                 print(f"\n  🛡️ 容错串关: {cov_type} ({cov['n_bets']}注, 容1错)")

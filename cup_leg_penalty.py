@@ -311,13 +311,13 @@ def compute_cup_leg_penalty(match_num, league, home_name='', away_name=''):
         # 本场主队首回合落后
         trailing_side = 'home'
         stars = '★' * int(conf_cap) + ('½' if conf_cap % 1 == 0.5 else '')
-        note = (f'首回合{first_leg_home}-{first_leg_away}落后{abs_diff}球(总比分{first_leg_home+first_leg_away}-{first_leg_away+first_leg_home}),'
+        note = (f'首回合{first_leg_home}-{first_leg_away}落后,首回合分差{abs_diff}球,'
                 f'主队λ×{lambda_factor:.2f}(背水一战),客队λ×{leader_factor:.2f}(保守),置信度封顶{stars} [来源:{source}]')
     else:
         # 本场客队首回合落后
         trailing_side = 'away'
         stars = '★' * int(conf_cap) + ('½' if conf_cap % 1 == 0.5 else '')
-        note = (f'首回合{first_leg_home}-{first_leg_away}领先{abs_diff}球(总比分{first_leg_home+first_leg_away}-{first_leg_away+first_leg_home}),'
+        note = (f'首回合{first_leg_home}-{first_leg_away}领先,首回合分差{abs_diff}球,'
                 f'客队λ×{lambda_factor:.2f}(背水一战),主队λ×{leader_factor:.2f}(保守),置信度封顶{stars} [来源:{source}]')
 
     return {

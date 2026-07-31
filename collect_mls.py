@@ -10,10 +10,8 @@ MLS 赛季: 2025 (2月-11月), 2026 (2月-至今)
 """
 
 import os
-import re
 import sqlite3
 import time
-import json
 from datetime import datetime, timedelta
 import requests
 
@@ -74,7 +72,20 @@ def fetch_sporttery_mls_matches():
                     'pcOrWap': '1',
                 }
                 try:
-                    r = requests.get(RESULT_URL, headers=HEADERS_SP, params=params, timeout=15)
+                    # M10: 分页请求失败重试2次 (time.sleep(2)), 避免单月数据永久缺失
+                    r = None
+                    for _attempt in range(3):
+                        try:
+                            r = requests.get(RESULT_URL, headers=HEADERS_SP, params=params, timeout=15)
+                            if r.status_code == 200:
+                                break
+                        except Exception:
+                            r = None
+                        if _attempt < 2:
+                            time.sleep(2)
+                    if r is None:
+                        print(f"  [WARN] 请求失败(已重试2次), 跳过: {cb}~{ce} page{page}")
+                        break
                     data = r.json()
                     val = data.get('value', {})
                     results = val.get('matchResult', [])
@@ -131,7 +142,8 @@ def fetch_sporttery_mls_matches():
                             'league_id': m.get('leagueId'),
                         })
                     
-                    total_pages = val.get('pages', 1)
+                    # S5: 兼容 totalPage/pages 两种字段名, 并int()保护
+                    total_pages = int(val.get('totalPage') or val.get('pages') or 1)
                     if page >= total_pages:
                         break
                     page += 1

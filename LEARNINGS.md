@@ -28,6 +28,22 @@
 
 ## 错误修复记录
 
+### ERR-20260731-002: 全量代码审查批量修复 (20文件) (严重)
+- **症状**: 代码审查发现 3 处 NameError 笔误(_re/_sqlite3)、M串N结算必崩、HHAD主推结算必败、SQLite连接泄漏、import副作用、分页字段名不一致、缓存无TTL等40+问题
+- **根因**: 历史迭代积累的笔误 + 功能新增(容错串关)未同步结算侧 + 脚本无 __main__ 保护 + 采集脚本缺少重试/TTL
+- **修复**: 20个文件 — v215_e2e(S1/S2/S3/M1/M2/M4/M5/M7/L1 赔率校验/API防护/连接finally/半星stars_to_score/0-0校准字段同步/数学边界) + v215_verify(S6赛果缺失保pending/M13不入库/M18半场正则/L1 busy_timeout/L3 json防护/L8 html转义) + v215_simulate(M14样本/M15文件回退/L5微秒ID) + v215_update(M16只认场次级cached_at/M17失败告警+原子写) + 采集(S5 totalPage兼容/M8 float防护/M9 match_id_map TTL/M10重试除零/M11 np_xg列名/M12 ProxyError) + SWOT/报告/工具(S4 __main__保护/M19迁移边界/M20 recall免写盘/M21文案/M22 tempfile/M23 ROI防护/M24解析警告)
+- **验证**: 25模块全导入OK、py_compile全过、3串4结算正确、赛果缺失保持pending、import无副作用
+- **预防**: 概率函数入口统一加边界防护; 新增功能必须同步所有消费方; 所有脚本加__main__保护
+
+
+### ERR-20260731-001: leisu SWOT 全为"解析为空" — solve_waf_jsdom_v2.js 缺失 (严重)
+- **症状**: 预测时 leisu 卡片发现正常(23张)且匹配成功, 但所有详情页解析为空, 全部降级 stats 备用
+- **根因**: .gitignore 第45行 `solve_waf_*.js` 排除 WAF 求解脚本 → 提交 d526e82 (Ultra 7.8-7.9 仓库清理) 删除 solve_waf_jsdom_v2.js → 仓库副本缺失该文件 → leisu_get 遇 WAF 挑战页时 subprocess.run(node 脚本) 因文件不存在抛异常 → solve_waf 失败 → 详情页返回 WAF 挑战页 → parse_swot_from_html 解析 0 条
+- **修复**: 从删除前提交 545905e 恢复 solve_waf_jsdom_v2.js (1742字节) 到工作区
+- **验证**: 端到端回归 3/3 场解析成功 (瓦勒伦加9条/博德闪耀9条/纽约城6条)
+- **预防**: 该文件是运行必需依赖, 应纳入 git 版本管理(修改 .gitignore 移除 solve_waf_jsdom_v2.js 匹配); 重新 clone 后必须检查该文件存在
+
+
 ### ERR-20260730-001: 杯赛两回合惩罚逻辑方向反转 (Ultra 7.7)
 - **症状**: 波兹南首回合4-1领先, 次回合0-3惨败; 模型预测主胜, 实际客胜
 - **根因**: 旧逻辑(Ultra 7.6)落后方λ×0.90(减少进攻), 但杯赛次回合落后方应背水一战强攻

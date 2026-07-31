@@ -39,6 +39,17 @@ predictions/report_2026072*.html
 # --- 数据库文件(大文件, 不入库) ---
 sporttery.db
 *.db.bak
+predictions/*.db
+
+# --- 运行时数据产物(不入库) ---
+predictions/league_calibration.json
+predictions/memory_store.json
+predictions/swot_data_refreshed.json
+
+# --- 所有预测输出和报告(不入库, 仅保留代码) ---
+predictions/pred_*.json
+predictions/report_*.pdf
+predictions/report_*.html
 
 # --- 临时/调试文件 ---
 downloaded_files/

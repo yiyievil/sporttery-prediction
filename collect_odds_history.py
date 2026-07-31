@@ -21,10 +21,8 @@ import os
 import sqlite3
 import time
 import json
-import re
 from datetime import datetime, timedelta
 import requests
-from concurrent.futures import as_completed
 
 # ============================================================
 # 配置
@@ -224,7 +222,8 @@ def backfill_match_ids():
                         m.get('leagueNameAbbr', ''),
                     ))
                 
-                total_pages = val.get('totalPage', 1)
+                # S5: totalPage为主候选, 兼容pages字段回退, 并int()保护
+                total_pages = int(val.get('totalPage') or val.get('pages') or 1)
                 if page >= total_pages:
                     break
                 page += 1
@@ -262,7 +261,9 @@ def backfill_match_ids():
     total_with_id = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM historical_matches")
     total = c.fetchone()[0]
-    print(f"  数据库总比赛: {total}, 有matchId: {total_with_id} ({total_with_id*100//total}%)")
+    # M10: total==0 时避免除零
+    pct_str = f"{total_with_id*100//total}%" if total else "0%"
+    print(f"  数据库总比赛: {total}, 有matchId: {total_with_id} ({pct_str})")
     
     # 按联赛统计
     c.execute('''SELECT league, 

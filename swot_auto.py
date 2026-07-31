@@ -50,6 +50,7 @@ def discover_leisu_guides(session):
     """
     html, ok = leisu_get(session, 'https://www.leisu.com/guide')
     if not ok:
+        print("  [SWOT] ⚠️ leisu /guide 获取失败, 无当日SWOT卡片 (页面结构可能变化, 请检查 https://www.leisu.com/guide)")
         return []
 
     cards = {}
@@ -71,6 +72,8 @@ def discover_leisu_guides(session):
             'league': league.group(1).strip() if league else '',
             'url': f'https://www.leisu.com/guide/swot-{gid}',
         }
+    if not cards:
+        print("  [SWOT] ⚠️ leisu /guide 解析不到SWOT卡片(0张), 页面结构可能已变化, 请检查 https://www.leisu.com/guide")
     return list(cards.values())
 
 

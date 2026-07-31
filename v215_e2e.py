@@ -371,52 +371,65 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
     
     若比赛已结束(getMatchListV1不再返回), 自动回退到结果API获取赔率
     """
-    r = fetch_with_retry(SPORTTERY_URL, SPORTTERY_HEADERS)
-    data = r.json()
+    try:
+        r = fetch_with_retry(SPORTTERY_URL, SPORTTERY_HEADERS)
+        data = r.json()
+    except Exception as e:
+        print(f"  [错误] sporttery 主API请求/解析失败: {e}")
+        return {}
     
     matches = {}
-    for mi in data['value']['matchInfoList']:
+    for mi in (data.get('value') or {}).get('matchInfoList', []) or []:
         weekday = mi.get('weekday', '')
-        for s in mi['subMatchList']:
-            full_num = str(s['matchNum'])
-            match_num = full_num[-3:]  # 取后3位
-            
-            if match_num not in match_numbers:
-                continue
-            
-            match_date = s.get('matchDate', '')
-            # 日期过滤
-            if target_date and match_date != target_date:
-                continue
-            
-            # Key: 周X+编号 (如 '周四201')
-            key = f"{weekday}{match_num}"
-            
-            had = hhad = {}
-            had_in_list = False  # Ultra 7.10: 跟踪体彩API是否实际返回HAD盘口
-            for o in s.get('oddsList', []):
-                if o['poolCode'] == 'HAD':
-                    had = {'h': float(o['h']), 'd': float(o['d']), 'a': float(o['a'])}
-                    had_in_list = True
-                elif o['poolCode'] == 'HHAD':
-                    hhad = {'h': float(o['h']), 'd': float(o['d']), 'a': float(o['a']),
-                            'goalLine': float(o.get('goalLine', 0) or 0)}
+        for s in mi.get('subMatchList', []) or []:
+            try:
+                full_num = str(s.get('matchNum', ''))
+                match_num = full_num[-3:] if full_num else ''
+                
+                if match_num not in match_numbers:
+                    continue
+                
+                match_date = s.get('matchDate', '')
+                # 日期过滤 (统一为字符串比较, 避免 date 对象与字符串恒不等)
+                if target_date and match_date != str(target_date):
+                    continue
+                
+                # Key: 周X+编号 (如 '周四201')
+                key = f"{weekday}{match_num}"
+                # 同键去重保护: 若已有更晚的 matchDate 则跳过, 否则覆盖
+                if key in matches and matches[key].get('match_date', '') >= match_date:
+                    continue
+                
+                had = hhad = {}
+                had_in_list = False  # Ultra 7.10: 跟踪体彩API是否实际返回HAD盘口
+                for o in s.get('oddsList', []) or []:
+                    if o.get('poolCode') == 'HAD':
+                        had = {'h': float(o.get('h') or 0), 'd': float(o.get('d') or 0),
+                               'a': float(o.get('a') or 0)}
+                        had_in_list = True
+                    elif o.get('poolCode') == 'HHAD':
+                        hhad = {'h': float(o.get('h') or 0), 'd': float(o.get('d') or 0),
+                                'a': float(o.get('a') or 0),
+                                'goalLine': float(o.get('goalLine', 0) or 0)}
 
-            matches[key] = {
-                'match_num': match_num,
-                'full_num': full_num,
-                'weekday': weekday,
-                'key': key,
-                'match_id': s.get('matchId'),
-                'league': s.get('leagueAbbName', ''),
-                'home': s.get('homeTeamAbbName', ''),
-                'away': s.get('awayTeamAbbName', ''),
-                'match_date': match_date,
-                'match_time': s.get('matchTime', ''),
-                'HAD': had,
-                'HHAD': hhad,
-                'had_in_list': had_in_list,  # Ultra 7.10: HAD是否在体彩开盘列表
-            }
+                matches[key] = {
+                    'match_num': match_num,
+                    'full_num': full_num,
+                    'weekday': weekday,
+                    'key': key,
+                    'match_id': s.get('matchId'),
+                    'league': s.get('leagueAbbName', ''),
+                    'home': s.get('homeTeamAbbName', ''),
+                    'away': s.get('awayTeamAbbName', ''),
+                    'match_date': match_date,
+                    'match_time': s.get('matchTime', ''),
+                    'HAD': had,
+                    'HHAD': hhad,
+                    'had_in_list': had_in_list,  # Ultra 7.10: HAD是否在体彩开盘列表
+                }
+            except Exception as _e:
+                print(f"  [错误] 解析场次 {s.get('matchNum', '?')} 失败, 跳过: {_e}")
+                continue
     
     # 周几过滤: 如果指定了TARGET_WEEKDAY, 只保留该周几的比赛
     if TARGET_WEEKDAY:
@@ -1263,6 +1276,9 @@ def poisson(k, lam):
     """泊松分布概率"""
     if k < 0:
         return 0.0
+    if lam <= 0:
+        # 边界防护: 负/零 λ 无意义, 与 negbin_pmf 语义一致
+        return 1.0 if k == 0 else 0.0
     return math.exp(-lam) * (lam ** k) / math.factorial(k)
 
 
@@ -1304,6 +1320,16 @@ def skellam_pmf(k, lam_h, lam_a):
     P(home - away = k) 直接给出净胜球概率, 用于HHAD让球预测。
     比遍历8×8比分矩阵更精确(覆盖所有进球数, 不截断在7球)。
     """
+    if lam_h <= 0 or lam_a <= 0:
+        # 边界防护: 任一 λ ≤ 0 时退化为确定性分布
+        diff = 0 if lam_h == 0 else 1
+        if lam_h <= 0 and lam_a <= 0:
+            return 1.0 if k == 0 else 0.0
+        lam_pos = lam_h if lam_h > 0 else lam_a
+        if lam_h <= 0:  # 主队不进球: P(k) = Poisson(-k, lam_a)
+            return poisson(-k, lam_pos)
+        else:           # 客队不进球: P(k) = Poisson(k, lam_h)
+            return poisson(k, lam_pos)
     # P(X-Y=k) = exp(-(λ₁+λ₂)) × (λ₁/λ₂)^(k/2) × I_|k|(2√(λ₁λ₂))
     # I_k = 修正贝塞尔函数第一类
     try:
@@ -1731,13 +1757,14 @@ def shin_method(odds_list):
     """
     N = len(odds_list)
     if N < 2:
-        return [1.0]
+        return [1.0] + [0.0] * (len(odds_list) - 1)
 
     inv_odds = [1.0 / o for o in odds_list if o > 0]
     if len(inv_odds) < N:
-        # 某些赔率为0或负, 回退到简单归一化
+        # 某些赔率为0或负, 回退到简单归一化 (补齐等长列表, 避免调用方越界)
         s = sum(inv_odds)
-        return [io / s for io in inv_odds]
+        probs = [io / s for io in inv_odds] if s > 0 else [1.0 / N] * N
+        return probs + [0.0] * (N - len(probs))
 
     # 计算Shin参数z
     sum_inv = sum(inv_odds)
@@ -2020,11 +2047,12 @@ def power_method(odds_list):
     """
     N = len(odds_list)
     if N < 2:
-        return [1.0]
+        return [1.0] + [0.0] * (len(odds_list) - 1)
     inv_odds = [1.0 / o for o in odds_list if o > 0]
     if len(inv_odds) < N:
         s = sum(inv_odds)
-        return [io / s for io in inv_odds] if s > 0 else [1.0 / N] * N
+        probs = [io / s for io in inv_odds] if s > 0 else [1.0 / N] * N
+        return probs + [0.0] * (N - len(probs))
     margin = sum(inv_odds) - 1.0
     beta = 1.0 / (1.0 + margin * 2.0) if margin > 0 else 1.0
     powered = [io ** beta for io in inv_odds]
@@ -3007,6 +3035,7 @@ def _load_league_calibration():
     if not os.path.exists(_CALIBRATION_DB):
         return None
     
+    conn = None
     try:
         conn = sqlite3.connect(_CALIBRATION_DB)
         c = conn.cursor()
@@ -3259,8 +3288,6 @@ def _load_league_calibration():
         except Exception:
             pass  # odds_change_history 表可能不存在
 
-        conn.close()
-
         if not leagues:
             return None
 
@@ -3286,6 +3313,11 @@ def _load_league_calibration():
     except Exception as e:
         print(f'  [标定] 加载失败, 使用经验值: {e}')
         return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 # 启动时加载 (失败则使用经验值, 不影响原有逻辑)
 _CALIBRATION = _load_league_calibration()
@@ -3602,7 +3634,7 @@ def _get_adv_db():
     if not os.path.exists(_CALIBRATION_DB):
         return None
     try:
-        _ADV_DB_CONN = _sqlite3.connect(_CALIBRATION_DB)
+        _ADV_DB_CONN = sqlite3.connect(_CALIBRATION_DB)
         return _ADV_DB_CONN
     except Exception:
         return None
@@ -3830,6 +3862,7 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
     if not os.path.exists(_db_path):
         return None
 
+    conn = None
     try:
         conn = sqlite3.connect(_db_path)
         c = conn.cursor()
@@ -3854,12 +3887,12 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
             WHERE match_date < ? AND is_result = 1
               AND (home_team IN ({placeholders}) OR away_team IN ({placeholders}))
               AND home_xg IS NOT NULL AND away_xg IS NOT NULL
+              AND home_goals IS NOT NULL AND away_goals IS NOT NULL
             ORDER BY match_date DESC
             LIMIT ?
         ''', (match_date, *team_names, *team_names, window))
 
         rows = c.fetchall()
-        conn.close()
 
         if not rows:
             return None
@@ -3953,6 +3986,11 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
         }
     except Exception as e:
         return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 _ODDS_BINS = [(1.0,1.5,'1.0-1.5'),(1.5,2.0,'1.5-2.0'),
@@ -4471,6 +4509,7 @@ def query_draw_bias():
     if _DRAW_BIAS_CACHE['value'] is not None:
         return _DRAW_BIAS_CACHE['value']
     _DRAW_BIAS_CACHE['value'] = 0.0
+    conn = None
     try:
         db_path = os.path.join(os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)),
                                'predictions', 'regression.db')
@@ -4482,7 +4521,6 @@ def query_draw_bias():
             WHERE pred_had_p IS NOT NULL AND pred_had_p != ''
               AND had_result IN ('胜','平','负')""")
         rows = c.fetchall()
-        conn.close()
         preds, draws = [], 0
         for p, r in rows:
             m = re.findall(r'(\d+(?:\.\d+)?)%', str(p))
@@ -4499,6 +4537,12 @@ def query_draw_bias():
         return corr
     except Exception:
         return 0.0
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def query_historical_feedback(league, had_dir, conf_score, odds):
     """查询历史验证数据获取反馈 — 贝叶斯更新版 (Ultra 6.1)
@@ -4525,6 +4569,7 @@ def query_historical_feedback(league, had_dir, conf_score, odds):
     if not os.path.exists(DB_PATH):
         return None
 
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -4537,7 +4582,6 @@ def query_historical_feedback(league, had_dir, conf_score, odds):
         row = c.fetchone()
         total, hits = row[0] or 0, row[1] or 0
         if total < 3:
-            conn.close()
             return None
         feedback['overall_rate'] = round(hits / total * 100, 1)
         feedback['sample_size'] = total
@@ -4588,8 +4632,15 @@ def query_historical_feedback(league, had_dir, conf_score, odds):
 
         # 4. 置信度校准 (贝叶斯)
         if conf_score >= 4.0:
+            # 覆盖 4.0★(★★★★)/4.5★(★★★★½)/5.0★(★★★★★) 三档, 用 GLOB 精确排除高星误匹配
             c.execute('''SELECT COUNT(*), SUM(had_hit) FROM verify_history
-                WHERE pred_had_dir != '' AND (pred_had_conf LIKE '%★★★★★' OR pred_had_conf LIKE '%★★★★½')''')
+                WHERE pred_had_dir != '' AND (
+                    pred_had_conf GLOB '*★★★★★'
+                    OR pred_had_conf GLOB '*★★★★½'
+                    OR (pred_had_conf GLOB '*★★★★'
+                        AND pred_had_conf NOT GLOB '*★★★★★'
+                        AND pred_had_conf NOT GLOB '*★★★★½')
+                )''')
             row = c.fetchone()
             hc_total, hc_hits = row[0] or 0, row[1] or 0
             if hc_total >= 1:
@@ -4616,8 +4667,6 @@ def query_historical_feedback(league, had_dir, conf_score, odds):
                 feedback['odds_range_samples'] = o_total
                 feedback['odds_range_ci'] = f"{ci_lo*100:.0f}%-{ci_hi*100:.0f}%"
 
-        conn.close()
-
         if len(feedback) <= 2:
             return None
 
@@ -4639,6 +4688,11 @@ def query_historical_feedback(league, had_dir, conf_score, odds):
         return feedback
     except Exception:
         return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def predict_match(match_num, data):
     """七步预测 — 内部计算，仅输出结论"""
@@ -4667,6 +4721,7 @@ def predict_match(match_num, data):
     
     # 无外部盘口数据时, 从历史库推断市场盘口
     if market_gl_source == '默认值' and had and had.get('h'):
+        _conn = None
         try:
             _db_path = os.path.join(os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)), 'predictions', 'historical_odds.db')
             if os.path.exists(_db_path):
@@ -4690,15 +4745,20 @@ def predict_match(match_num, data):
                     print(f"  [盘口推断] {league} 最近10场场均{_row[0]:.1f}球 → 盘口{market_goal_line}")
                 else:
                     print(f"  [盘口推断] {league} 历史库无足够数据, 保持默认2.5")
-                _conn.close()
         except Exception as e:
             print(f"  [盘口推断] 历史库查询失败: {e}")
+        finally:
+            if _conn is not None:
+                try:
+                    _conn.close()
+                except Exception:
+                    pass
     
     # Step 2: P0 (体彩 + 500.com融合)
     # Ultra 2.0: 使用Shin's method替代简单1/odds归一化, 修正favorite-longshot bias
     # 体彩HAD可能为空(未开盘)，此时用500.com欧指代替
     # league 已在盘口推断前定义
-    if had and 'h' in had:
+    if had and had.get('h', 0) > 0 and had.get('d', 0) > 0 and had.get('a', 0) > 0:
         # Ultra 2.0: Shin's method 替代简单归一化
         shin_probs = shin_method([had['h'], had['d'], had['a']])
         # Ultra 6.6: 联赛标定修正 Shin 输出 (按联赛+赔率区间修正系统性偏差)
@@ -4868,6 +4928,7 @@ def predict_match(match_num, data):
     
     # Bug3修复: 无外部数据时, 从历史库获取球队统计
     if not home_stats or not away_stats:
+        _conn = None
         try:
             _db_path = os.path.join(os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)), 'predictions', 'historical_odds.db')
             if os.path.exists(_db_path):
@@ -4901,14 +4962,20 @@ def predict_match(match_num, data):
                         away_stats = {'avg_gf': _row[0], 'avg_ga': _row[1], 'games': _row[2],
                                       'form_wr': _row[3] or 0.5, 'form_string': _row[4] or ''}
                         print(f"  [历史库] {away_name} 统计: 场均进{_row[0]:.1f}/失{_row[1]:.1f} {_row[2]}场 胜率{_row[3]:.2f}")
-                
-                _conn.close()
+
         except Exception as e:
             print(f"  [历史库] 球队统计查询失败: {e}")
+        finally:
+            if _conn is not None:
+                try:
+                    _conn.close()
+                except Exception:
+                    pass
     
     # Bug3修复: 同时获取Elo评级 (用于第4源概率)
     _hist_elo_h = None
     _hist_elo_a = None
+    _conn = None
     try:
         _db_path = os.path.join(os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)), 'predictions', 'historical_odds.db')
         if os.path.exists(_db_path):
@@ -4931,11 +4998,16 @@ def predict_match(match_num, data):
             _row = _c.fetchone()
             if _row:
                 _hist_elo_a = _row[0]
-            _conn.close()
             if _hist_elo_h and _hist_elo_a:
                 print(f"  [历史库] Elo: {home_name}={_hist_elo_h:.0f} vs {away_name}={_hist_elo_a:.0f}")
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [历史库] Elo查询失败: {e}")
+    finally:
+        if _conn is not None:
+            try:
+                _conn.close()
+            except Exception:
+                pass
     
     # Bug3修复: 无外部近况数据时, 从历史库form_string补充
     if not home_form and home_stats and home_stats.get('form_string'):
@@ -5157,14 +5229,54 @@ def predict_match(match_num, data):
                 _scores_probs[k] /= _total_p
             # 更新scores中的相关字段
             scores['all_probs'] = _scores_probs
-            # 更新WDL概率
+            # 更新WDL概率 (round 替代 int, 保持与 compute_scores 一致)
             w_new = sum(p for s, p in _scores_probs.items() if int(s[0]) > int(s[2]))
             d_new = sum(p for s, p in _scores_probs.items() if int(s[0]) == int(s[2]))
             l_new = sum(p for s, p in _scores_probs.items() if int(s[0]) < int(s[2]))
-            scores['poisson_wdl'] = [int(w_new * 100), int(d_new * 100), int(l_new * 100)]
+            scores['poisson_wdl'] = [round(w_new * 100, 1), round(d_new * 100, 1), round(l_new * 100, 1)]
             # 更新top3比分
             _sorted = sorted(_scores_probs.items(), key=lambda x: x[1], reverse=True)
             scores['top3'] = ' '.join(f'{s}:{p*100:.1f}' for s, p in _sorted[:3])
+            # M1修复: 同步更新全部派生字段, 避免下游(CRS EV/比分推荐/大小球)读到修正前数据
+            def _tg(s_key):
+                return int(s_key.split('-')[0]) + int(s_key.split('-')[1])
+
+            def _over_prob_for(gl):
+                int_part = int(gl)
+                frac = round(gl - int_part, 2)
+                if frac in (0.5, 0.0):
+                    return sum(p for s, p in _sorted if _tg(s) >= int_part + 1)
+                elif frac == 0.25:
+                    return (sum(p for s, p in _sorted if _tg(s) >= int_part + 1)
+                            + sum(p for s, p in _sorted if _tg(s) == int_part) * 0.5)
+                elif frac == 0.75:
+                    return (sum(p for s, p in _sorted if _tg(s) >= int_part + 2)
+                            + sum(p for s, p in _sorted if _tg(s) == int_part + 1) * 0.5)
+                return sum(p for s, p in _sorted if _tg(s) >= int_part + 1)
+
+            _gl_main = scores.get('market_gl', market_goal_line)
+            scores['top5_raw'] = [[s, round(p * 100, 1)] for s, p in _sorted[:5]]
+            scores['over_main'] = round(_over_prob_for(_gl_main) * 100, 1)
+            scores['over_low'] = round(_over_prob_for(round(_gl_main - 0.5, 2)) * 100, 1)
+            scores['over_ml'] = round(_over_prob_for(round(_gl_main - 0.25, 2)) * 100, 1)
+            scores['over_mh'] = round(_over_prob_for(round(_gl_main + 0.25, 2)) * 100, 1)
+            scores['over_high'] = round(_over_prob_for(round(_gl_main + 0.5, 2)) * 100, 1)
+            # 主/副盘口方向过滤
+            def _threshold(gl):
+                thr = int(math.ceil(gl))
+                return int(gl) + 1 if gl == int(gl) else thr
+            _thr_main = _threshold(_gl_main)
+            _thr_high = _threshold(round(_gl_main + 0.5, 2))
+            _big_m = [(s, p) for s, p in _sorted if _tg(s) >= _thr_main]
+            _big_h = [(s, p) for s, p in _sorted if _tg(s) >= _thr_high]
+            scores['main_dir'] = '大' if _over_prob_for(_gl_main) > 0.5 else '小'
+            scores['high_dir'] = '大' if _over_prob_for(round(_gl_main + 0.5, 2)) > 0.5 else '小'
+            scores['top3_filtered'] = [[s, round(p * 100, 1)] for s, p in
+                                       (_big_m if scores['main_dir'] == '大' else
+                                        [(s, p) for s, p in _sorted if _tg(s) < _thr_main])[:3]]
+            scores['high_top3'] = [[s, round(p * 100, 1)] for s, p in
+                                   (_big_h if scores['high_dir'] == '大' else
+                                    [(s, p) for s, p in _sorted if _tg(s) < _thr_high])[:3]]
         v611_notes.append(f"0-0低估修正(模型{_model_00:.1%}→市场{_market_00:.1%}), 低进球区间+{_00_adj:.0%}")
         v611_flags['zero_zero_fix'] = True
     
@@ -5844,7 +5956,9 @@ def compare_and_adjust_for_update(prev_results, new_results):
         (adjusted_results, change_log)
     """
     change_log = []
-    _STAR_MAP = {'★': 1, '★★': 2, '★★★': 3, '★★★★': 4, '★★★★★': 5}
+    # 半星兼容: 用 stars_to_score (支持 ★★★½ 等半星) 替代只识别整星的 _STAR_MAP
+    def _star_score(conf_str):
+        return stars_to_score(conf_str or '')
 
     for key in new_results:
         new_r = new_results[key]
@@ -5892,7 +6006,7 @@ def compare_and_adjust_for_update(prev_results, new_results):
         # HAD 方向反转 → 封顶 ★★★
         if had_dir_reversed and new_had_dir:
             cur_conf = new_had.get('conf', '')
-            cur_stars = _STAR_MAP.get(cur_conf, 0)
+            cur_stars = _star_score(cur_conf)
             if cur_stars > 3:
                 new_had['conf'] = '★★★'
                 changes_for_key.append(f"HAD置信度降级: {cur_conf}→★★★ (方向反转)")
@@ -5900,7 +6014,7 @@ def compare_and_adjust_for_update(prev_results, new_results):
         # HHAD 方向反转 → 封顶 ★★★
         if hhad_dir_reversed and new_hhad_dir:
             cur_conf = new_hhad.get('conf', '')
-            cur_stars = _STAR_MAP.get(cur_conf, 0)
+            cur_stars = _star_score(cur_conf)
             if cur_stars > 3:
                 new_hhad['conf'] = '★★★'
                 changes_for_key.append(f"HHAD置信度降级: {cur_conf}→★★★ (方向反转)")
@@ -5909,7 +6023,7 @@ def compare_and_adjust_for_update(prev_results, new_results):
         # 只看预测方向的赔率变化 (而非三个赔率之和)
         if had_odds_changed and not had_dir_reversed and new_had_dir:
             cur_conf = new_had.get('conf', '')
-            cur_stars = _STAR_MAP.get(cur_conf, 0)
+            cur_stars = _star_score(cur_conf)
             _dir_odds_key = {'胜': 'h', '平': 'd', '负': 'a'}.get(new_had_dir, '')
             if _dir_odds_key:
                 _po = prev_had.get(_dir_odds_key, 0) or 0
@@ -5919,7 +6033,7 @@ def compare_and_adjust_for_update(prev_results, new_results):
                     # 预测方向赔率下降(概率上升) → 市场确认, 微升
                     if _pred_pct < -0.05 and cur_stars < 5 and cur_stars > 0:
                         new_stars = min(cur_stars + 1, 5)
-                        new_had['conf'] = '★' * new_stars
+                        new_had['conf'] = format_stars(new_stars)
                         changes_for_key.append(f"HAD置信度微升: {cur_conf}→{new_had['conf']} (市场确认, 赔率{_pred_pct*100:+.1f}%)")
                     # 预测方向赔率上升(概率下降) → 市场分歧, 维持但标注
                     elif _pred_pct > 0.05:
@@ -6059,7 +6173,16 @@ def main():
     t4 = time.time()
     results = {}
     for key in all_data:
-        results[key] = predict_match(key, all_data[key])
+        try:
+            results[key] = predict_match(key, all_data[key])
+        except Exception as e:
+            # 单场预测失败不中断整批, 记录后继续 (防止整批结果丢失)
+            import traceback as _tb
+            print(f"  [错误] 预测场次 {key} 失败: {e}")
+            print(f"          {_tb.format_exc().splitlines()[-2:]}")
+            results[key] = None
+    # 过滤预测失败场次
+    results = {k: v for k, v in results.items() if v is not None}
     dt4 = time.time() - t4
     monitor.append(('Phase4-predict', dt4, 0, f"预测{len(results)}场"))
     

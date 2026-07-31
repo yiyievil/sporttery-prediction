@@ -19,7 +19,6 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.lib import colors
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, LongTable,
-    PageBreak, KeepTogether
 )
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont

@@ -148,7 +148,8 @@ class UnderstatCollector:
                      row.get("home_goals"), row.get("away_goals"),
                      row.get("home_xg"), row.get("away_xg"),
                      row.get("home_np_xg"), row.get("away_np_xg"),
-                     row.get("home_np_xg_difference"), row.get("away_np_xg_difference"),
+                     # M11: 建表列名为 home_np_xg_diff/away_np_xg_diff, 取值列名需一致
+                     row.get("home_np_xg_diff"), row.get("away_np_xg_diff"),
                      row.get("home_ppda"), row.get("away_ppda"),
                      row.get("home_deep_completions"), row.get("away_deep_completions"),
                      row.get("home_expected_points"), row.get("away_expected_points"),

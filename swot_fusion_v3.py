@@ -157,9 +157,19 @@ def apply_swot_prob_shift(wdl, home_score, away_score):
     shift = max(-SWOT_MAX_SHIFT, min(SWOT_MAX_SHIFT, diff * SWOT_SHIFT_PER_POINT))
     w, d, l = wdl
     # 边界保护: 任一侧概率不低于2%
-    shift = min(shift, l - 0.02) if shift > 0 else max(shift, -(w - 0.02))
-    if abs(shift) < 0.005:
-        return list(wdl), 0.0, False
+    # 注意: max(0.0, ...) 防止 w/l 已低于2% 时 -(w-0.02) 为正导致方向翻转 (M19)
+    if shift > 0:
+        # 上迁移: 从负(lose)侧取概率, 负侧概率不低于2%
+        max_shift_up = max(0.0, l - 0.02)
+        shift = min(shift, max_shift_up)
+        if abs(shift) < 0.005:
+            return list(wdl), 0.0, False
+    else:
+        # 下迁移: 从胜(win)侧取概率, 胜侧概率不低于2%
+        max_shift_down = max(0.0, w - 0.02)
+        shift = max(shift, -max_shift_down)
+        if abs(shift) < 0.005:
+            return list(wdl), 0.0, False
     return [w + shift, d, l - shift], shift, True
 
 

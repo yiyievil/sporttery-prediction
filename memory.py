@@ -98,6 +98,17 @@ _AUTO_RECALL_KEYWORDS = {
 }
 
 
+def _entry_ts_ms(mem):
+    """防御性读取记忆条目的毫秒时间戳 (旧条目缺 timestamp 字段时回退 created_at)"""
+    ts = mem.get('timestamp', mem.get('created_at', 0))
+    if not isinstance(ts, (int, float)):
+        try:
+            ts = datetime.strptime(str(ts), '%Y-%m-%d %H:%M:%S').timestamp() * 1000
+        except (ValueError, TypeError):
+            ts = 0
+    return ts
+
+
 class MemoryStore:
     """文件记忆存储 — JSON 持久化 + 关键词搜索"""
 
@@ -161,10 +172,10 @@ class MemoryStore:
 
         # 去重检查: 相同文本不重复存储
         for existing in data['memories']:
-            if existing['text'] == text:
+            if existing.get('text') == text:
                 # 更新重要性和访问次数
-                existing['importance'] = max(existing['importance'], importance)
-                existing['access_count'] += 1
+                existing['importance'] = max(existing.get('importance', 0), importance)
+                existing['access_count'] = existing.get('access_count', 0) + 1
                 existing['last_accessed'] = entry['created_at']
                 self._save()
                 return existing['id']
@@ -173,7 +184,7 @@ class MemoryStore:
         self._save()
         return mid
 
-    def recall(self, query, limit=5, category=None, scope=None):
+    def recall(self, query, limit=5, category=None, scope=None, update_access=True):
         """搜索记忆 (关键词匹配 + 重要性排序)
 
         Args:
@@ -181,6 +192,7 @@ class MemoryStore:
             limit: 最多返回条数
             category: 过滤分类 (可选)
             scope: 过滤作用域 (可选)
+            update_access: 是否更新访问计数并写盘 (内部调用传 False 跳过)
 
         Returns:
             匹配的记忆列表
@@ -192,9 +204,9 @@ class MemoryStore:
         scored = []
         for mem in data['memories']:
             # 分类过滤
-            if category and mem['category'] != category:
+            if category and mem.get('category') != category:
                 continue
-            if scope and mem['scope'] != scope:
+            if scope and mem.get('scope') != scope:
                 continue
 
             text_lower = mem['text'].lower()
@@ -209,22 +221,23 @@ class MemoryStore:
                     score += 1  # 标签命中
 
             if score > 0:
-                # 时间衰减: 30天半衰期
-                age_days = (time.time() - mem['timestamp'] / 1000) / 86400
+                # 时间衰减: 30天半衰期 (旧条目缺 timestamp 时回退 created_at)
+                age_days = (time.time() - _entry_ts_ms(mem) / 1000) / 86400
                 recency = 0.5 ** (age_days / 30)
                 # 综合分: 命中分 × 0.5 + 重要性 × 0.3 + 时间新鲜度 × 0.2
-                final_score = score * 0.5 + mem['importance'] * 0.3 + recency * 0.2
+                final_score = score * 0.5 + mem.get('importance', 0) * 0.3 + recency * 0.2
                 scored.append((final_score, mem))
 
         # 排序并取 top N
         scored.sort(key=lambda x: x[0], reverse=True)
         results = [mem for _, mem in scored[:limit]]
 
-        # 更新访问计数
-        for mem in results:
-            mem['access_count'] = mem.get('access_count', 0) + 1
-            mem['last_accessed'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        self._save()
+        # 更新访问计数 (内部调用传 update_access=False 跳过访问时间更新与全量写盘)
+        if update_access:
+            for mem in results:
+                mem['access_count'] = mem.get('access_count', 0) + 1
+                mem['last_accessed'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self._save()
 
         return results
 
@@ -233,23 +246,23 @@ class MemoryStore:
         data = self._load()
         mems = data['memories']
         if category:
-            mems = [m for m in mems if m['category'] == category]
+            mems = [m for m in mems if m.get('category') == category]
         if scope:
-            mems = [m for m in mems if m['scope'] == scope]
-        mems = sorted(mems, key=lambda m: m['timestamp'], reverse=True)
+            mems = [m for m in mems if m.get('scope') == scope]
+        mems = sorted(mems, key=_entry_ts_ms, reverse=True)
         return mems[:limit]
 
     def stats(self):
         """统计信息"""
         data = self._load()
         mems = data['memories']
-        cat_count = Counter(m['category_cn'] for m in mems)
-        avg_importance = sum(m['importance'] for m in mems) / len(mems) if mems else 0
+        cat_count = Counter(m.get('category_cn', m.get('category', 'other')) for m in mems)
+        avg_importance = sum(m.get('importance', 0) for m in mems) / len(mems) if mems else 0
         return {
             'total': len(mems),
             'by_category': dict(cat_count),
             'avg_importance': round(avg_importance, 2),
-            'last_updated': mems[-1]['created_at'] if mems else 'N/A',
+            'last_updated': mems[-1].get('created_at', 'N/A') if mems else 'N/A',
         }
 
     def forget(self, query=None, memory_id=None):
@@ -406,7 +419,7 @@ class MemoryStore:
         """
         hard = {}
         for mid in match_ids or []:
-            for mem in self.recall(mid, limit=5):
+            for mem in self.recall(mid, limit=5, update_access=False):
                 text = mem.get('text', '')
                 if mid not in text or mem.get('importance', 0) < 0.8:
                     continue
@@ -463,7 +476,8 @@ class MemoryStore:
             warnings.append(f"日期解析失败: {date_str}")
 
         # 搜索记忆库中关于此编号的已有记录
-        existing = self.recall(match_id, limit=3)
+        # (update_access=False: 验证仅做只读检索, 不更新访问时间, 不触发全量写盘)
+        existing = self.recall(match_id, limit=3, update_access=False)
         for mem in existing:
             if match_id in mem['text']:
                 warnings.append(f"记忆库已有此编号记录: {mem['text'][:100]}...")
@@ -553,12 +567,12 @@ class MemoryStore:
 # ============================================================
 def _format_mem(mem):
     """格式化单条记忆用于终端输出"""
-    stars = '★' * int(mem['importance'] * 5)
+    stars = '★' * int(mem.get('importance', 0) * 5)
     tags = f" [{', '.join(mem.get('tags', []))}]" if mem.get('tags') else ''
     return (
-        f"  [{mem['id']}] {mem['category_cn']}{tags} {stars}\n"
+        f"  [{mem['id']}] {mem.get('category_cn', mem.get('category', 'other'))}{tags} {stars}\n"
         f"    {mem['text']}\n"
-        f"    创建: {mem['created_at']} | 访问: {mem.get('access_count', 0)}次"
+        f"    创建: {mem.get('created_at', 'N/A')} | 访问: {mem.get('access_count', 0)}次"
     )
 
 

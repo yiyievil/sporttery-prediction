@@ -601,18 +601,20 @@ def main():
         cached_entry = cache.get(key, {})
         cached_shuju = cached_entry.get('shuju', {})
         if cached_shuju:
-            # P1-1: 优先使用场次级时间戳, 回退到全局 saved_at
-            cache_time_str = cached_entry.get('cached_at', '') or pred_data.get('saved_at', '')
+            # M16修复: 只认场次级 cached_at —
+            # 不再回退到文件级 saved_at(每次更新都刷新→永远新鲜, 导致新鲜度判断失效);
+            # cached_at 缺失视为过期; 负 age(时钟偏移) 视为过期; 无法解析视为过期
+            cache_time_str = cached_entry.get('cached_at', '')
             is_fresh = False
             if cache_time_str:
                 try:
                     cache_time = datetime.strptime(cache_time_str, '%Y-%m-%d %H:%M:%S')
                     age_hours = (datetime.now() - cache_time).total_seconds() / 3600
-                    is_fresh = age_hours < 24
+                    is_fresh = 0 <= age_hours < 24
                 except:
-                    is_fresh = True  # 无法解析时间则视为新鲜
+                    is_fresh = False  # 无法解析时间则视为过期
             else:
-                is_fresh = True  # 无时间戳则视为新鲜
+                is_fresh = False  # 无场次级时间戳则视为过期
 
             if is_fresh:
                 # P1-3: 合并方向修正 — 新数据(fresh_data)优先, 缓存仅填补空缺
@@ -675,9 +677,11 @@ def main():
     new_results = {}
     all_changes = {}
     all_trends = {}
+    skipped_keys = []  # M17: 收集获取失败的场次, 不再静默跳过
 
     for key in found_keys:
         if key not in all_data:
+            skipped_keys.append(key)
             continue
         new_result = predict_match(key, all_data[key])
         new_results[key] = new_result
@@ -765,6 +769,15 @@ def main():
             print()
             print(format_prediction_summary(key, meta, new_results[key]))
 
+    # M17: 报告尾部打印获取失败的场次(保留旧数据, 不再静默跳过)
+    if skipped_keys:
+        print(f"\n{'=' * 60}")
+        print("【获取失败场次】")
+        print(f"{'=' * 60}")
+        print(f"  ⚠️ 以下 {len(skipped_keys)} 场获取失败, 本次更新跳过(保留旧数据):")
+        for key in skipped_keys:
+            print(f"    - {key}")
+
     # ===== Step 8: 保存更新后的预测文件 =====
     print(f"\n{'=' * 60}")
     print("【保存更新结果】")
@@ -808,9 +821,11 @@ def main():
         'history': history,
     }
 
-    # 保存到文件
-    with open(pred_file, 'w', encoding='utf-8') as f:
+    # 保存到文件 (M17: 临时文件+os.replace原子替换, 避免写入中途失败损坏预测文件)
+    tmp_file = pred_file + '.tmp'
+    with open(tmp_file, 'w', encoding='utf-8') as f:
         json.dump(updated_pred, f, ensure_ascii=False, indent=1)
+    os.replace(tmp_file, pred_file)
     print(f"  ✅ 已更新: {pred_file}")
     print(f"  首次预测: {pred_data.get('saved_at', '未知')}")
     print(f"  本次更新: {updated_pred['saved_at']}")
