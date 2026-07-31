@@ -1960,6 +1960,69 @@ def compute_total_goals(lam_h, lam_a, ttg_odds=None, league=None, xg_cv_quality=
                     for k in goals_probs:
                         goals_probs[k] /= total
 
+    # ===== Step 4: 大小球方向偏差校准 (Ultra 10.4) =====
+    # 基于4412场历史数据: 大球偏差-0.6pp (轻微低估)
+    # 同时按盘口区间做更精细校准
+    if _OVER_UNDER_CALIB:
+        ou_overall = _OVER_UNDER_CALIB.get('overall', {})
+        over_bias = ou_overall.get('over_bias_pp', 0)
+        if abs(over_bias) > 0.3 and ou_overall.get('total_matches', 0) >= 1000:
+            # 大球偏差: 负值=模型低估大球→上调大球概率
+            correction = over_bias / 100.0 * 0.3  # 保守30%修正
+            # 大球(3+球)上调/下调
+            big_total = sum(goals_probs.get(f"{k}球", 0) for k in range(3, 8))
+            small_total = sum(goals_probs.get(f"{k}球", 0) for k in range(3))
+            if big_total > 0 and small_total > 0:
+                # bias negative → 大球实际更多 → 上调大球
+                big_factor = 1.0 - correction
+                small_factor = 1.0 + correction * (big_total / small_total)
+                for k in range(3, 8):
+                    label = f"{k}球" if k < 7 else "7+球"
+                    goals_probs[label] *= big_factor
+                for k in range(3):
+                    goals_probs[f"{k}球"] *= small_factor
+                # 重新归一化
+                total = sum(goals_probs.values())
+                if total > 0:
+                    for k in goals_probs:
+                        goals_probs[k] /= total
+
+    # ===== Step 5: 联赛实际进球分布校准 (Ultra 10.4) =====
+    # 基于4449场历史数据(42个联赛): 用联赛实际big_rate校准模型预测
+    # 适用于有足够样本量(>=30场)的联赛
+    if _LEAGUE_PATTERNS_CALIB and league:
+        lg_goal_dist = _LEAGUE_PATTERNS_CALIB.get('part1_goal_distribution', {}).get(league)
+        if not lg_goal_dist:
+            lg_short = re.sub(r'_\d{4}(-\d{2})?$', '', league)
+            if lg_short != league:
+                lg_goal_dist = _LEAGUE_PATTERNS_CALIB.get('part1_goal_distribution', {}).get(lg_short)
+        if lg_goal_dist and lg_goal_dist.get('n', 0) >= 30:
+            # 对比模型预测的big_rate(3+球) vs 联赛实际big_rate
+            actual_big = lg_goal_dist.get('big_rate_3plus', 0.5)
+            pred_big = sum(goals_probs.get(f"{k}球", 0) for k in range(3, 8))
+            big_gap = actual_big - pred_big
+            # 偏差>=5pp才校准, 保守30%修正
+            if abs(big_gap) >= 0.05:
+                corr = big_gap * 0.30
+                small_total = sum(goals_probs.get(f"{k}球", 0) for k in range(3))
+                if big_gap > 0:
+                    # 模型低估大球→上调大球
+                    big_factor = 1.0 + corr
+                    small_factor = 1.0 - corr * (pred_big / small_total) if small_total > 0 else 1.0
+                else:
+                    # 模型高估大球→下调大球
+                    big_factor = 1.0 + corr
+                    small_factor = 1.0 - corr * (pred_big / small_total) if small_total > 0 else 1.0
+                for k in range(3, 8):
+                    label = f"{k}球" if k < 7 else "7+球"
+                    goals_probs[label] *= big_factor
+                for k in range(3):
+                    goals_probs[f"{k}球"] *= small_factor
+                total = sum(goals_probs.values())
+                if total > 0:
+                    for k in goals_probs:
+                        goals_probs[k] /= total
+
     # 排序输出
     sorted_goals = sorted(goals_probs.items(), key=lambda x: x[1], reverse=True)
     top1 = sorted_goals[0]
@@ -4110,6 +4173,86 @@ def _load_pools_calibration():
 
 _POOLS_CALIB = _load_pools_calibration()
 
+# Ultra 10.4: 大小球盘口准确性校准因子 (4412场TTG→大小球转换分析)
+# 数据源: predictions/over_under_analysis.json
+_OVER_UNDER_CALIB_PATH = os.path.join(
+    os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__))),
+    'predictions', 'over_under_analysis.json'
+)
+
+def _load_over_under_calibration():
+    """加载大小球盘口准确性校准因子 (Ultra 10.4)
+    
+    关键发现: 整体命中率58.1%, 大球偏差-0.6pp (轻微低估)
+    """
+    if not os.path.exists(_OVER_UNDER_CALIB_PATH):
+        print('  [大小球校准] 校准文件不存在, 跳过')
+        return None
+    try:
+        with open(_OVER_UNDER_CALIB_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        print(f'  [大小球校准] 加载 (命中率{data["overall"]["accuracy"]:.1%}, {data["overall"]["total_matches"]}场)')
+        return data
+    except Exception as e:
+        print(f'  [大小球校准] 加载失败, 跳过: {e}')
+        return None
+
+_OVER_UNDER_CALIB = _load_over_under_calibration()
+
+# Ultra 10.4: HHAD穿盘/输盘规律校准因子 (4412场让球盘分析)
+# 数据源: predictions/hhad_yazhi_analysis.json
+_HHAD_CALIB_PATH = os.path.join(
+    os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__))),
+    'predictions', 'hhad_yazhi_analysis.json'
+)
+
+def _load_hhad_calibration():
+    """加载HHAD穿盘/输盘规律校准因子 (Ultra 10.4)
+    
+    关键发现: 穿盘33.3%, 走水13.3%, 输盘53.4%
+    Skellam分布系统性高估走水概率(偏差-9.2pp)
+    """
+    if not os.path.exists(_HHAD_CALIB_PATH):
+        print('  [HHAD校准] 校准文件不存在, 跳过')
+        return None
+    try:
+        with open(_HHAD_CALIB_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        print(f'  [HHAD校准] 加载 (穿盘{data["hhad_analysis"]["overall_hhad"]["win"]["pct"]:.1%}, {data["metadata"]["total_sample"]}场)')
+        return data
+    except Exception as e:
+        print(f'  [HHAD校准] 加载失败, 跳过: {e}')
+        return None
+
+_HHAD_CALIB = _load_hhad_calibration()
+
+# Ultra 10.4: 联赛模式校准因子 (4449场, 42个联赛)
+# 数据源: predictions/league_patterns_analysis.json
+_LEAGUE_PATTERNS_CALIB_PATH = os.path.join(
+    os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__))),
+    'predictions', 'league_patterns_analysis.json'
+)
+
+def _load_league_patterns_calibration():
+    """加载联赛模式校准因子 (Ultra 10.4)
+    
+    包含: 进球分布/主场优势/比分分布
+    """
+    if not os.path.exists(_LEAGUE_PATTERNS_CALIB_PATH):
+        print('  [联赛模式] 校准文件不存在, 跳过')
+        return None
+    try:
+        with open(_LEAGUE_PATTERNS_CALIB_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        n_leagues = data.get('analysis_meta', {}).get('total_leagues', 0)
+        print(f'  [联赛模式] 加载 ({n_leagues}个联赛, {data["analysis_meta"]["total_matches"]}场)')
+        return data
+    except Exception as e:
+        print(f'  [联赛模式] 加载失败, 跳过: {e}')
+        return None
+
+_LEAGUE_PATTERNS_CALIB = _load_league_patterns_calibration()
+
 # --- 历史数据库连接 (单例, 懒加载, 进程级缓存) ---
 # Ultra 10.0: 统一连接管理, 所有DB查询均通过此函数获取连接
 _ADV_DB_CONN = None
@@ -5037,6 +5180,81 @@ def post_fusion_hhad_draw_calibration(probs, had, hhad, handicap, league):
     s = pw_new + pd_new + pl_new
     if s > 0:
         pw_new, pd_new, pl_new = pw_new / s, pd_new / s, pl_new / s
+
+    # ===== Step 10: HHAD穿盘/输盘规律二次校准 (Ultra 10.4) =====
+    # 基于4412场历史数据: Skellam分布系统性高估走水概率(偏差-9.2pp)
+    # 同时按盘口和联赛做更精细校准, 与上层_CALIBRATION校准叠加
+    if _HHAD_CALIB:
+        hhad_analysis = _HHAD_CALIB.get('hhad_analysis', {})
+        implied_vs_actual = hhad_analysis.get('implied_vs_actual', {})
+
+        # 1. 整体隐含偏差: Skellam高估走水
+        push_bias_pp = implied_vs_actual.get('push', {}).get('bias_pp', 0)
+
+        # 2. 按盘口区间 (handicap为整数, 转为HHAD浮点key)
+        hhad_gl_key = f'{float(handicap):.1f}'
+        gl_data = hhad_analysis.get('by_goal_line', {}).get(hhad_gl_key, {})
+
+        # 3. 按联赛
+        lg_hhad = hhad_analysis.get('by_league', {}).get(league)
+        if not lg_hhad and league:
+            lg_short = re.sub(r'_\d{4}(-\d{2})?$', '', league)
+            if lg_short != league:
+                lg_hhad = hhad_analysis.get('by_league', {}).get(lg_short)
+
+        # 构建二次校准目标
+        hhad_targets = []
+        hhad_weights = []
+
+        # 整体偏差信号(权重30%): bias -9.2pp → 实际走水率更低
+        if push_bias_pp < -3:
+            adjusted_push = pd_new + push_bias_pp / 100.0 * 0.5  # 保守50%
+            hhad_targets.append(adjusted_push)
+            hhad_weights.append(0.30)
+
+        # 盘口区间信号(权重40%)
+        gl_push = gl_data.get('push', {}) if gl_data else {}
+        if gl_push and gl_push.get('n', 0) >= 50:
+            actual_push_rate = gl_push.get('pct', 0)
+            if actual_push_rate > 0:
+                hhad_targets.append(actual_push_rate)
+                hhad_weights.append(0.40)
+
+        # 联赛信号(权重30%)
+        if lg_hhad and lg_hhad.get('n', 0) >= 20:
+            lg_push_rate = lg_hhad.get('push_rate', 0)
+            if lg_push_rate > 0:
+                hhad_targets.append(lg_push_rate)
+                hhad_weights.append(0.30)
+
+        if hhad_targets:
+            total_hw = sum(hhad_weights)
+            hhad_target_draw = sum(t * w for t, w in zip(hhad_targets, hhad_weights)) / total_hw
+
+            # 二次校准偏差
+            gap2 = hhad_target_draw - pd_new
+            if abs(gap2) >= 0.01:
+                # 保守修正: 40% of gap, cap 5pp
+                correction2 = max(-0.05, min(0.05, gap2 * 0.40))
+                pd_new += correction2
+                # 从pw和pl按比例分配
+                total_non_draw = pw_new + pl_new
+                if total_non_draw > 0:
+                    pw_share = pw_new / total_non_draw
+                    pl_share = pl_new / total_non_draw
+                    pw_new -= correction2 * pw_share
+                    pl_new -= correction2 * pl_share
+                else:
+                    pw_new -= correction2 * 0.5
+                    pl_new -= correction2 * 0.5
+
+                # 重新边界保护 + 归一化
+                pw_new = max(0.05, min(0.85, pw_new))
+                pd_new = max(0.08, min(0.45, pd_new))
+                pl_new = max(0.05, min(0.85, pl_new))
+                s2 = pw_new + pd_new + pl_new
+                if s2 > 0:
+                    pw_new, pd_new, pl_new = pw_new / s2, pd_new / s2, pl_new / s2
 
     return [pw_new, pd_new, pl_new]
 
