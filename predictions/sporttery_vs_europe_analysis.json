@@ -1,0 +1,542 @@
+{
+  "metadata": {
+    "version": "Ultra 10.5",
+    "generated_at": "2026-07-31 15:53:23",
+    "description": "体彩vs欧指偏差分析 — 体彩sp_had vs 500.com欧指fc_ouzhi",
+    "total_sample": 343
+  },
+  "part1_had_vs_europe": {
+    "overall": {
+      "sample": 343,
+      "avg_deviation_pp": {
+        "主胜": {
+          "avg_diff_pp": 0.3,
+          "min_diff_pp": -14.6,
+          "max_diff_pp": 13.0,
+          "std_diff_pp": 4.1
+        },
+        "平局": {
+          "avg_diff_pp": -0.7,
+          "min_diff_pp": -5.1,
+          "max_diff_pp": 5.7,
+          "std_diff_pp": 1.6
+        },
+        "客胜": {
+          "avg_diff_pp": 0.4,
+          "min_diff_pp": -13.6,
+          "max_diff_pp": 15.8,
+          "std_diff_pp": 4.0
+        }
+      },
+      "deviation_distribution": {
+        "偏高": {
+          "n": 120,
+          "pct": 35.0
+        },
+        "偏低": {
+          "n": 104,
+          "pct": 30.3
+        },
+        "相同": {
+          "n": 119,
+          "pct": 34.7
+        }
+      },
+      "avg_margin": {
+        "sporttery": 12.9,
+        "europe": 7.7,
+        "diff_pp": 5.2
+      }
+    },
+    "result_by_deviation": {
+      "主胜": {
+        "偏高": {
+          "n": 120,
+          "result_dist": {
+            "主胜": {
+              "n": 67,
+              "pct": 55.8
+            },
+            "平局": {
+              "n": 25,
+              "pct": 20.8
+            },
+            "客胜": {
+              "n": 28,
+              "pct": 23.3
+            }
+          }
+        },
+        "偏低": {
+          "n": 104,
+          "result_dist": {
+            "主胜": {
+              "n": 28,
+              "pct": 26.9
+            },
+            "平局": {
+              "n": 27,
+              "pct": 26.0
+            },
+            "客胜": {
+              "n": 49,
+              "pct": 47.1
+            }
+          }
+        },
+        "相同": {
+          "n": 119,
+          "result_dist": {
+            "主胜": {
+              "n": 54,
+              "pct": 45.4
+            },
+            "平局": {
+              "n": 28,
+              "pct": 23.5
+            },
+            "客胜": {
+              "n": 37,
+              "pct": 31.1
+            }
+          }
+        }
+      },
+      "平局": {
+        "偏高": {
+          "n": 14,
+          "result_dist": {
+            "主胜": {
+              "n": 6,
+              "pct": 42.9
+            },
+            "平局": {
+              "n": 4,
+              "pct": 28.6
+            },
+            "客胜": {
+              "n": 4,
+              "pct": 28.6
+            }
+          }
+        },
+        "偏低": {
+          "n": 75,
+          "result_dist": {
+            "主胜": {
+              "n": 32,
+              "pct": 42.7
+            },
+            "平局": {
+              "n": 15,
+              "pct": 20.0
+            },
+            "客胜": {
+              "n": 28,
+              "pct": 37.3
+            }
+          }
+        },
+        "相同": {
+          "n": 254,
+          "result_dist": {
+            "主胜": {
+              "n": 111,
+              "pct": 43.7
+            },
+            "平局": {
+              "n": 61,
+              "pct": 24.0
+            },
+            "客胜": {
+              "n": 82,
+              "pct": 32.3
+            }
+          }
+        }
+      },
+      "客胜": {
+        "偏高": {
+          "n": 105,
+          "result_dist": {
+            "主胜": {
+              "n": 28,
+              "pct": 26.7
+            },
+            "平局": {
+              "n": 25,
+              "pct": 23.8
+            },
+            "客胜": {
+              "n": 52,
+              "pct": 49.5
+            }
+          }
+        },
+        "偏低": {
+          "n": 106,
+          "result_dist": {
+            "主胜": {
+              "n": 59,
+              "pct": 55.7
+            },
+            "平局": {
+              "n": 22,
+              "pct": 20.8
+            },
+            "客胜": {
+              "n": 25,
+              "pct": 23.6
+            }
+          }
+        },
+        "相同": {
+          "n": 132,
+          "result_dist": {
+            "主胜": {
+              "n": 62,
+              "pct": 47.0
+            },
+            "平局": {
+              "n": 33,
+              "pct": 25.0
+            },
+            "客胜": {
+              "n": 37,
+              "pct": 28.0
+            }
+          }
+        }
+      }
+    },
+    "agreement_analysis": {
+      "方向一致": {
+        "n": 323,
+        "correct_rate": 52.9
+      },
+      "方向不一致": {
+        "n": 20,
+        "体彩正确率": 30.0,
+        "欧指正确率": 40.0
+      },
+      "总体准确率": {
+        "sporttery": 51.6,
+        "europe": 52.2
+      }
+    },
+    "by_odds_range": {
+      "1.0-1.5": {
+        "n": 81,
+        "avg_diff_pp": 3.4,
+        "high_pct": 66.7,
+        "low_pct": 3.7,
+        "result_dist": {
+          "主胜": 69.1,
+          "平局": 16.0,
+          "客胜": 14.8
+        }
+      },
+      "1.5-2.0": {
+        "n": 83,
+        "avg_diff_pp": 2.1,
+        "high_pct": 53.0,
+        "low_pct": 12.0,
+        "result_dist": {
+          "主胜": 47.0,
+          "平局": 26.5,
+          "客胜": 26.5
+        }
+      },
+      "2.0-2.5": {
+        "n": 56,
+        "avg_diff_pp": -1.3,
+        "high_pct": 21.4,
+        "low_pct": 37.5,
+        "result_dist": {
+          "主胜": 46.4,
+          "平局": 16.1,
+          "客胜": 37.5
+        }
+      },
+      "2.5-3.5": {
+        "n": 64,
+        "avg_diff_pp": -2.0,
+        "high_pct": 10.9,
+        "low_pct": 53.1,
+        "result_dist": {
+          "主胜": 32.8,
+          "平局": 26.6,
+          "客胜": 40.6
+        }
+      },
+      "3.5+": {
+        "n": 59,
+        "avg_diff_pp": -2.3,
+        "high_pct": 5.1,
+        "low_pct": 61.0,
+        "result_dist": {
+          "主胜": 11.9,
+          "平局": 32.2,
+          "客胜": 55.9
+        }
+      }
+    },
+    "by_league": {
+      "英超": {
+        "n": 130,
+        "avg_diff_pp": 0.1,
+        "high_pct": 31.5,
+        "low_pct": 30.8,
+        "sp_accuracy": 43.8,
+        "fc_accuracy": 45.4,
+        "accuracy_diff_pp": -1.5
+      },
+      "瑞超": {
+        "n": 64,
+        "avg_diff_pp": 0.7,
+        "high_pct": 42.2,
+        "low_pct": 34.4,
+        "sp_accuracy": 54.7,
+        "fc_accuracy": 54.7,
+        "accuracy_diff_pp": 0.0
+      },
+      "挪超": {
+        "n": 51,
+        "avg_diff_pp": 1.4,
+        "high_pct": 45.1,
+        "low_pct": 21.6,
+        "sp_accuracy": 58.8,
+        "fc_accuracy": 56.9,
+        "accuracy_diff_pp": 2.0
+      },
+      "美职联": {
+        "n": 39,
+        "avg_diff_pp": -1.1,
+        "high_pct": 20.5,
+        "low_pct": 35.9,
+        "sp_accuracy": 59.0,
+        "fc_accuracy": 61.5,
+        "accuracy_diff_pp": -2.6
+      },
+      "芬超": {
+        "n": 20,
+        "avg_diff_pp": 0.5,
+        "high_pct": 35.0,
+        "low_pct": 30.0,
+        "sp_accuracy": 55.0,
+        "fc_accuracy": 50.0,
+        "accuracy_diff_pp": 5.0
+      },
+      "欧罗巴": {
+        "n": 13,
+        "avg_diff_pp": -0.1,
+        "high_pct": 30.8,
+        "low_pct": 30.8,
+        "sp_accuracy": 69.2,
+        "fc_accuracy": 76.9,
+        "accuracy_diff_pp": -7.7
+      },
+      "欧冠": {
+        "n": 13,
+        "avg_diff_pp": -0.1,
+        "high_pct": 38.5,
+        "low_pct": 30.8,
+        "sp_accuracy": 46.2,
+        "fc_accuracy": 38.5,
+        "accuracy_diff_pp": 7.7
+      }
+    },
+    "margin_analysis": {
+      "avg_sp_margin": 12.9,
+      "avg_fc_margin": 7.7,
+      "avg_margin_diff_pp": 5.2,
+      "体彩margin更高时": {
+        "n": 343,
+        "sp_accuracy": 51.6
+      },
+      "体彩margin更低时": {
+        "n": 0,
+        "sp_accuracy": 0
+      }
+    },
+    "diff_analysis": {
+      "<-10pp": {
+        "n": 3,
+        "result_dist": {
+          "主胜": {
+            "n": 2,
+            "pct": 66.7
+          },
+          "平局": {
+            "n": 0,
+            "pct": 0.0
+          },
+          "客胜": {
+            "n": 1,
+            "pct": 33.3
+          }
+        }
+      },
+      "-10~-5pp": {
+        "n": 27,
+        "result_dist": {
+          "主胜": {
+            "n": 7,
+            "pct": 25.9
+          },
+          "平局": {
+            "n": 7,
+            "pct": 25.9
+          },
+          "客胜": {
+            "n": 13,
+            "pct": 48.1
+          }
+        }
+      },
+      "-5~-2pp": {
+        "n": 72,
+        "result_dist": {
+          "主胜": {
+            "n": 19,
+            "pct": 26.4
+          },
+          "平局": {
+            "n": 19,
+            "pct": 26.4
+          },
+          "客胜": {
+            "n": 34,
+            "pct": 47.2
+          }
+        }
+      },
+      "±2pp": {
+        "n": 121,
+        "result_dist": {
+          "主胜": {
+            "n": 54,
+            "pct": 44.6
+          },
+          "平局": {
+            "n": 29,
+            "pct": 24.0
+          },
+          "客胜": {
+            "n": 38,
+            "pct": 31.4
+          }
+        }
+      },
+      "2~5pp": {
+        "n": 72,
+        "result_dist": {
+          "主胜": {
+            "n": 39,
+            "pct": 54.2
+          },
+          "平局": {
+            "n": 14,
+            "pct": 19.4
+          },
+          "客胜": {
+            "n": 19,
+            "pct": 26.4
+          }
+        }
+      },
+      "5~10pp": {
+        "n": 45,
+        "result_dist": {
+          "主胜": {
+            "n": 26,
+            "pct": 57.8
+          },
+          "平局": {
+            "n": 11,
+            "pct": 24.4
+          },
+          "客胜": {
+            "n": 8,
+            "pct": 17.8
+          }
+        }
+      },
+      ">10pp": {
+        "n": 3,
+        "result_dist": {
+          "主胜": {
+            "n": 2,
+            "pct": 66.7
+          },
+          "平局": {
+            "n": 0,
+            "pct": 0.0
+          },
+          "客胜": {
+            "n": 1,
+            "pct": 33.3
+          }
+        }
+      }
+    },
+    "combo_analysis": {
+      "high_count_distribution": {
+        "0": {
+          "n": 110,
+          "pct": 32.1
+        },
+        "1": {
+          "n": 227,
+          "pct": 66.2
+        },
+        "2": {
+          "n": 6,
+          "pct": 1.7
+        }
+      },
+      "三方向都偏高": null,
+      "三方向都偏低": null
+    }
+  },
+  "part2_internal_comparison": {
+    "sample": 3274,
+    "had_vs_hhad": {
+      "consistency_pct": 22.3,
+      "by_goal_line": {
+        "-1.0": {
+          "n": 2070,
+          "had_hhad_agree_pct": 26.9,
+          "had_accuracy": 47.6,
+          "hhad_accuracy": 32.2
+        },
+        "1.0": {
+          "n": 1077,
+          "had_hhad_agree_pct": 14.9,
+          "had_accuracy": 42.9,
+          "hhad_accuracy": 25.1
+        },
+        "-2.0": {
+          "n": 108,
+          "had_hhad_agree_pct": 13.0,
+          "had_accuracy": 74.1,
+          "hhad_accuracy": 17.6
+        },
+        "2.0": {
+          "n": 19,
+          "had_hhad_agree_pct": 0.0,
+          "had_accuracy": 78.9,
+          "hhad_accuracy": 5.3
+        }
+      }
+    },
+    "had_vs_yazhi": {
+      "consistency_pct": 20.7
+    },
+    "accuracy_comparison": {
+      "had": 47.1,
+      "hhad": 29.2,
+      "yazhi": 28.4
+    }
+  }
+}
