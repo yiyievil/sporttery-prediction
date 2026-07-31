@@ -4253,6 +4253,36 @@ def _load_league_patterns_calibration():
 
 _LEAGUE_PATTERNS_CALIB = _load_league_patterns_calibration()
 
+# Ultra 10.6: 体彩赔率变动特征 + 玩法矛盾信号校准因子 (3274场)
+# 数据源: predictions/odds_change_analysis_calibration.json
+_ODDS_CHANGE_ANALYSIS_CALIB_PATH = os.path.join(
+    os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__))),
+    'predictions', 'odds_change_analysis_calibration.json'
+)
+
+def _load_odds_change_analysis_calibration():
+    """加载赔率变动特征分析校准因子 (Ultra 10.6)
+    
+    包含:
+    - draw_change: 平局赔率变动信号 (平赔下降→主胜44.1%)
+    - conflict_signal: HAD/HHAD/亚盘矛盾信号 (三方向一致55.9%)
+    - had_hhad_linkage: HAD-HHAD联动信号 (同时上升→主胜45.9%)
+    - had_change_detail: HAD赔率变动幅度分层信号
+    """
+    if not os.path.exists(_ODDS_CHANGE_ANALYSIS_CALIB_PATH):
+        print('  [赔率变动分析] 校准文件不存在, 跳过')
+        return None
+    try:
+        with open(_ODDS_CHANGE_ANALYSIS_CALIB_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        print(f'  [赔率变动分析] 加载 ({data["total_had_sample"]}场HAD, {data["total_conflict_sample"]}场矛盾信号)')
+        return data
+    except Exception as e:
+        print(f'  [赔率变动分析] 加载失败, 跳过: {e}')
+        return None
+
+_ODDS_CHANGE_ANALYSIS_CALIB = _load_odds_change_analysis_calibration()
+
 # --- 历史数据库连接 (单例, 懒加载, 进程级缓存) ---
 # Ultra 10.0: 统一连接管理, 所有DB查询均通过此函数获取连接
 _ADV_DB_CONN = None
@@ -5259,6 +5289,125 @@ def post_fusion_hhad_draw_calibration(probs, had, hhad, handicap, league):
     return [pw_new, pd_new, pl_new]
 
 
+def apply_odds_change_analysis_calibration(probs, had, hhad, league, odds_change, 
+                                            had_hhad_change=None, sp_had_probs=None, sp_hhad_probs=None):
+    """体彩赔率变动特征 + 玩法矛盾信号校准 (Ultra 10.6)
+    
+    基于3274场数据分析的3个全新校准信号:
+    1. draw_change: 平局赔率变动 → 平赔下降时看好分出胜负
+    2. conflict_signal: HAD/HHAD矛盾 → HAD自信度更高时以HAD为准
+    3. had_hhad_linkage: 联动信号 → 同时上升时信号更强
+    
+    参数:
+      probs: [pw, pd, pl] 当前概率
+      had: 体彩HAD赔率dict {'h':, 'd':, 'a':}
+      hhad: 体彩HHAD赔率dict {'h':, 'd':, 'a':}
+      league: 联赛名
+      odds_change: dict含 'draw_change' 方向 ('上升'/'下降'/'不变' 或 None)
+      had_hhad_change: dict含 'had_h'/'hhad_h' 方向 或 None (用于联动信号)
+      sp_had_probs: HAD Shin概率 [pw, pd, pl] 或 None (用于矛盾信号)
+      sp_hhad_probs: HHAD Shin概率 [pw, pd, pl] 或 None (用于矛盾信号)
+    """
+    if not _ODDS_CHANGE_ANALYSIS_CALIB:
+        return probs, []
+    
+    pw, pd, pl = probs
+    notes = []
+    calib = _ODDS_CHANGE_ANALYSIS_CALIB
+    
+    # ===== 1. 平局赔率变动校准 (Part 5) =====
+    # 平赔下降→主胜44.1%, 平赔上升→平局38.9%
+    # 应用在HAD平局概率上
+    if odds_change and odds_change.get('draw_change'):
+        dc = odds_change['draw_change']
+        dc_data = calib.get('draw_change', {}).get('变动', {}).get(dc)
+        if dc_data and dc_data['n'] >= 100:
+            base_draw = calib['draw_change']['base_draw_rate']
+            target_draw = dc_data['draw_rate']
+            # 偏差量, 保守20%修正
+            draw_delta = (target_draw - base_draw) * 0.20
+            draw_delta = max(-0.02, min(0.02, draw_delta))
+            if abs(draw_delta) > 0.005:
+                pd += draw_delta
+                pw -= draw_delta * 0.5
+                pl -= draw_delta * 0.5
+                notes.append(f'平赔变动校准: {dc}→平{"↑" if draw_delta>0 else "↓"}{abs(draw_delta)*100:.1f}pp')
+    
+    # ===== 2. HAD-HHAD联动信号校准 (Part 4) =====
+    # 同时上升→主胜45.9%, 同时下降→主胜32.2%
+    if had_hhad_change and had_hhad_change.get('had_h') and had_hhad_change.get('hhad_h'):
+        hh = had_hhad_change
+        linkage = calib.get('had_hhad_linkage', {})
+        if hh['had_h'] == '上升' and hh['hhad_h'] == '上升':
+            both = linkage.get('both_up', {})
+            if both and both['n'] >= 100:
+                # 联动信号, 温和增强(与原有变动信号叠加)
+                linkage_home = both['home_rate']
+                base_home = 0.401  # 整体基准主胜率
+                home_delta = (linkage_home - base_home) * 0.15  # 15%修正
+                home_delta = max(-0.015, min(0.015, home_delta))
+                if abs(home_delta) > 0.003:
+                    pw += home_delta
+                    pd -= home_delta * 0.3
+                    pl -= home_delta * 0.7
+                    notes.append(f'HAD-HHAD联动: 同时上升→主{home_delta*100:+.1f}pp')
+        elif hh['had_h'] == '下降' and hh['hhad_h'] == '下降':
+            both = linkage.get('both_down', {})
+            if both and both['n'] >= 100:
+                linkage_home = both['home_rate']
+                base_home = 0.401
+                home_delta = (linkage_home - base_home) * 0.15
+                home_delta = max(-0.015, min(0.015, home_delta))
+                if abs(home_delta) > 0.003:
+                    pw += home_delta  # 负值→主胜下降
+                    pd -= home_delta * 0.3
+                    pl -= home_delta * 0.7
+                    notes.append(f'HAD-HHAD联动: 同时下降→主{home_delta*100:+.1f}pp')
+    
+    # ===== 3. HAD/HHAD矛盾信号 → HHAD可靠性调整 (Part 6) =====
+    # 当HAD自信度>5pp高于HHAD时, HAD准确率56.4% vs HHAD仅33.5%
+    # 此信号在HHAD融合后调用, 降低HHAD置信度或调整方向
+    # (HAD侧的校准已有单独的逻辑, 这里仅记录信息)
+    if sp_had_probs and sp_hhad_probs and hhad and 'h' in hhad:
+        had_conf = max(sp_had_probs)
+        hhad_conf = max(sp_hhad_probs)
+        conf_diff_pp = (had_conf - hhad_conf) * 100
+        
+        # 确定自信度差异区间
+        conf_diff_data = calib.get('conflict_signal', {}).get('confidence_diff', {})
+        diff_label = None
+        if conf_diff_pp > 5:
+            diff_label = 'HAD自信度更高(>5pp)'
+        elif conf_diff_pp > 2:
+            diff_label = 'HAD略高(2~5pp)'
+        elif conf_diff_pp > -2:
+            diff_label = 'HAD-HHAD接近(±2pp)'
+        elif conf_diff_pp > -5:
+            diff_label = 'HHAD略高(-5~-2pp)'
+        else:
+            diff_label = 'HHAD自信度更高(<-5pp)'
+        
+        if diff_label and diff_label in conf_diff_data:
+            entry = conf_diff_data[diff_label]
+            # 返回HHAD可靠度系数, 供HHAD侧使用
+            hhad_reliability = entry.get('hhad_可靠度', 0.5)
+            notes.append(f'矛盾信号: {diff_label} (HAD准确率{entry["had_accuracy"]}%, HHAD可靠度{hhad_reliability:.0%})')
+            return [pw, pd, pl], notes, hhad_reliability
+    
+    # 归一化 + 边界保护
+    s = pw + pd + pl
+    if s > 0:
+        pw, pd, pl = pw / s, pd / s, pl / s
+    pw = max(0.05, min(0.90, pw))
+    pd = max(0.05, min(0.60, pd))
+    pl = max(0.05, min(0.90, pl))
+    s = pw + pd + pl
+    if s > 0:
+        pw, pd, pl = pw / s, pd / s, pl / s
+    
+    return [pw, pd, pl], notes, 0.5  # 默认HHAD可靠度0.5
+
+
 _DRAW_BIAS_CACHE = {'value': None}
 
 def query_draw_bias():
@@ -6076,6 +6225,18 @@ def predict_match(match_num, data):
     _adv_probs, _adv_notes = apply_advanced_calibration([p1_w, p1_d, p1_l], sp, had, hhad)
     p1_w, p1_d, p1_l = _adv_probs
 
+    # Ultra 10.6: 赔率变动特征分析校准 — 平局赔率变动 + HAD-HHAD联动
+    # 注: 平赔变动信号需odds_change_history数据, 预测时无逐场数据则跳过
+    _oca_notes = []
+    if _ODDS_CHANGE_ANALYSIS_CALIB and had and 'h' in had:
+        # 预测时无法获取逐场draw_change信号, 跳过变动校准, 仅保留框架
+        _oca_probs, _oca_notes, _ = apply_odds_change_analysis_calibration(
+            [p1_w, p1_d, p1_l], had, hhad, _league_for_cal, 
+            odds_change=None, had_hhad_change=None)
+        p1_w, p1_d, p1_l = _oca_probs
+    if _oca_notes:
+        _adv_notes.extend(_oca_notes)
+
     # Ultra 6.9: 融合后平局校准 — 双信号(主赔+平赔)修复系统性平局低估
     # 必须在advanced_calibration之后、HAD方向确定之前调用
     p1_w, p1_d, p1_l = post_fusion_draw_calibration([p1_w, p1_d, p1_l], had, _league_for_cal)
@@ -6253,6 +6414,35 @@ def predict_match(match_num, data):
     # 在HHAD融合后、方向确定前调用 (与HAD平局校准对称)
     hhad_final_probs = post_fusion_hhad_draw_calibration(
         hhad_final_probs, had, hhad, handicap, _league_for_cal)
+
+    # Ultra 10.6: HAD/HHAD矛盾信号 → HHAD可靠性调整
+    # 当HAD自信度>5pp高于HHAD时, HAD准确率56.4% vs HHAD仅33.5%
+    # 此时降低HHAD置信度, 让HAD预测主导
+    if _ODDS_CHANGE_ANALYSIS_CALIB and hhad and 'h' in hhad and had and 'h' in had:
+        try:
+            _sp_had_shin = shin_method([had['h'], had['d'], had['a']])
+            _sp_hhad_shin = shin_method([hhad['h'], hhad['d'], hhad['a']])
+            _oca_hhad, _oca_hhad_notes, _hhad_rel = apply_odds_change_analysis_calibration(
+                hhad_final_probs, had, hhad, _league_for_cal,
+                odds_change=None, sp_had_probs=_sp_had_shin, sp_hhad_probs=_sp_hhad_shin)
+            if _hhad_rel < 0.5:
+                # HHAD不可靠, 降低其置信度: 向均匀分布收缩
+                _hhad_pull = (1.0 - _hhad_rel) * 0.15  # 最多收缩15%
+                _max_i = hhad_final_probs.index(max(hhad_final_probs))
+                for _i in range(3):
+                    if _i == _max_i:
+                        hhad_final_probs[_i] -= _hhad_pull * 0.8
+                    else:
+                        hhad_final_probs[_i] += _hhad_pull * 0.4
+                # 重新归一化
+                _s = sum(hhad_final_probs)
+                if _s > 0:
+                    hhad_final_probs = [p / _s for p in hhad_final_probs]
+            if _oca_hhad_notes:
+                print(f'  {" ".join(_oca_hhad_notes)}')
+        except Exception as _e:
+            pass  # 矛盾信号校准失败时跳过, 不影响原有逻辑
+
     hhad_final_idx = hhad_final_probs.index(max(hhad_final_probs))
     if hhad and 'h' in hhad:
         hhad_dir = hhad_dirs[hhad_final_idx]
