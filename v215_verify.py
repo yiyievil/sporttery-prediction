@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
-赛果验证脚本 Ultra 6.1 — 自动化验证预测结果
+赛果验证脚本 Ultra 7.11 — 自动化验证预测结果
 输入: 体彩日期 + 比赛编号 (如 "周二205,周二206,周二207")
       或日期+编号 (如 "2026-07-22 205,206,207")
 
 流程:
-  用户输入 → 500.com赛果获取(优先) → sporttery赛果API(备用补充赔率)
-  → 加载预测文件 → 自动验证 → HTML报告 → 回归分析入库
+  用户输入 → sporttery比分直播API(zqbfzb,优先) → sporttery赛果API(补充赔率)
+  → 500.com(fallback,zqbfzb无比分时) → 加载预测文件 → 自动验证 → PDF报告(手机优化) → 回归分析入库
+
+Ultra 7.11 升级:
+  - zqbfzb API(getMatchDataPageListV1)作为主数据源: 比赛结束后立即更新比分
+  - 500.com降级为末位fallback: 仅当zqbfzb无比分时才调用
+  - 三级数据源: zqbfzb(比分) → sporttery赛果API(赔率/goalLine) → 500.com(fallback)
 
 Ultra 6.1 升级:
   - 贝叶斯更新模型 (Beta-Binomial共轭, 小样本收缩, 可信区间)
@@ -56,6 +61,16 @@ SPORTTERY_RESULT_URL = "https://webapi.sporttery.cn/gateway/uniform/football/get
 SPORTTERY_HEADERS = {
     'User-Agent': 'Mozilla/5.0',
     'Referer': 'https://www.lottery.gov.cn/jc/zqsgkj/',
+    'Accept': 'application/json',
+}
+
+# Ultra 7.11: Sporttery比分直播API (zqbfzb页面背后的JSON API)
+# 优势: 比赛结束后立即更新比分, 比赛果API(getUniformMatchResultV1)更快
+# API: getMatchDataPageListV1.qry?method=all (全部=已完成+进行中+待开)
+ZQBFZB_API_URL = "https://webapi.sporttery.cn/gateway/uniform/fb/getMatchDataPageListV1.qry"
+ZQBFZB_HEADERS = {
+    'User-Agent': 'Mozilla/5.0',
+    'Referer': 'https://www.sporttery.cn/jc/zqbfzb/',
     'Accept': 'application/json',
 }
 
@@ -287,6 +302,90 @@ def fetch_500_results(match_keys):
             'source': '500.com',
         }
         print(f"  500.com: {key} {home} {home_score}-{away_score} {away} | 半场{half_home}-{half_away} | HAD={had_result} | 完场={finished}")
+
+    return results
+
+
+def fetch_zqbfzb_results(match_keys):
+    """从sporttery比分直播页面API获取赛果 (主数据源, Ultra 7.11)
+
+    数据源: https://www.sporttery.cn/jc/zqbfzb/ 页面背后的JSON API
+    API: getMatchDataPageListV1.qry?method=all (全部=已完成+进行中+待开)
+
+    优势:
+    - 体彩官方数据源, 比赛结束后立即更新比分
+    - JSON API, 无需HTML解析, 比赛果API(getUniformMatchResultV1)更快更稳定
+    - 包含全场比分(sectionsNo999)、半场比分(sectionsNo1)、比赛状态、HAD赔率(未完场时)
+
+    返回 {matchNumStr: {match data}} — 兼容parse_result的sporttery格式
+    """
+    try:
+        r = requests.get(ZQBFZB_API_URL, params={'method': 'all'},
+                        headers=ZQBFZB_HEADERS, timeout=15)
+        if r.status_code != 200:
+            print(f"  zqbfzb API请求失败: HTTP {r.status_code}")
+            return {}
+        data = r.json()
+    except Exception as e:
+        print(f"  zqbfzb API请求异常: {e}")
+        return {}
+
+    if data.get('errorCode') != '0':
+        print(f"  zqbfzb API返回错误: errorCode={data.get('errorCode')}")
+        return {}
+
+    match_info_list = data.get('value', {}).get('matchInfoList', [])
+    if not match_info_list:
+        print("  zqbfzb API: 无比赛数据")
+        return {}
+
+    # 建立matchNumStr → match data 映射 (跨日期组)
+    all_matches = {}
+    for grp in match_info_list:
+        for m in grp.get('subMatchList', []):
+            key = m.get('matchNumStr', '')
+            if key:
+                all_matches[key] = m
+
+    # 过滤出目标比赛, 转换为parse_result兼容格式
+    results = {}
+    for key in match_keys:
+        m = all_matches.get(key)
+        if not m:
+            continue
+
+        score = m.get('sectionsNo999', '')
+        half = m.get('sectionsNo1', '')
+        status = m.get('matchStatusName', '')
+
+        result = {
+            'matchNumStr': key,
+            'homeTeam': m.get('homeTeamAllName') or m.get('homeTeamAbbName', ''),
+            'awayTeam': m.get('awayTeamAllName') or m.get('awayTeamAbbName', ''),
+            'leagueNameAbbr': m.get('leagueAbbName', ''),
+            'matchDate': m.get('matchDate', ''),
+            'sectionsNo999': score,
+            'sectionsNo1': half,
+            'h': m.get('h', ''),
+            'd': m.get('d', ''),
+            'a': m.get('a', ''),
+            'matchResultStatus': status,
+            'matchId': m.get('matchId'),
+            'source': 'zqbfzb',
+        }
+
+        # 从比分推算winFlag (zqbfzb API不返回winFlag)
+        if ':' in score:
+            parts = score.split(':')
+            h_s, a_s = int(parts[0]), int(parts[1])
+            result['winFlag'] = 'H' if h_s > a_s else ('D' if h_s == a_s else 'A')
+        else:
+            result['winFlag'] = ''
+
+        score_display = score if score else '无比分'
+        print(f"  zqbfzb: {key} {result['homeTeam']} {score_display} {result['awayTeam']} | 半场{half or 'N/A'} | {status}")
+
+        results[key] = result
 
     return results
 
@@ -1171,10 +1270,15 @@ def confusion_matrix_analysis(verified_matches):
 
 
 def cusum_drift_detection(verified_stats_list, target_rate=0.5, threshold=3.0):
-    """CUSUM模型漂移检测 (Ultra 6.1)
+    """CUSUM模型漂移检测 (Ultra 8.0: 预警升级)
 
     使用累积和控制图监控预测准确率随时间的变化。
     当模型性能发生漂移(突然下降或上升)时发出警报。
+
+    Ultra 8.0 升级:
+      1. 早期预警: CUSUM > 0.15 × threshold 时发出预警 (提前干预)
+      2. 连续低命中检测: 连续3批命中率<40%时触发重标定建议
+      3. 输出可操作建议 (降权Power/Elo源, 触发重标定)
 
     算法:
         对每批验证数据, 计算偏差 = target_rate - actual_rate
@@ -1182,23 +1286,20 @@ def cusum_drift_detection(verified_stats_list, target_rate=0.5, threshold=3.0):
         CUSUM_neg = min(0, CUSUM_neg_prev + deviation)   — 检测上升
         若 |CUSUM| > threshold × sigma → 漂移警报
 
-    应用场景:
-        1. 检测模型在新赛季是否失效(球队阵容大变)
-        2. 检测赔率市场效率变化(更多内幕信息进入市场)
-        3. 检测数据源质量下降(爬取异常)
-
     参数:
         verified_stats_list: 按时间排序的验证统计列表 (from DB, 每条含verify_date, had_rate, has_pred)
         target_rate: 目标准确率 (默认50%, 体彩1X2合理水平)
         threshold: 控制限倍数 (3.0 = 3 sigma, 工业标准)
     返回:
         {'cusum_pos': float, 'cusum_neg': float, 'drift_detected': bool,
-         'drift_direction': str, 'drift_point': str, 'interpretation': str}
+         'drift_direction': str, 'drift_point': str, 'interpretation': str,
+         'early_warning': bool, 'consecutive_low': bool, 'recommendation': str}
     """
     if not verified_stats_list or len(verified_stats_list) < 3:
         return {'cusum_pos': 0, 'cusum_neg': 0, 'drift_detected': False,
                 'drift_direction': '无', 'drift_point': '',
-                'interpretation': '数据不足(需≥3批验证)'}
+                'interpretation': '数据不足(需≥3批验证)',
+                'early_warning': False, 'consecutive_low': False, 'recommendation': ''}
 
     # 计算标准差估计 (用历史数据)
     rates = [s.get('had_rate', 0) / 100 for s in verified_stats_list if s.get('had_rate') is not None]
@@ -1212,9 +1313,12 @@ def cusum_drift_detection(verified_stats_list, target_rate=0.5, threshold=3.0):
     cusum_pos = 0.0
     cusum_neg = 0.0
     control_limit = threshold * sigma
+    # Ultra 8.0: 早期预警线 = 控制限的50% (如控制限0.30则预警线0.15)
+    early_warning_limit = control_limit * 0.50
     drift_detected = False
     drift_direction = '无'
     drift_point = ''
+    early_warning = False
 
     for s in verified_stats_list:
         actual_rate = (s.get('had_rate', 0) or 0) / 100
@@ -1231,9 +1335,33 @@ def cusum_drift_detection(verified_stats_list, target_rate=0.5, threshold=3.0):
                 drift_detected = True
                 drift_direction = '上升(准确率显著提高)'
                 drift_point = s.get('verify_date', '')
+        # Ultra 8.0: 早期预警 (CUSUM超过预警线但未超控制限)
+        if cusum_pos > early_warning_limit and not drift_detected:
+            early_warning = True
+
+    # Ultra 8.0: 连续低命中检测 (最近3批命中率均<40%)
+    consecutive_low = False
+    recent_rates = [(s.get('had_rate', 0) or 0) / 100 for s in verified_stats_list[-3:]]
+    if len(recent_rates) >= 3 and all(r < 0.40 for r in recent_rates):
+        consecutive_low = True
+
+    # 生成可操作建议
+    recommendation = ''
+    if drift_detected and '下降' in drift_direction:
+        recommendation = '⚠️ 建议降权Power/Elo源(偏向市场赔率), 并触发模型重标定'
+    elif consecutive_low:
+        recommendation = '⚠️ 连续3批命中率<40%, 建议触发模型重标定(重新标定联赛参数+赔率区间)'
+    elif early_warning:
+        recommendation = '⚡ CUSUM接近控制限, 建议降权Power/Elo源(增加市场赔率权重)'
 
     if drift_detected:
         interp = f"检测到模型漂移: {drift_direction}, 起始点: {drift_point}"
+        if recommendation:
+            interp += f" | {recommendation}"
+    elif consecutive_low:
+        interp = f"模型稳定(CUSUM={cusum_pos:.2f}/{cusum_neg:.2f}, 控制限={control_limit:.2f}) | {recommendation}"
+    elif early_warning:
+        interp = f"⚠️ 早期预警(CUSUM={cusum_pos:.2f}, 预警线={early_warning_limit:.2f}, 控制限={control_limit:.2f}) | {recommendation}"
     else:
         interp = f"模型稳定(CUSUM={cusum_pos:.2f}/{cusum_neg:.2f}, 控制限={control_limit:.2f})"
 
@@ -1244,6 +1372,9 @@ def cusum_drift_detection(verified_stats_list, target_rate=0.5, threshold=3.0):
         'drift_direction': drift_direction,
         'drift_point': drift_point,
         'control_limit': round(control_limit, 4),
+        'early_warning': early_warning,
+        'consecutive_low': consecutive_low,
+        'recommendation': recommendation,
         'interpretation': interp,
     }
 
@@ -1733,9 +1864,14 @@ def _ultra61_html(cal_analysis, conf_matrix, boot_ci, bayes_overall, logistic_fa
             parts.append(f'<tr><td>{name}</td><td>{imp:.4f}</td><td>{direction}</td></tr>')
         parts.append('</tbody></table>')
 
-    # 7. CUSUM漂移检测
+    # 7. CUSUM漂移检测 (Ultra 8.0: 早期预警+连续低命中)
     if cusum_out:
-        cls = 'callout' if not cusum_out.get('drift_detected') else 'callout warning'
+        if cusum_out.get('drift_detected'):
+            cls = 'callout warning'
+        elif cusum_out.get('early_warning') or cusum_out.get('consecutive_low'):
+            cls = 'callout warning'
+        else:
+            cls = 'callout'
         parts.append(f'<div class="{cls}"><strong>CUSUM漂移检测:</strong> {cusum_out.get("interpretation", "N/A")}</div>')
 
     return '\n'.join(parts)
@@ -2729,7 +2865,7 @@ def generate_regression_report(current_stats, hist_stats, date_str):
 
 def main():
     print("=" * 60)
-    print("【赛果验证脚本 Ultra 6.1】")
+    print("【赛果验证脚本 Ultra 7.11】")
     print(f"输入: {INPUT}")
     print("=" * 60)
 
@@ -2737,39 +2873,62 @@ def main():
     match_keys, date_range = parse_input(INPUT)
     print(f"\n[Phase1] 解析输入: match_keys={match_keys}, date_range={date_range}")
 
-    # Phase 2: 从500.com获取赛果(优先数据源)
-    print("\n[Phase2] 从500.com获取赛果(优先)...")
-    results_500 = fetch_500_results(match_keys)
-    print(f"  500.com获取到 {len(results_500)} 场比赛赛果")
+    # Phase 2: 从sporttery比分直播API获取赛果 (Ultra 7.11: 主数据源)
+    print("\n[Phase2] 从sporttery比分直播(zqbfzb)获取赛果(优先)...")
+    results_zqbfzb = fetch_zqbfzb_results(match_keys)
+    print(f"  zqbfzb获取到 {len(results_zqbfzb)} 场比赛赛果")
 
-    # 从sporttery获取备用数据(赔率+补缺)
-    print("\n  从sporttery获取赔率补充(备用)...")
+    # 从sporttery赛果API获取补充数据(赔率/goalLine/winFlag)
+    print("\n  从sporttery赛果API获取赔率补充...")
     results_sporttery = fetch_match_results(date_range)
 
-    # 合并: 500.com比分 + sporttery赔率信息
+    # 500.com作为末位fallback (zqbfzb无比分时)
+    need_500 = [k for k in match_keys
+                if k not in results_zqbfzb or ':' not in results_zqbfzb[k].get('sectionsNo999', '')]
+    results_500 = {}
+    if need_500:
+        print(f"\n  500.com fallback: {len(need_500)}场无比分, 尝试500.com...")
+        results_500 = fetch_500_results(need_500)
+        print(f"  500.com获取到 {len(results_500)} 场比赛赛果")
+
+    # 合并: zqbfzb比分(优先) + sporttery赔率/goalLine + 500.com fallback
     target_results = {}
     for key in match_keys:
-        r500 = results_500.get(key)
+        zq = results_zqbfzb.get(key)
         sport = results_sporttery.get(key)
+        r500 = results_500.get(key)
 
-        if r500 and sport:
-            # 合并: 500.com比分 + sporttery赔率/联赛
+        if zq and ':' in zq.get('sectionsNo999', ''):
+            # zqbfzb有比分 — 以zqbfzb为主, 补充sporttery的goalLine/赔率
+            merged = zq.copy()
+            if sport:
+                # 补充zqbfzb缺失的字段: goalLine, winFlag, 终赔
+                if not merged.get('goalLine') and sport.get('goalLine'):
+                    merged['goalLine'] = sport['goalLine']
+                if not merged.get('h') and sport.get('h'):
+                    merged['h'] = sport['h']
+                    merged['d'] = sport.get('d', '')
+                    merged['a'] = sport.get('a', '')
+            merged['source'] = 'zqbfzb' + ('+sporttery' if sport else '')
+            target_results[key] = merged
+        elif r500 and sport:
+            # zqbfzb无比分, 500.com有 — 合并500.com比分 + sporttery赔率
             merged = sport.copy()
             merged['sectionsNo999'] = f"{r500['home_score']}:{r500['away_score']}"
             merged['sectionsNo1'] = f"{r500['half_home']}:{r500['half_away']}"
-            if r500['home_score'] > r500['away_score']:
-                merged['winFlag'] = 'H'
-            elif r500['home_score'] == r500['away_score']:
-                merged['winFlag'] = 'D'
-            else:
-                merged['winFlag'] = 'A'
+            merged['winFlag'] = 'H' if r500['home_score'] > r500['away_score'] else ('D' if r500['home_score'] == r500['away_score'] else 'A')
             merged['source'] = '500.com+sporttery'
             target_results[key] = merged
         elif r500:
-            # 仅500.com数据
             target_results[key] = r500
+        elif zq and sport:
+            # zqbfzb无比分但有比赛信息, 合并sporttery
+            merged = sport.copy()
+            merged['source'] = 'zqbfzb+sporttery(无比分)'
+            target_results[key] = merged
+        elif zq:
+            target_results[key] = zq
         elif sport:
-            # 仅sporttery数据(可能无比分)
             target_results[key] = sport
 
     # ★★★ Ultra 7.7: 应用手动比分覆盖 (API未返回比分时使用已验证的真实比分) ★★★
@@ -2945,8 +3104,8 @@ def main():
     else:
         print(f"  [Pro3.0] Kelly验证: 无value投注数据")
 
-    # Phase 5: 生成HTML报告
-    print("\n[Phase5] 生成HTML报告...")
+    # Phase 5: 生成PDF报告 (手机阅读优化, 不再输出HTML)
+    print("\n[Phase5] 生成PDF报告 (手机阅读优化版)...")
     # 使用输入日期(开盘日)作为报告日期, 而非比赛实际日期
     input_date_match = re.match(r'(\d{4}-\d{2}-\d{2})', INPUT)
     if input_date_match:
@@ -2968,9 +3127,9 @@ def main():
     cusum_out = None
     if hist_stats and hist_stats.get('recent'):
         cusum_out = cusum_drift_detection(hist_stats['recent'])
-        print(f"  [Ultra6.1] CUSUM漂移: {cusum_out.get('interpretation')}")
+        print(f"  [Ultra8.0] CUSUM漂移: {cusum_out.get('interpretation')}")
 
-    # 生成报告HTML(含回归分析)
+    # 生成报告HTML字符串 (仅用于PDF解析, 不保存到文件)
     html = generate_html_report(verified_matches, stats, date_str,
                                 brier_result=brier_out, calibration=calib_out, kelly_result=kelly_out,
                                 cal_analysis=cal_analysis, conf_matrix=conf_matrix,
@@ -2987,24 +3146,12 @@ def main():
 </div>"""
     html = html.replace('</div>\n</body>', regression_section + '\n\n</div>\n</body>')
 
-    report_file = os.path.join(REPORT_DIR, f'verify_{date_str.replace("-","")}.html')
-    with open(report_file, 'w', encoding='utf-8') as f:
-        f.write(html)
-    print(f"  报告已保存: {report_file}")
-
-    # ★★★ Ultra 7.7: 同时生成PDF报告 (手机阅读优化, 同预测报告格式) ★★★
+    # Ultra 8.2: 直接从HTML字符串生成PDF (不保存HTML文件)
+    pdf_file = os.path.join(REPORT_DIR, f'verify_{date_str.replace("-","")}.pdf')
     try:
-        pdf_file = report_file.replace('.html', '.pdf')
-        import subprocess
-        result = subprocess.run(
-            [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gen_verify_pdf.py'),
-             report_file, pdf_file],
-            capture_output=True, text=True, timeout=60
-        )
-        if result.returncode == 0:
-            print(f"  PDF报告已保存: {pdf_file}")
-        else:
-            print(f"  ⚠️ PDF生成失败: {result.stderr[:200]}")
+        from gen_verify_pdf import generate_verify_pdf
+        generate_verify_pdf(html, pdf_file)
+        print(f"  PDF报告已保存: {pdf_file}")
     except Exception as e:
         print(f"  ⚠️ PDF生成异常: {e}")
 
@@ -3017,10 +3164,7 @@ def main():
 
     print("\n" + "=" * 60)
     print("【验证完成】")
-    print(f"  HTML报告: {report_file}")
-    pdf_file = report_file.replace('.html', '.pdf')
-    if os.path.exists(pdf_file):
-        print(f"  PDF报告: {pdf_file}")
+    print(f"  PDF报告: {pdf_file}")
     print(f"  数据库: {DB_PATH}")
     print("=" * 60)
 

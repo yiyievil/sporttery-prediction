@@ -561,9 +561,14 @@ def build_msn_section(pred_file, styles):
 
         els = [Paragraph('M串N 容错过关推荐 (官方32种组合)', styles['section'])]
 
-        # 场次明细
-        legs = ' | '.join(f"{b['key']}{b['dir']}@{b['odds']}(P{b['prob']:.0%})" for b in bets)
-        els.append(Paragraph(normalize_text(f'串关场次({M}场HAD主推): {legs}'), styles['small']))
+        # 场次明细 — 显示市场类型(HAD/HHAD)和让球数
+        leg_parts = []
+        for b in bets:
+            mkt = b.get('market', 'HAD')
+            hc = f"让{b['handicap']}" if 'handicap' in b else ''
+            leg_parts.append(f"{b['key']}[{mkt}]{hc} {b['dir']}@{b['odds']}(P{b['prob']:.0%})")
+        legs = ' | '.join(leg_parts)
+        els.append(Paragraph(normalize_text(f'串关场次({M}场HAD/HHAD最优): {legs}'), styles['small']))
         dist_str = ' '.join(f"{x}场:{dist[x]:.0%}" for x in range(1, M + 1) if dist[x] >= 0.01)
         els.append(Paragraph(normalize_text(f'命中场数分布: {dist_str}'), styles['small']))
 

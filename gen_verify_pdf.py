@@ -180,10 +180,21 @@ def normalize_text(text):
 # ============================================================
 # HTML 解析器
 # ============================================================
-def parse_verify_html(html_path):
-    """解析验证HTML报告，提取结构化数据"""
-    with open(html_path, 'r', encoding='utf-8') as f:
-        html = f.read()
+def parse_verify_html(html_path_or_content):
+    """解析验证HTML报告，提取结构化数据
+
+    Args:
+        html_path_or_content: HTML文件路径 或 HTML内容字符串
+    """
+    # 判断是文件路径还是HTML内容
+    if '<html' in html_path_or_content[:500].lower() or '<h1>' in html_path_or_content[:500]:
+        html = html_path_or_content
+    elif os.path.exists(html_path_or_content):
+        with open(html_path_or_content, 'r', encoding='utf-8') as f:
+            html = f.read()
+    else:
+        # 内容本身就是HTML (没有文件头标志但也不是文件路径)
+        html = html_path_or_content
 
     data = {'stats': {}, 'matches': [], 'calibration': {}, 'confusion': {},
             'lessons': [], 'history': {}, 'advanced': {}}
@@ -844,6 +855,113 @@ def main():
 
     doc.build(story, onFirstPage=draw_bg, onLaterPages=draw_bg)
     print(f'\n验证报告PDF已生成 (手机阅读优化版): {OUTPUT_PDF}')
+
+
+def generate_verify_pdf(html_content, output_pdf_path):
+    """从HTML内容字符串直接生成验证报告PDF (供 v215_verify.py 直接调用)
+
+    Args:
+        html_content: HTML报告字符串 (不保存到文件)
+        output_pdf_path: 输出PDF文件路径
+    """
+    global OUTPUT_PDF
+    OUTPUT_PDF = output_pdf_path
+
+    cjk = register_cjk_font()
+    styles = get_styles(cjk)
+
+    # 解析HTML内容
+    data = parse_verify_html(html_content)
+
+    # 生成PDF
+    doc = SimpleDocTemplate(
+        output_pdf_path, pagesize=PAGE_SIZE,
+        leftMargin=LM, rightMargin=RM, topMargin=TM, bottomMargin=BM,
+        title=f'验证报告 {data["title"]}',
+    )
+
+    story = []
+
+    # 标题
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+    title_data = [[Paragraph(data['title'], styles['title'])]]
+    title_table = Table(title_data, colWidths=[CW])
+    title_table.setStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), BG_HEADER),
+        ('TOPPADDING', (0, 0), (-1, -1), 16),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 16),
+    ])
+    story.append(title_table)
+
+    meta_data = [[Paragraph(f'{data["subtitle"]} | 生成时间 {now_str}', styles['subtitle'])]]
+    meta_table = Table(meta_data, colWidths=[CW])
+    meta_table.setStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), BG_HEADER),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ])
+    story.append(meta_table)
+    story.append(Spacer(1, 14))
+
+    # 命中率总览
+    story.append(Paragraph('命中率总览', styles['section']))
+    if data['badge']:
+        badge_data = [[Paragraph(f'<b>{data["badge"]}</b>',
+                                  ParagraphStyle('badge', fontName='CJK-Bold', fontSize=16, leading=22,
+                                                 textColor=ACCENT_GREEN, alignment=TA_CENTER, wordWrap='CJK'))]]
+        badge_table = Table(badge_data, colWidths=[CW])
+        badge_table.setStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), BG_HIT),
+            ('BOX', (0, 0), (-1, -1), 2, BORDER_GREEN),
+            ('TOPPADDING', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        ])
+        story.append(badge_table)
+        story.append(Spacer(1, 10))
+
+    story.extend(build_stat_grid(data['stats'], styles))
+
+    # 汇总表
+    story.append(Spacer(1, 14))
+    story.append(Paragraph('验证汇总表', styles['section']))
+    story.append(build_summary_table(data['matches'], styles))
+
+    # 逐场详细分析
+    story.append(Spacer(1, 18))
+    story.append(Paragraph('逐场验证详情', styles['section']))
+    for m in data['matches']:
+        card = build_match_card(m, styles)
+        story.extend(card)
+
+    # 校准分析
+    story.append(Spacer(1, 10))
+    story.append(Paragraph('校准分析 & 高级验证', styles['section']))
+    story.extend(build_calibration_section(data, styles))
+
+    # 回归分析与教训
+    if data['lessons']:
+        story.append(Spacer(1, 14))
+        story.append(Paragraph('回归分析与教训', styles['section']))
+        story.extend(build_lessons_section(data, styles))
+
+    # 历史统计
+    if data.get('history', {}).get('had_hist'):
+        story.append(Spacer(1, 14))
+        story.append(Paragraph('历史累计统计', styles['section']))
+        hist = data['history']
+        hist_text = f'HAD累计: {hist.get("had_hist", "")} | HHAD累计: {hist.get("hhad_hist", "")}'
+        hist_data = [[Paragraph(hist_text, styles['callout'])]]
+        hist_table = Table(hist_data, colWidths=[CW])
+        hist_table.setStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), BG_CARD),
+            ('BOX', (0, 0), (-1, -1), 1, BORDER_LIGHT),
+            ('TOPPADDING', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+            ('LEFTPADDING', (0, 0), (-1, -1), 14),
+        ])
+        story.append(hist_table)
+
+    doc.build(story, onFirstPage=draw_bg, onLaterPages=draw_bg)
 
 
 if __name__ == '__main__':

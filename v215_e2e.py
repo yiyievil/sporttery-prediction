@@ -109,6 +109,11 @@ TARGET_DATE = None   # ← 不限日期(避免跨天分类问题)
 TARGET_WEEKDAY = "周三"  # ← 指定周几过滤(如"周四"), None=不过滤
 MATCH_NUMBERS = ["001","002"]  # ← 场次编号(后3位)
 
+# ===== 工作模式 (Ultra 8.1) =====
+# predict: 全新预测 — 所有数据重新拉取, 不读缓存, 完成后写入缓存
+# update:  更新预测 — 重新拉取数据, 与上次预测比对, 根据变化调整结果
+PRED_MODE = 'predict'
+
 # ===== 编号日期输入 (Ultra 7.3) =====
 # 竞彩官网(sporttery.cn/jc/jsq/zqspf)编号日期格式: 260728 = 2026-07-28
 # 命令行: python v215_e2e.py 260728 001,002
@@ -126,6 +131,41 @@ def parse_code_date(code):
     except ValueError:
         return None, None
     return d, _WEEKDAY_CN[d.weekday()]
+
+def apply_cli_mode():
+    """解析 --mode predict|update 参数, 同时剥离 --mode/--force 等标志 (Ultra 8.1)
+
+    用法: python v215_e2e.py 260731 001,002 --mode update
+          python v215_e2e.py 260731 001,002 --mode=predict --force
+    """
+    global PRED_MODE
+    _argv_filtered = []
+    _flags_to_strip = {'--force'}  # 这些标志保留在 _flags_seen 中供后续检查, 但不传入 match_input
+    _flags_seen = set()
+    i = 1
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        if arg == '--mode' and i + 1 < len(sys.argv):
+            mode = sys.argv[i + 1].strip().lower()
+            if mode in ('predict', 'update'):
+                PRED_MODE = mode
+            i += 2
+            continue
+        if arg.startswith('--mode='):
+            mode = arg.split('=', 1)[1].strip().lower()
+            if mode in ('predict', 'update'):
+                PRED_MODE = mode
+            i += 1
+            continue
+        if arg in _flags_to_strip:
+            _flags_seen.add(arg)
+            i += 1
+            continue
+        _argv_filtered.append(arg)
+        i += 1
+    # 恢复 --force 等标志到 argv 末尾 (供 inject_memory_context 检查)
+    sys.argv = [sys.argv[0]] + _argv_filtered + sorted(_flags_seen)
+
 
 def apply_cli_match_input():
     """命令行编号日期输入 → 覆盖 TARGET_WEEKDAY / MATCH_NUMBERS (无参数时用顶部配置)"""
@@ -353,13 +393,15 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
             key = f"{weekday}{match_num}"
             
             had = hhad = {}
+            had_in_list = False  # Ultra 7.10: 跟踪体彩API是否实际返回HAD盘口
             for o in s.get('oddsList', []):
                 if o['poolCode'] == 'HAD':
                     had = {'h': float(o['h']), 'd': float(o['d']), 'a': float(o['a'])}
+                    had_in_list = True
                 elif o['poolCode'] == 'HHAD':
                     hhad = {'h': float(o['h']), 'd': float(o['d']), 'a': float(o['a']),
                             'goalLine': float(o.get('goalLine', 0) or 0)}
-            
+
             matches[key] = {
                 'match_num': match_num,
                 'full_num': full_num,
@@ -373,6 +415,7 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
                 'match_time': s.get('matchTime', ''),
                 'HAD': had,
                 'HHAD': hhad,
+                'had_in_list': had_in_list,  # Ultra 7.10: HAD是否在体彩开盘列表
             }
     
     # 周几过滤: 如果指定了TARGET_WEEKDAY, 只保留该周几的比赛
@@ -4170,14 +4213,18 @@ def post_fusion_draw_calibration(probs, had, league):
     if is_close:
         target_draw = min(0.40, target_draw + 0.03)
 
+    # Ultra 8.0: 联赛专项平局修正 (29场回归: 瑞超HAD 0%, 历史平局率高)
+    if league in ('瑞超', '韩职'):
+        target_draw = min(0.42, target_draw + 0.05)
+
     # --- 5. 计算偏差gap ---
     gap = target_draw - pd
 
-    # 势均力敌接近比赛额外加成: 当top-2概率差<6pp且在平局高发区间时
-    # 这些比赛模型最容易在平局/胜负之间犹豫, 历史数据显示平局被低估
+    # 势均力敌接近比赛额外加成: 当top-2概率差<8pp且在平局高发区间时
+    # Ultra 8.0: 阈值从0.06放宽至0.08 (29场回归: 平局召回率仅9%, 需扩大触发范围)
     sorted_probs = sorted([pw, pd, pl], reverse=True)
     top2_gap = sorted_probs[0] - sorted_probs[1]
-    is_competitive = 2.0 <= home_odds <= 3.5 and top2_gap < 0.06
+    is_competitive = 2.0 <= home_odds <= 3.5 and top2_gap < 0.08
     
     # 双向校准: gap > 0.01 上调, gap < -0.02 下调
     # 势均力敌接近比赛: 即使gap小也做修正 (因为历史偏差大)
@@ -4185,19 +4232,19 @@ def post_fusion_draw_calibration(probs, had, league):
         return probs
 
     # --- 6. 有界修正 ---
-    # 上调: 70% of gap, cap 12pp; 下调: 50% of gap, cap 8pp (下调更保守)
+    # Ultra 8.0: 上调修正比例70%→80%, 上限12pp→15pp (29场回归: 平局低估仍严重)
     if gap > 0 or is_competitive:
         # 势均力敌接近比赛: 最小修正3pp (确保平局得到足够权重)
-        base_correction = gap * 0.70 if gap > 0 else 0
-        correction = min(0.12, base_correction)
+        base_correction = gap * 0.80 if gap > 0 else 0
+        correction = min(0.15, base_correction)
         if is_competitive:
             correction = max(correction, 0.03)  # 最小3pp上调
-            correction = min(0.12, correction)
+            correction = min(0.15, correction)
         # 平赔偏差大时额外增强
         d_bias = d_draw_cal.get('draw_bias', 0) if d_draw_cal else 0
         h_bias = h_draw_cal.get('draw_bias', 0) if h_draw_cal else 0
         if (d_bias > 0.05 or h_bias > 0.04) and not is_close:
-            correction = min(0.14, correction + 0.02)
+            correction = min(0.17, correction + 0.02)
     else:
         correction = max(-0.08, gap * 0.50)
 
@@ -4215,8 +4262,8 @@ def post_fusion_draw_calibration(probs, had, league):
         pw_new = pw - correction * 0.5
         pl_new = pl - correction * 0.5
 
-    # --- 8. 平局概率下限: 不低于目标的80% ---
-    draw_floor = target_draw * 0.80
+    # --- 8. 平局概率下限: 不低于目标的85% (Ultra 8.0: 80%→85%) ---
+    draw_floor = target_draw * 0.85
     if pd_new < draw_floor:
         deficit = draw_floor - pd_new
         pd_new = draw_floor
@@ -5180,6 +5227,20 @@ def predict_match(match_num, data):
     # 必须在advanced_calibration之后、HAD方向确定之前调用
     p1_w, p1_d, p1_l = post_fusion_draw_calibration([p1_w, p1_d, p1_l], had, _league_for_cal)
 
+    # Ultra 8.0: HAD主场偏差修正 (29场回归: 76%预测"胜"但命中率仅41%)
+    # 1. 主场概率上限65% (防止主场优势权重过大)
+    # 2. 客队赔率<3.0时(非弱旅), 对"胜"方向-3pp
+    away_odds_val = had.get('a', 0) if had else 0
+    if p1_w > 0.65:
+        excess = p1_w - 0.65
+        p1_w = 0.65
+        p1_d += excess * 0.5
+        p1_l += excess * 0.5
+    if away_odds_val and 1 < away_odds_val < 3.0 and p1_w > 0.40:
+        p1_w -= 0.03
+        p1_d += 0.015
+        p1_l += 0.015
+
     fused_probs = [p1_w, p1_d, p1_l]
     
     # 4. 重新确定HAD方向 (基于融合概率)
@@ -5289,15 +5350,15 @@ def predict_match(match_num, data):
     
     # ===== 三条预测: HAD + HHAD + 比分 =====
     # --- HAD预测 (Ultra 3.0: 基于融合概率) ---
-    had_dir = had_dirs[had_min_idx]
+    # Ultra 7.10: HAD未开盘时不生成推荐 (体彩停售/未开HAD盘时禁止推荐)
+    had_open = bool(had and had.get('h', 0) > 0)
     had_probs = [p1_w, p1_d, p1_l]
-    # 赔率: 优先使用体彩开盘赔率, 否则从概率反推
-    if had and 'h' in had:
+    if had_open:
+        had_dir = had_dirs[had_min_idx]
         odds = round([had['h'], had['d'], had['a']][had_min_idx], 2)
-    elif ouzhi and ouzhi_is_rr:
-        odds = round(1 / max(p1_w, p1_d, p1_l), 2)
     else:
-        odds = round([ow, od, ol][had_min_idx], 2)
+        had_dir = '未开盘'
+        odds = None
     
     # --- HHAD预测 (基于Poisson让球概率) ---
     hhad_dirs = ['让胜', '让平', '让负']
@@ -5340,12 +5401,14 @@ def predict_match(match_num, data):
     else:
         hhad_dir = hhad_dirs[hhad_final_idx]
 
-    # ===== 置信度计算 (Ultra 1.0: 融合概率差值 + 数据质量 + 模型一致性) =====
+    # ===== 置信度计算 (Ultra 8.0: 阈值重新标定 + 平局风险惩罚) =====
     # 辅助函数: 概率差值→星级分数
+    # Ultra 8.0: 4.5★阈值0.12→0.14, 5★阈值0.15→0.18
+    # (29场回归: ★★★★½命中25%, 虚假高信心重灾区)
     def delta_to_score(delta):
-        if delta >= 0.15: return 5.0
-        if delta >= 0.12: return 4.5
-        if delta >= 0.09: return 4.0
+        if delta >= 0.18: return 5.0
+        if delta >= 0.14: return 4.5
+        if delta >= 0.10: return 4.0
         if delta >= 0.07: return 3.5
         if delta >= 0.05: return 3.0
         if delta >= 0.04: return 2.5
@@ -5356,6 +5419,11 @@ def predict_match(match_num, data):
     had_spread = sorted(had_probs, reverse=True)
     had_delta = had_spread[0] - had_spread[1]
     had_conf_score = delta_to_score(had_delta)
+
+    # Ultra 8.0: 平局风险惩罚 — 预测"胜/负"但平局概率>25%时置信度封顶★★★★
+    # (29场回归: 预测"胜"→实际"平"8次, 平局概率高时高置信度是虚假信心)
+    if had_probs[1] > 0.25 and had_min_idx != 1:  # 平局概率>25%且预测方向非平局
+        had_conf_score = min(had_conf_score, 4.0)
 
     hhad_spread = sorted(hhad_final_probs, reverse=True)
     hhad_delta = hhad_spread[0] - hhad_spread[1]
@@ -5374,6 +5442,14 @@ def predict_match(match_num, data):
     if _xg_is_proxy:
         had_conf_score = min(had_conf_score, 4.0)
         hhad_conf_score = min(hhad_conf_score, 4.0)
+
+    # Ultra 8.0: 联赛专项置信度封顶 (29场回归: 韩职HAD 0%, 欧冠HHAD 0%)
+    _league_name = sp.get('league', '')
+    if _league_name == '韩职':
+        had_conf_score = min(had_conf_score, 3.0)
+        hhad_conf_score = min(hhad_conf_score, 3.0)
+    if _league_name in ('欧冠', '欧罗巴'):
+        hhad_conf_score = min(hhad_conf_score, 3.5)
 
     # Ultra 8.0: xG 交叉验证质量加星 — xG与实际进球一致性高时增信
     if _xg_data and _xg_data['cv_quality_avg'] >= 0.45:
@@ -5488,10 +5564,10 @@ def predict_match(match_num, data):
     hhad_conf = format_stars(hhad_conf_score)
     
     # ===== 证据收集 =====
-    had_str = f"{had['h']}/{had['d']}/{had['a']}" if had and 'h' in had else "未开"
+    had_str = f"{had['h']}/{had['d']}/{had['a']}" if had_open else "未开"
     hhad_str = f"{handicap} {hhad['h']}/{hhad['d']}/{hhad['a']}" if hhad and 'h' in hhad else f"{handicap} 未开"
     evidence = [
-        f"HAD {had_str}→{had_dir}@{odds}",
+        f"HAD {had_str}→{had_dir}@{odds}" if had_open else f"HAD 未开→不推荐",
         f"HHAD {hhad_str}→{hhad_dir}",
     ]
     if ouzhi or avg_odds or init_ouzhi:
@@ -5582,8 +5658,9 @@ def predict_match(match_num, data):
         'HAD': {
             'dir': had_dir,
             'odds': odds,
-            'conf': had_conf,
-            'p': f"{p1_w:.0%}/{p1_d:.0%}/{p1_l:.0%}",
+            'conf': had_conf if had_open else '—',
+            'p': f"{p1_w:.0%}/{p1_d:.0%}/{p1_l:.0%}" if had_open else '未开盘',
+            'had_open': had_open,
         },
         'HHAD': {
             'dir': hhad_dir,
@@ -5595,7 +5672,7 @@ def predict_match(match_num, data):
         },
         'kelly': {
             'HAD': kelly_criterion(p_for_had_dir, odds,
-                                   pool_margin([had['h'], had['d'], had['a']]) if had and 'h' in had else 0.0),
+                                   pool_margin([had['h'], had['d'], had['a']]) if had_open else 0.0) if had_open else {'stake_pct': 0, 'ev': 0, 'value': False},
             'HHAD': kelly_criterion(p_for_hhad_dir, hhad_odds_val,
                                     pool_margin([hhad['h'], hhad['d'], hhad['a']]) if hhad and 'h' in hhad else 0.0),
         },
@@ -5747,11 +5824,123 @@ def fetch_nowscore_for_matches(matches):
 
 
 # ============================================================
+# Ultra 8.1: 更新模式 — 数据比对与预测调整
+# ============================================================
+def compare_and_adjust_for_update(prev_results, new_results):
+    """更新模式: 比对上次预测与新数据, 根据变化调整预测结果
+
+    比对维度:
+      1. HAD/HHAD 赔率变化 (>5% 视为显著)
+      2. 预测方向是否反转
+      3. 置信度是否需要修正
+
+    调整规则:
+      - 方向一致 + 赔率向有利于预测方向移动 → 置信度微升 (最多+0.5★)
+      - 方向一致 + 赔率反向移动 → 置信度不变 (市场分歧, 维持判断)
+      - 方向反转 → 置信度封顶 ★★★ (信号矛盾, 降级处理)
+      - 新增场次 → 不调整 (无对比基准)
+
+    Returns:
+        (adjusted_results, change_log)
+    """
+    change_log = []
+    _STAR_MAP = {'★': 1, '★★': 2, '★★★': 3, '★★★★': 4, '★★★★★': 5}
+
+    for key in new_results:
+        new_r = new_results[key]
+        if key not in prev_results:
+            change_log.append(f"  {key}: 新增场次 (上次无预测)")
+            continue
+
+        prev_r = prev_results[key]
+        changes_for_key = []
+
+        # --- 比对 HAD ---
+        prev_had = prev_r.get('HAD', {})
+        new_had = new_r.get('HAD', {})
+        prev_had_dir = prev_had.get('dir', '')
+        new_had_dir = new_had.get('dir', '')
+
+        had_odds_changed = False
+        had_odds_shift = 0.0  # 正=赔率上升(概率下降), 负=赔率下降(概率上升)
+        for ok in ('h', 'd', 'a'):
+            po = prev_had.get(ok, 0) or 0
+            no = new_had.get(ok, 0) or 0
+            if po > 0 and no > 0:
+                pct = (no - po) / po
+                if abs(pct) > 0.05:
+                    had_odds_changed = True
+                    had_odds_shift += pct
+                    changes_for_key.append(f"HAD.{ok}: {po}→{no} ({pct*100:+.1f}%)")
+
+        # 方向是否反转
+        had_dir_reversed = (prev_had_dir and new_had_dir and prev_had_dir != new_had_dir)
+        if had_dir_reversed:
+            changes_for_key.append(f"HAD方向反转: {prev_had_dir}→{new_had_dir}")
+
+        # --- 比对 HHAD ---
+        prev_hhad = prev_r.get('HHAD', {})
+        new_hhad = new_r.get('HHAD', {})
+        prev_hhad_dir = prev_hhad.get('dir', '')
+        new_hhad_dir = new_hhad.get('dir', '')
+
+        hhad_dir_reversed = (prev_hhad_dir and new_hhad_dir and prev_hhad_dir != new_hhad_dir)
+        if hhad_dir_reversed:
+            changes_for_key.append(f"HHAD方向反转: {prev_hhad_dir}→{new_hhad_dir}")
+
+        # --- 调整置信度 ---
+        # HAD 方向反转 → 封顶 ★★★
+        if had_dir_reversed and new_had_dir:
+            cur_conf = new_had.get('conf', '')
+            cur_stars = _STAR_MAP.get(cur_conf, 0)
+            if cur_stars > 3:
+                new_had['conf'] = '★★★'
+                changes_for_key.append(f"HAD置信度降级: {cur_conf}→★★★ (方向反转)")
+
+        # HHAD 方向反转 → 封顶 ★★★
+        if hhad_dir_reversed and new_hhad_dir:
+            cur_conf = new_hhad.get('conf', '')
+            cur_stars = _STAR_MAP.get(cur_conf, 0)
+            if cur_stars > 3:
+                new_hhad['conf'] = '★★★'
+                changes_for_key.append(f"HHAD置信度降级: {cur_conf}→★★★ (方向反转)")
+
+        # 方向一致 + 预测方向赔率显著变化 → 微调
+        # 只看预测方向的赔率变化 (而非三个赔率之和)
+        if had_odds_changed and not had_dir_reversed and new_had_dir:
+            cur_conf = new_had.get('conf', '')
+            cur_stars = _STAR_MAP.get(cur_conf, 0)
+            _dir_odds_key = {'胜': 'h', '平': 'd', '负': 'a'}.get(new_had_dir, '')
+            if _dir_odds_key:
+                _po = prev_had.get(_dir_odds_key, 0) or 0
+                _no = new_had.get(_dir_odds_key, 0) or 0
+                if _po > 0 and _no > 0:
+                    _pred_pct = (_no - _po) / _po
+                    # 预测方向赔率下降(概率上升) → 市场确认, 微升
+                    if _pred_pct < -0.05 and cur_stars < 5 and cur_stars > 0:
+                        new_stars = min(cur_stars + 1, 5)
+                        new_had['conf'] = '★' * new_stars
+                        changes_for_key.append(f"HAD置信度微升: {cur_conf}→{new_had['conf']} (市场确认, 赔率{_pred_pct*100:+.1f}%)")
+                    # 预测方向赔率上升(概率下降) → 市场分歧, 维持但标注
+                    elif _pred_pct > 0.05:
+                        changes_for_key.append(f"HAD赔率上升(市场分歧, {_pred_pct*100:+.1f}%), 维持{cur_conf}")
+
+        if changes_for_key:
+            change_log.append(f"  {key}: " + " | ".join(changes_for_key))
+
+    return new_results, change_log
+
+
+# ============================================================
 # Main: 端到端执行 + 全程监测
 # ============================================================
 def main():
     t0 = time.time()
     monitor = []  # [(phase, elapsed, data_size, detail)]
+
+    # Ultra 8.1: 工作模式解析 (必须在 match_input 之前, 过滤 --mode 参数)
+    apply_cli_mode()
+    print(f"  [模式] {PRED_MODE}" + (" (全新预测, 不读缓存)" if PRED_MODE == 'predict' else " (更新预测, 比对上次)"))
 
     # Ultra 7.3: 命令行编号日期输入 (如 260728 001,002) 优先于顶部配置
     apply_cli_match_input()
@@ -5778,7 +5967,8 @@ def main():
                     if bonus:
                         matches[key]['sporttery_bonus'] = bonus
                         # 从固定奖金中回填HAD/HHAD赔率 (结果API回退时体彩终赔可能缺失)
-                        if bonus.get('had') and not matches[key].get('HAD'):
+                        # Ultra 7.10: HAD未在体彩开盘列表时禁止从历史赔率回填 (停售/未开HAD盘)
+                        if bonus.get('had') and not matches[key].get('HAD') and matches[key].get('had_in_list', True):
                             matches[key]['HAD'] = bonus['had']
                         if bonus.get('hhad'):
                             _old_hhad = matches[key].get('HHAD', {})
@@ -5914,7 +6104,10 @@ def main():
             fr = m.get('fallback_reason', '')
             ds_display = f"{ds} ⚠️{fr}" if fr else ds
             summary_lines.append(f"  {key} {m['home']} vs {m['away']} [{ds_display}]")
-            summary_lines.append(f"    HAD:  {had_info['dir']}@{had_info['odds']} {had_info['conf']} P={had_info['p']}")
+            if had_info.get('had_open', True):
+                summary_lines.append(f"    HAD:  {had_info['dir']}@{had_info['odds']} {had_info['conf']} P={had_info['p']}")
+            else:
+                summary_lines.append(f"    HAD:  未开盘 (仅参考HHAD)")
             summary_lines.append(f"    HHAD: {hhad_info['dir']}@{hhad_info['odds']} {hhad_info['conf']} P={hhad_info['p']}")
             summary_lines.append(f"    盘口({r.get('market_gl_source','')}): {gl_str} (市场盘口)")
             # 初赔对比
@@ -6006,40 +6199,103 @@ def main():
     wd_tag = '_'.join(sorted(weekday_prefixes)) if weekday_prefixes else ''
     pred_file = os.path.join(predictions_dir, f'pred_{date_tag}_{wd_tag}.json' if wd_tag else f'pred_{date_tag}.json')
 
-    # 保存带时间戳的完整预测数据
-    # Pro 3.1: 增量合并 — 保留已有场次，不覆盖
-    new_count = len(results)
+    # ===== 保存预测结果到文件 (Ultra 8.1: 按模式区分) =====
     existing_history = []
-    if os.path.exists(pred_file):
-        try:
-            with open(pred_file, 'r', encoding='utf-8') as f:
-                existing = json.load(f)
-            # 合并: 新结果覆盖同key的旧结果，保留未更新的旧结果
-            existing_count = len(existing.get('results', {}))
-            merged_results = existing.get('results', {})
-            merged_results.update(results)
-            merged_meta = existing.get('meta', {})
-            merged_meta.update(meta)
-            merged_cache = existing.get('cache', {})
-            merged_cache.update(cache)
-            existing_history = existing.get('history', [])
-            results = merged_results
-            meta = merged_meta
-            cache = merged_cache
-            print(f"  [增量合并] 已有{existing_count}场 + 新增{new_count}场 → 共{len(results)}场")
-        except Exception as e:
-            print(f"  [增量合并] 读取已有文件失败({e}), 将创建新文件")
-    
-    pred_data = {
-        'saved_at': time.strftime('%Y-%m-%d %H:%M:%S'),
-        'meta': meta,
-        'results': results,
-        'cache': cache,       # 历史数据缓存 (供更新模块复用)
-        'history': existing_history,  # 保留已有历史
-    }
+    update_changes = []  # 更新模式的数据变化记录
+
+    if PRED_MODE == 'predict':
+        # ---- predict 模式: 全新预测, 不读取已有结果做增量合并 ----
+        # 保留旧文件的版本历史 (不丢失版本追踪), 但不合并旧结果
+        if os.path.exists(pred_file):
+            try:
+                with open(pred_file, 'r', encoding='utf-8') as f:
+                    old_data = json.load(f)
+                existing_history = old_data.get('history', [])
+                old_count = len(old_data.get('results', {}))
+                # 记录版本历史
+                existing_history.append({
+                    'saved_at': old_data.get('saved_at', ''),
+                    'mode': old_data.get('mode', 'unknown'),
+                    'match_count': old_count,
+                    'archived_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+                })
+                print(f"  [预测] 已有文件({old_count}场)归档到历史, 创建全新预测文件")
+            except Exception as e:
+                print(f"  [预测] 读取旧文件历史失败({e}), 创建全新文件")
+
+        pred_data = {
+            'saved_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'mode': 'predict',
+            'meta': meta,
+            'results': results,
+            'cache': cache,
+            'history': existing_history,
+        }
+
+    else:
+        # ---- update 模式: 加载上次预测, 比对数据变化, 调整后合并 ----
+        prev_results = {}
+        prev_meta = {}
+        prev_cache = {}
+        prev_data = None
+        if os.path.exists(pred_file):
+            try:
+                with open(pred_file, 'r', encoding='utf-8') as f:
+                    prev_data = json.load(f)
+                prev_results = prev_data.get('results', {})
+                prev_meta = prev_data.get('meta', {})
+                prev_cache = prev_data.get('cache', {})
+                existing_history = prev_data.get('history', [])
+                print(f"  [更新] 加载上次预测: {len(prev_results)}场 (保存于{prev_data.get('saved_at','')})")
+            except Exception as e:
+                print(f"  [更新] 读取上次预测失败({e}), 降级为全新预测")
+        else:
+            print(f"  [更新] 未找到上次预测文件, 降级为全新预测")
+
+        # 比对数据变化并调整预测
+        if prev_results:
+            results, update_changes = compare_and_adjust_for_update(prev_results, results)
+            if update_changes:
+                print(f"  [更新] 检测到 {len(update_changes)} 处数据变化:")
+                for line in update_changes:
+                    print(line)
+            else:
+                print(f"  [更新] 无显著数据变化 (赔率变动均<5%)")
+
+        # 合并: 保留上次未更新的场次 + 本次新结果
+        merged_results = prev_results.copy()
+        merged_results.update(results)
+        merged_meta = prev_meta.copy()
+        merged_meta.update(meta)
+        merged_cache = prev_cache.copy()
+        merged_cache.update(cache)
+
+        # 记录版本历史
+        existing_history.append({
+            'saved_at': prev_data.get('saved_at', '') if prev_data else '',
+            'mode': 'update',
+            'match_count': len(prev_results),
+            'changes': len(update_changes),
+            'updated_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+        })
+
+        results = merged_results
+        meta = merged_meta
+        cache = merged_cache
+
+        pred_data = {
+            'saved_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'mode': 'update',
+            'meta': meta,
+            'results': results,
+            'cache': cache,
+            'history': existing_history,
+            'update_changes': update_changes,
+        }
+
     with open(pred_file, 'w', encoding='utf-8') as f:
         json.dump(pred_data, f, ensure_ascii=False, indent=1)
-    print(f"  已保存: {pred_file} (共{len(results)}场, 含{len(cache)}场缓存)")
+    print(f"  已保存: {pred_file} (共{len(results)}场, 含{len(cache)}场缓存, 模式={PRED_MODE})")
 
     # ===== Phase 5: SWOT 全自动获取+融合 (Ultra 6.5) =====
     # leisu情报为主, 500/nowscore统计数据型情报为备用兜底

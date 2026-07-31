@@ -4,7 +4,7 @@
 核心改进:
 1. 每场比赛明确标注【第一推荐】和【第二推荐】
 2. 综合置信度、概率、SWOT一致性、EV进行排名
-3. 直观的HTML报告输出
+3. 直接生成手机优化PDF报告 (Ultra 8.2: 不再输出HTML)
 """
 
 import json
@@ -16,13 +16,13 @@ from datetime import datetime
 _WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__))
 _PRED_DIR = os.path.join(_WORKSPACE, 'predictions')
 
-# 用法: python gen_report_v2.py [pred文件] [输出html]
+# 用法: python gen_report_v2.py [pred文件] [输出pdf]
 PRED_FILE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_PRED_DIR, 'pred_20260725_周六.json')
 if len(sys.argv) > 2:
-    OUTPUT_HTML = sys.argv[2]
+    OUTPUT_PDF = sys.argv[2]
 else:
-    _base = os.path.basename(PRED_FILE).replace('pred_', 'report_').replace('.json', '.html')
-    OUTPUT_HTML = os.path.join(os.path.dirname(PRED_FILE) or _PRED_DIR, _base)
+    _base = os.path.basename(PRED_FILE).replace('pred_', 'report_').replace('.json', '.pdf')
+    OUTPUT_PDF = os.path.join(os.path.dirname(PRED_FILE) or _PRED_DIR, _base)
 
 # 报告标题从文件名派生: pred_20260725_周六.json → 2026-07-25 周六
 def _derive_title(pred_file):
@@ -165,39 +165,42 @@ def rank_match(key, meta, result):
     seen_keys = set()  # 去重用
     
     # 1. HAD纯方向 (含cross_market的pure_direction_bet, 合并去重)
+    # Ultra 7.10: HAD未开盘时跳过HAD推荐
     had_dir = had.get('dir', '')
     had_odds = had.get('odds', 0)
     had_conf = had.get('conf', '')
     had_p = had.get('p', '')
-    had_prob = parse_prob_from_p(had_p, had_dir)
-    had_ev = result.get('kelly', {}).get('HAD', {}).get('ev', 0)
-    had_conf_adj = apply_swot_adj(had_conf, 'conf_old' in had)
+    had_open = had.get('had_open', True)
+    had_prob = parse_prob_from_p(had_p, had_dir) if had_open else 0
+    had_ev = result.get('kelly', {}).get('HAD', {}).get('ev', 0) if had_open else 0
+    had_conf_adj = apply_swot_adj(had_conf, 'conf_old' in had) if had_open else ''
     
     # 检查pure_direction_bet是否和HAD方向相同
     pdb = cm.get('pure_direction_bet', {})
     pdb_option = pdb.get('option', '')
     pdb_is_same = False
-    if pdb_option:
+    if pdb_option and had_open:
         # 去除空格比较: "HAD负" vs "HAD 负"
         norm_pdb = pdb_option.replace(' ', '')
         norm_had = f'HAD{had_dir}'
         if norm_pdb == norm_had:
             pdb_is_same = True
     
-    had_name = f'HAD {had_dir}'
-    had_key = f'HAD_{had_dir}'
-    if had_key not in seen_keys:
-        seen_keys.add(had_key)
-        # 如果pure_direction_bet和HAD相同, 用概率更高的那个
-        best_prob = had_prob
-        if pdb_is_same:
-            pdb_prob = pdb.get('prob', 0)
-            if pdb_prob > best_prob:
-                best_prob = pdb_prob
-        options.append(score_option(
-            had_name, '胜平负', had_dir, had_odds,
-            had_conf_adj, best_prob, swot_consistency, had_ev, '单选'
-        ))
+    if had_open:
+        had_name = f'HAD {had_dir}'
+        had_key = f'HAD_{had_dir}'
+        if had_key not in seen_keys:
+            seen_keys.add(had_key)
+            # 如果pure_direction_bet和HAD相同, 用概率更高的那个
+            best_prob = had_prob
+            if pdb_is_same:
+                pdb_prob = pdb.get('prob', 0)
+                if pdb_prob > best_prob:
+                    best_prob = pdb_prob
+            options.append(score_option(
+                had_name, '胜平负', had_dir, had_odds,
+                had_conf_adj, best_prob, swot_consistency, had_ev, '单选'
+            ))
     
     # 2. HHAD让球方向
     hhad_dir = hhad.get('dir', '')
@@ -235,19 +238,27 @@ def rank_match(key, meta, result):
             ))
     
     # 4. 纯方向投注 (仅当与HAD方向不同时才添加)
+    # Ultra 7.10: HAD未开盘时, 若pure_direction_bet实际是HHAD则与HHAD去重
     if pdb_option and not pdb_is_same:
         pdb_odds = pdb.get('odds', 0)
         pdb_prob = pdb.get('prob', 0)
         pdb_ev = pdb.get('ev_pct', 0)
         pdb_sel_type = pdb.get('selection_type', '')
-        pdb_key = f'PDB_{pdb_option}'
-        if pdb_key not in seen_keys:
-            seen_keys.add(pdb_key)
-            options.append(score_option(
-                pdb_option, 'HAD方向', had_dir, pdb_odds,
-                had_conf_adj, pdb_prob, swot_consistency, pdb_ev,
-                '真单选' if '真' in pdb_sel_type else '单选'
-            ))
+        pdb_market = pdb.get('market', 'HAD')
+        # 若pure_direction_bet是HHAD且方向与HHAD主推相同, 跳过(避免重复)
+        pdb_is_hhad_dup = (pdb_market == 'HHAD' and
+                           f'HHAD_{hhad_dir}' in seen_keys)
+        if not pdb_is_hhad_dup:
+            pdb_key = f'PDB_{pdb_option}'
+            if pdb_key not in seen_keys:
+                seen_keys.add(pdb_key)
+                options.append(score_option(
+                    pdb_option, 'HAD方向' if pdb_market == 'HAD' else '让球胜平负',
+                    had_dir if pdb_market == 'HAD' else hhad_dir, pdb_odds,
+                    had_conf_adj if pdb_market == 'HAD' else hhad_conf_adj,
+                    pdb_prob, swot_consistency, pdb_ev,
+                    '真单选' if '真' in pdb_sel_type else '单选'
+                ))
     
     # 按分数排序
     options.sort(key=lambda x: x['score'], reverse=True)
@@ -551,12 +562,18 @@ def main():
         all_opts = ' | '.join('{}@{}({})'.format(o['name'], o['odds'], o['score']) for o in m['all_options'])
         print(f"  全部选项: {all_opts}")
     
-    # 生成HTML
-    html = generate_html_report(matches)
-    with open(OUTPUT_HTML, 'w', encoding='utf-8') as f:
-        f.write(html)
-    
-    print(f"\n✅ HTML报告已生成: {OUTPUT_HTML}")
+    # Ultra 8.2: 不再生成HTML, 直接调用 gen_report_pdf 生成手机优化PDF
+    print(f"\n→ 生成PDF报告 (手机阅读优化版)...")
+    import subprocess
+    result = subprocess.run(
+        [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gen_report_pdf.py'),
+         PRED_FILE, OUTPUT_PDF],
+        capture_output=True, text=True, timeout=60
+    )
+    if result.returncode == 0:
+        print(f"✅ PDF报告已生成: {OUTPUT_PDF}")
+    else:
+        print(f"⚠️ PDF生成失败: {result.stderr[:200]}")
 
 
 if __name__ == '__main__':
