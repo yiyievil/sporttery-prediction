@@ -3665,26 +3665,30 @@ def calibrate_global_odds_bias(probs, home_odds):
     return [pw_new/s, pd_new/s, pl_new/s]
 
 
-def calibrate_odds_change_signal(probs, init_odds, final_odds):
+def calibrate_odds_change_signal(probs, init_odds, final_odds, league=None, home_odds=None):
     """赔率变动信号校准 — 基于初赔→终赔变动方向与赛果关系
     
-    数据发现 (2819场有初终赔对比):
-      胜赔下降: 主胜率49.0% (n=1249) → 看涨主胜
-      胜赔上升: 主胜率36.0% (n=1404) → 看跌主胜
-      胜赔不变: 主胜率46.0% (n=166)  → 中性
+    Ultra 10.1: 升级为三层校准体系:
+      1. 整体方向信号 (全局基准)
+      2. 联赛特定信号 (如挪超-34.3pp, 英冠-33.5pp)
+      3. 赔率区间特定信号 (2.0-3.0区间最强)
     
-    按变动幅度:
-      胜赔↓<0.1:  主胜率55.2% (n=744)  → 最佳主胜信号 (+13pp)
-      胜赔↑<0.1:  主胜率52.4% (n=529)  → 偏中性
-      胜赔↓0.1-0.3: 主胜率47.7% (n=398) → 看好主队
-      胜赔↑0.1-0.3: 主胜率30.8% (n=504) → 看空主队 (-13pp)
-      胜赔↓>0.3:  主胜率21.1% (n=107)  → 反向信号!
-      胜赔↑>0.3:  主胜率21.1% (n=371)  → 强烈看空
+    数据发现 (3274场 odds_change_history):
+      胜赔下降: 主胜率44.3% (n=1389) → 看涨主胜
+      胜赔上升: 主胜率33.0% (n=1544) → 看跌主胜
+      整体信号: -11.3pp (正常市场)
+    
+    强信号联赛:
+      挪超: -34.3pp (降赔64.9% vs 升赔30.6%)
+      英冠: -33.5pp (降赔47.8% vs 升赔14.3%)
+      瑞超: -20.0pp (降赔51.4% vs 升赔31.4%)
     
     参数:
       probs: [pw, pd, pl] 当前概率
       init_odds: 初赔胜赔 (或None)
       final_odds: 终赔胜赔 (或None)
+      league: 联赛名 (用于联赛特定校准, 可选)
+      home_odds: 当前主胜赔率 (用于赔率区间校准, 可选)
     """
     if not _CALIBRATION:
         return probs
@@ -3701,42 +3705,82 @@ def calibrate_odds_change_signal(probs, init_odds, final_odds):
     
     # 确定变动类别
     if abs_change < 0.01:
-        # 无变动, 中性信号
         return probs
     
     pw, pd, pl = probs
-
-    # 根据变动方向和幅度计算修正量
-    # Ultra 7.1: 目标主胜率从标定库 odds_change_signal.magnitude 动态读取
-    # (数据库增量更新后自动适配), 硬编码值仅作无数据/小样本回退
+    
+    # ===== Ultra 10.1: 三层校准 =====
+    # 1. 按幅度 + 方向 (全局基准, 同原有逻辑)
     mag = sig.get('magnitude', {})
     if change < 0:
-        # 胜赔下降: 微调=最佳主胜信号, 大幅下降=反向信号
         mag_key = 'drop_small' if abs_change < 0.1 else ('drop_medium' if abs_change < 0.3 else 'drop_large')
         fallback_h = 0.552 if abs_change < 0.1 else (0.477 if abs_change < 0.3 else 0.211)
     else:
-        # 胜赔上升: 幅度越大越看空主队
         mag_key = 'rise_small' if abs_change < 0.1 else ('rise_medium' if abs_change < 0.3 else 'rise_large')
         fallback_h = 0.524 if abs_change < 0.1 else (0.308 if abs_change < 0.3 else 0.211)
     mag_entry = mag.get(mag_key)
     target_h = mag_entry['h_rate'] if mag_entry and mag_entry.get('sample', 0) >= 50 else fallback_h
-
-    # 基准主胜率: 优先用标定库方向样本加权均值, 回退0.43 (全库经验值)
+    
+    # 基准主胜率: 优先用标定库方向样本加权均值
     _dirs = [sig.get(k) for k in ('drop', 'rise', 'unchanged')]
     _n = sum(d['sample'] for d in _dirs if d and d.get('sample'))
     base_h_rate = (sum(d['h_rate'] * d['sample'] for d in _dirs if d and d.get('sample')) / _n) if _n >= 200 else 0.43
     
+    # 2. 联赛特定信号 (Ultra 10.1)
+    # 从预加载的 odds_movement_calibration.json 获取联赛特定校准因子
+    _league_correction = 0.0
+    if league and _ODDS_MOVEMENT_CALIB:
+        lg_data = _ODDS_MOVEMENT_CALIB.get('by_league', {}).get(league, {})
+        if lg_data.get('n', 0) >= 20:
+            lg_signal = lg_data.get('信号强度', 0)  # 如挪超 -34.3pp
+            # 信号强度/200 作为修正比例 (保守: 34.3pp → 0.17 修正, 即约一半信号)
+            _league_correction = lg_signal / 200.0
+    
+    # 3. 赔率区间特定信号 (Ultra 10.1)
+    _range_correction = 0.0
+    if home_odds and home_odds > 1 and _ODDS_MOVEMENT_CALIB:
+        for lo, hi, lbl in [(1.0,1.5,'1.0-1.5'),(1.5,2.0,'1.5-2.0'),
+                             (2.0,3.0,'2.0-3.0'),(3.0,5.0,'3.0-5.0'),(5.0,99,'5.0+')]:
+            if lo <= home_odds < hi:
+                rng_data = _ODDS_MOVEMENT_CALIB.get('by_odds_range', {}).get(lbl, {})
+                down_n = rng_data.get('赔率降(样本/主胜)', {}).get('n', 0)
+                up_n = rng_data.get('赔率升(样本/主胜)', {}).get('n', 0)
+                if down_n >= 10 and up_n >= 10:
+                    rng_signal = rng_data.get('信号强度(pp)', 0)
+                    # 信号强度/300 作为修正比例 (更保守: 7.4pp → 0.025)
+                    _range_correction = rng_signal / 300.0
+                break
+    
     # 计算偏差 (目标 - 基准)
     delta = target_h - base_h_rate
     
-    # 修正量: 取偏差的比例作为修正 (保守, 避免过度修正)
-    # 回测验证优化: 微调15%, 中等20%, 大幅10%
+    # 修正量: 综合全局 + 联赛 + 赔率区间
     if abs_change > 0.3:
         correction = delta * 0.10
     elif abs_change < 0.1:
         correction = delta * 0.15
     else:
         correction = delta * 0.20
+    
+    # 叠加联赛特定修正 (仅对变动方向一致时增强)
+    if change < 0 and _league_correction < 0:
+        # 赔率下降 + 联赛信号为负(降赔→主胜率高) → 增强主胜信心
+        correction += abs(_league_correction) * 0.5
+    elif change > 0 and _league_correction > 0:
+        # 赔率上升 + 联赛信号为正(反向市场) → 减弱看空力度
+        correction -= _league_correction * 0.5
+    elif change < 0 and _league_correction > 0:
+        # 赔率下降 + 联赛信号为正(诱盘) → 减弱看多力度
+        correction -= _league_correction * 0.3
+    elif change > 0 and _league_correction < 0:
+        # 赔率上升 + 联赛信号为负(正常市场) → 增强看空力度
+        correction += abs(_league_correction) * 0.3
+    
+    # 叠加赔率区间修正 (轻量)
+    if change < 0 and _range_correction < 0:
+        correction += abs(_range_correction) * 0.3
+    elif change > 0 and _range_correction > 0:
+        correction -= _range_correction * 0.3
     
     # 限制修正量
     correction = max(-0.10, min(0.10, correction))
@@ -3946,6 +3990,38 @@ def _load_advanced_calibration():
         return None
 
 _ADV_CALIB = _load_advanced_calibration()
+
+# Ultra 10.1: 赔率变动方向与幅度预测价值量化校准因子
+# 数据源: predictions/odds_movement_calibration.json (3274场, 31个联赛, 5个赔率区间, 4个幅度分层)
+_ODDS_MOVEMENT_CALIB_PATH = os.path.join(
+    os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__))),
+    'predictions', 'odds_movement_calibration.json'
+)
+
+def _load_odds_movement_calibration():
+    """加载赔率变动校准因子 (Ultra 10.1)
+    
+    包含:
+    - 整体方向信号 (全局 -11.3pp)
+    - 按联赛分层 (30个联赛, 含挪超-34.3pp等强信号)
+    - 按赔率区间分层 (5个区间, 2.0-3.0信号最强-7.4pp)
+    - 按变动幅度分层 (4个幅度)
+    """
+    if not os.path.exists(_ODDS_MOVEMENT_CALIB_PATH):
+        print('  [赔率变动] 校准文件不存在, 跳过')
+        return None
+    try:
+        with open(_ODDS_MOVEMENT_CALIB_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        n_leagues = len(data.get('by_league', {}))
+        n_matches = data.get('total_matches_analyzed', 0)
+        print(f'  [赔率变动] 加载校准因子 ({n_matches}场, {n_leagues}个联赛)')
+        return data
+    except Exception as e:
+        print(f'  [赔率变动] 加载失败, 跳过: {e}')
+        return None
+
+_ODDS_MOVEMENT_CALIB = _load_odds_movement_calibration()
 
 # --- 历史数据库连接 (单例, 懒加载, 进程级缓存) ---
 # Ultra 10.0: 统一连接管理, 所有DB查询均通过此函数获取连接
@@ -5245,7 +5321,8 @@ def predict_match(match_num, data):
         _init_h_odds = ouzhi.get('init_w')
         _final_h_odds = ouzhi.get('latest_w')
     if _init_h_odds and _final_h_odds:
-        _cal = calibrate_odds_change_signal([p0_w, p0_d, p0_l], _init_h_odds, _final_h_odds)
+        _cal = calibrate_odds_change_signal([p0_w, p0_d, p0_l], _init_h_odds, _final_h_odds,
+                                            league=league, home_odds=_home_odds_for_cal)
         p0_w, p0_d, p0_l = _cal[0], _cal[1], _cal[2]
     
     p0_w, p0_d, p0_l = normalize(p0_w, p0_d, p0_l)
