@@ -1,0 +1,173 @@
+{
+  "version": "Ultra 10.3",
+  "generated_at": "2026-07-31 15:24:56",
+  "description": "模型校准偏差修正因子 — 修正模型概率为实际校准概率",
+  "overall": {
+    "model_hit_rate": 47.3,
+    "brier_score": 0.6198
+  },
+  "probability_correction": {
+    "25-35%": {
+      "bias_pp": 6.6,
+      "correction_factor": 1.19
+    },
+    "35-45%": {
+      "bias_pp": -4.5,
+      "correction_factor": 0.889
+    },
+    "45-55%": {
+      "bias_pp": -6.8,
+      "correction_factor": 0.864
+    },
+    "55-65%": {
+      "bias_pp": -5.2,
+      "correction_factor": 0.913
+    },
+    "65-75%": {
+      "bias_pp": -5.2,
+      "correction_factor": 0.925
+    },
+    "75-85%": {
+      "bias_pp": -6.0,
+      "correction_factor": 0.922
+    }
+  },
+  "direction_correction": {
+    "主胜": {
+      "bias_pp": -4.8
+    },
+    "平局": {
+      "bias_pp": -4.5
+    },
+    "客胜": {
+      "bias_pp": -6.5
+    }
+  },
+  "league_correction": {
+    "瑞超": {
+      "n": 251,
+      "hit_rate": 51.4,
+      "vs_overall_pp": 4.1
+    },
+    "美职联": {
+      "n": 249,
+      "hit_rate": 52.6,
+      "vs_overall_pp": 5.3
+    },
+    "欧冠": {
+      "n": 223,
+      "hit_rate": 60.5,
+      "vs_overall_pp": 13.2
+    },
+    "挪超": {
+      "n": 222,
+      "hit_rate": 55.0,
+      "vs_overall_pp": 7.7
+    },
+    "欧罗巴": {
+      "n": 185,
+      "hit_rate": 58.4,
+      "vs_overall_pp": 11.1
+    },
+    "意甲": {
+      "n": 158,
+      "hit_rate": 50.6,
+      "vs_overall_pp": 3.3
+    },
+    "芬超": {
+      "n": 147,
+      "hit_rate": 53.7,
+      "vs_overall_pp": 6.4
+    },
+    "西甲": {
+      "n": 139,
+      "hit_rate": 40.3,
+      "vs_overall_pp": -7.0
+    },
+    "德甲": {
+      "n": 111,
+      "hit_rate": 40.5,
+      "vs_overall_pp": -6.8
+    },
+    "英冠": {
+      "n": 98,
+      "hit_rate": 39.8,
+      "vs_overall_pp": -7.5
+    },
+    "韩职": {
+      "n": 88,
+      "hit_rate": 38.6,
+      "vs_overall_pp": -8.7
+    },
+    "日职": {
+      "n": 84,
+      "hit_rate": 40.5,
+      "vs_overall_pp": -6.8
+    },
+    "法甲": {
+      "n": 81,
+      "hit_rate": 43.2,
+      "vs_overall_pp": -4.1
+    },
+    "葡超": {
+      "n": 66,
+      "hit_rate": 37.9,
+      "vs_overall_pp": -9.4
+    },
+    "荷甲": {
+      "n": 60,
+      "hit_rate": 41.7,
+      "vs_overall_pp": -5.6
+    },
+    "国际赛": {
+      "n": 60,
+      "hit_rate": 43.3,
+      "vs_overall_pp": -4.0
+    },
+    "德乙": {
+      "n": 55,
+      "hit_rate": 40.0,
+      "vs_overall_pp": -7.3
+    },
+    "欧协联": {
+      "n": 52,
+      "hit_rate": 57.7,
+      "vs_overall_pp": 10.4
+    },
+    "澳超": {
+      "n": 50,
+      "hit_rate": 36.0,
+      "vs_overall_pp": -11.3
+    },
+    "世预赛": {
+      "n": 50,
+      "hit_rate": 12.0,
+      "vs_overall_pp": -35.3
+    },
+    "沙职": {
+      "n": 34,
+      "hit_rate": 52.9,
+      "vs_overall_pp": 5.6
+    },
+    "日乙": {
+      "n": 31,
+      "hit_rate": 38.7,
+      "vs_overall_pp": -8.6
+    },
+    "荷乙": {
+      "n": 28,
+      "hit_rate": 39.3,
+      "vs_overall_pp": -8.0
+    },
+    "英足总杯": {
+      "n": 27,
+      "hit_rate": 29.6,
+      "vs_overall_pp": -17.7
+    },
+    "俱世界杯": {
+      "n": 22,
+      "hit_rate": 40.9,
+      "vs_overall_pp": -6.4
+    }
+  }
+}

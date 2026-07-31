@@ -1928,6 +1928,38 @@ def compute_total_goals(lam_h, lam_a, ttg_odds=None, league=None, xg_cv_quality=
                     for k in goals_probs:
                         goals_probs[k] /= total
 
+    # ===== Step 3: 体彩TTG池校准 (Ultra 10.3) =====
+    # 基于历史数据: 小(0-2球)偏差+2.7pp, 大(4+球)偏差-3.1pp
+    # 修正模型倾向: 适当上调小球, 下调大球
+    if _POOLS_CALIB:
+        ttg_cal = _POOLS_CALIB.get('ttg', {}).get('direction_calibration', {})
+        if ttg_cal:
+            # 小(0-2球): 实际频率更高 → 上调
+            small_bias = ttg_cal.get('小(0-2球)', {}).get('bias_pp', 0)
+            # 大(4+球): 实际频率更低 → 下调
+            big_bias = ttg_cal.get('大(4+球)', {}).get('bias_pp', 0)
+            if abs(small_bias) > 1 and abs(big_bias) > 1:
+                # 保守修正: 应用50%偏差量
+                small_correction = small_bias / 100.0 * 0.5  # +2.7pp → +0.0135
+                big_correction = big_bias / 100.0 * 0.5      # -3.1pp → -0.0155
+                # 小(0-2球): 上调
+                small_total = sum(goals_probs.get(f"{k}球", 0) for k in range(3))
+                if small_total > 0:
+                    for k in range(3):
+                        label = f"{k}球"
+                        goals_probs[label] *= (1.0 + small_correction)
+                # 大(4+球): 下调
+                big_total = sum(goals_probs.get(f"{k}球", 0) for k in range(4, 8))
+                if big_total > 0:
+                    for k in range(4, 8):
+                        label = f"{k}球" if k < 7 else "7+球"
+                        goals_probs[label] *= (1.0 + big_correction)
+                # 重新归一化
+                total = sum(goals_probs.values())
+                if total > 0:
+                    for k in goals_probs:
+                        goals_probs[k] /= total
+
     # 排序输出
     sorted_goals = sorted(goals_probs.items(), key=lambda x: x[1], reverse=True)
     top1 = sorted_goals[0]
@@ -4023,6 +4055,61 @@ def _load_odds_movement_calibration():
 
 _ODDS_MOVEMENT_CALIB = _load_odds_movement_calibration()
 
+# Ultra 10.3: 模型校准偏差修正因子 (3290场数据分析)
+# 数据源: predictions/model_calibration.json
+_MODEL_CALIB_PATH = os.path.join(
+    os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__))),
+    'predictions', 'model_calibration.json'
+)
+
+def _load_model_calibration():
+    """加载模型校准偏差修正因子 (Ultra 10.3)
+    
+    包含:
+    - 概率校准曲线 (6个置信度区间偏差)
+    - 方向校准 (主/平/客偏差)
+    - 联赛命中率对比 (vs整体)
+    """
+    if not os.path.exists(_MODEL_CALIB_PATH):
+        print('  [模型校准] 校准文件不存在, 跳过')
+        return None
+    try:
+        with open(_MODEL_CALIB_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        print(f'  [模型校准] 加载偏差修正因子 (基于{data.get("overall",{}).get("model_hit_rate","?")}%命中率)')
+        return data
+    except Exception as e:
+        print(f'  [模型校准] 加载失败, 跳过: {e}')
+        return None
+
+_MODEL_CALIB = _load_model_calibration()
+
+# Ultra 10.3: 体彩各玩法赔率偏差校准因子
+# 数据源: predictions/sporttery_pools_calibration.json
+_POOLS_CALIB_PATH = os.path.join(
+    os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__))),
+    'predictions', 'sporttery_pools_calibration.json'
+)
+
+def _load_pools_calibration():
+    """加载体彩池赔率偏差校准因子 (Ultra 10.3)
+    
+    包含 TTG/HAFU/CRS 三个玩法的偏差分析
+    """
+    if not os.path.exists(_POOLS_CALIB_PATH):
+        print('  [体彩池] 校准文件不存在, 跳过')
+        return None
+    try:
+        with open(_POOLS_CALIB_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        print(f'  [体彩池] 加载赔率偏差校准 (TTG/HAFU/CRS)')
+        return data
+    except Exception as e:
+        print(f'  [体彩池] 加载失败, 跳过: {e}')
+        return None
+
+_POOLS_CALIB = _load_pools_calibration()
+
 # --- 历史数据库连接 (单例, 懒加载, 进程级缓存) ---
 # Ultra 10.0: 统一连接管理, 所有DB查询均通过此函数获取连接
 _ADV_DB_CONN = None
@@ -4567,6 +4654,44 @@ def apply_advanced_calibration(probs, sp, had, hhad):
         pl = pl * (1 - prior_w) + a_rate * prior_w
         if total >= 3:
             notes.append(f'H2H: {h2h["home_wins"]}-{h2h["draws"]}-{h2h["away_wins"]}(n={total})')
+
+    # --- 7. 模型校准偏差修正 (Ultra 10.3) ---
+    # 基于3290场历史数据的闭环验证:
+    #   模型在所有置信度区间系统性高估概率 (偏差-4.5~-6.8pp)
+    #   修正方式: 按置信度区间将预测概率向实际校准概率调整
+    if _MODEL_CALIB:
+        mc = _MODEL_CALIB.get('probability_correction', {})
+        if mc:
+            conf = max(pw, pd, pl)
+            # 确定置信度区间
+            bins = [(0.0, 0.25, '0-25%'), (0.25, 0.35, '25-35%'), (0.35, 0.45, '35-45%'),
+                    (0.45, 0.55, '45-55%'), (0.55, 0.65, '55-65%'), (0.65, 0.75, '65-75%'),
+                    (0.75, 0.85, '75-85%'), (0.85, 1.0, '85-100%')]
+            bin_label = None
+            for lo, hi, lbl in bins:
+                if lo <= conf < hi:
+                    bin_label = lbl
+                    break
+            if bin_label and bin_label in mc:
+                entry = mc[bin_label]
+                bias_pp = entry.get('bias_pp', 0)
+                # 只对偏差>2pp的区间修正, 应用50%修正量 (保守)
+                if abs(bias_pp) > 2 and entry.get('n', 0) >= 50:
+                    correction = bias_pp / 100.0 * 0.5
+                    # 将最高概率向实际校准方向调整
+                    if conf == pw:
+                        pw += correction
+                        pl -= correction * 0.6
+                        pd -= correction * 0.4
+                    elif conf == pd:
+                        pd += correction
+                        pw -= correction * 0.5
+                        pl -= correction * 0.5
+                    else:
+                        pl += correction
+                        pw -= correction * 0.6
+                        pd -= correction * 0.4
+                    notes.append(f'模型校准: {bin_label}偏差{bias_pp:+.1f}pp→{correction*100:+.1f}pp修正')
 
     # 归一化 + 边界保护
     s = pw + pd + pl
