@@ -142,10 +142,12 @@ def _parse_wdl_str(p_str):
 
 
 def apply_swot_prob_shift(wdl, home_score, away_score):
-    """SWOT评分差 → HAD概率迁移 (线性转移, 平局中性)
+    """SWOT评分差 → HAD概率迁移 (Ultra 9.1: 支持平局调整)
 
-    原理: 胜/负之间直接转移概率质量 s, 平局概率固定不变。
-    有界(±8pp)、方向恒正确、概率和恒为1, 不会侵蚀平局。
+    原理: 
+      - 评分差大(>=MIN_DIFF): 胜/负之间直接转移概率质量 s, 平局概率固定不变
+      - 评分差小(<MIN_DIFF): SWOT指向平局, 从胜/负各抽一半概率给平局
+      - 有界(±8pp)、方向恒正确、概率和恒为1
 
     参数: wdl = [p_win, p_draw, p_lose]
     返回: (new_wdl, shift, applied)
@@ -153,6 +155,15 @@ def apply_swot_prob_shift(wdl, home_score, away_score):
     """
     diff = home_score - away_score
     if abs(diff) < SWOT_MIN_DIFF:
+        # Ultra 9.1: 评分差小 → SWOT指向平局, 微幅提升平局概率
+        # 从胜/负各抽最多1.5pp给平局, 相当于平局置信度上调
+        w, d, l = wdl
+        DRAW_BOOST = 0.015  # 平局上调幅度上限 1.5pp
+        max_from_w = max(0.0, w - 0.02)
+        max_from_l = max(0.0, l - 0.02)
+        boost = min(DRAW_BOOST, max_from_w, max_from_l)
+        if boost >= 0.005:
+            return [w - boost, d + 2 * boost, l - boost], boost, True
         return list(wdl), 0.0, False
     shift = max(-SWOT_MAX_SHIFT, min(SWOT_MAX_SHIFT, diff * SWOT_SHIFT_PER_POINT))
     w, d, l = wdl

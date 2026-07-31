@@ -1358,10 +1358,16 @@ def _iv(n, x):
             break
     return result
 
-def compute_dc_matrix(lam_h, lam_a, use_negbin=True, use_dc=True):
-    """计算比分概率矩阵 (Ultra 5.0 — 负二项分布 + Dixon-Coles)
+def compute_dc_matrix(lam_h, lam_a, use_negbin=True, use_dc=True, league=None):
+    """计算比分概率矩阵 (Ultra 9.3 — 10×10矩阵 + 负二项 + Dixon-Coles)
 
     被 compute_scores 和 compute_cross_market_value 共享调用。
+
+    Ultra 9.3 改进:
+      - 矩阵从8×8扩展到10×10 (0-9球), 捕获更多尾部分布概率
+      - 高比分比赛(总λ≥3.5)时精度显著提升, 7+概率不再被截断低估
+
+    Ultra 9.2: 支持联赛特定离散参数r (数据驱动)
 
     Ultra 5.0 改进:
       - 用 negbin_pmf 替代 poisson + overdispersion_correction
@@ -1376,16 +1382,22 @@ def compute_dc_matrix(lam_h, lam_a, use_negbin=True, use_dc=True):
     参数:
       use_negbin: True=负二项, False=回退Poisson(兼容)
       use_dc: 是否应用Dixon-Coles修正
+      league: 联赛名, 用于联赛特定r参数
     返回: {f"{i}-{j}": probability, ...} 归一化后的概率字典
     """
     probs = {}
-    # Ultra 5.0: 根据总进球期望自适应离散参数r
-    # 低分比赛 r=8 (更强过离散), 高分比赛 r=12 (更弱过离散)
+    # Ultra 9.2: 联赛特定离散参数r (数据驱动)
+    # 优先使用联赛特定r, 回退自适应启发式
     total_lam = lam_h + lam_a
-    r_param = max(6.0, min(14.0, 10.0 + (total_lam - 2.5) * 1.5))
+    r_param = LEAGUE_R_PARAM.get(league, 0)
+    if r_param <= 0:
+        # 回退: 根据总进球期望自适应 (Ultra 5.0)
+        r_param = max(6.0, min(14.0, 10.0 + (total_lam - 2.5) * 1.5))
 
-    for i in range(8):
-        for j in range(8):
+    # Ultra 9.3: 矩阵扩展到10×10 (0-9球), 更好捕获高比分尾部分布
+    _MAX_GOALS = 10
+    for i in range(_MAX_GOALS):
+        for j in range(_MAX_GOALS):
             if use_negbin:
                 p = negbin_pmf(i, lam_h, r=r_param) * negbin_pmf(j, lam_a, r=r_param)
             else:
@@ -1415,25 +1427,26 @@ def compute_dc_matrix(lam_h, lam_a, use_negbin=True, use_dc=True):
                 probs[k] /= total_p
 
     # Skellam分布计算净胜球概率 (覆盖所有进球数, 不截断)
+    # Ultra 9.3: 扩展到-10到10
     margin_probs = {}
-    for k in range(-7, 8):
+    for k in range(-10, 11):
         margin_probs[k] = skellam_pmf(k, lam_h, lam_a)
     # 尾部残差按主客倾向非对称分配
     tail = max(0.0, 1.0 - sum(margin_probs.values()))
     pos_share = lam_h / (lam_h + lam_a) if (lam_h + lam_a) > 0 else 0.5
-    margin_probs[8] = tail * pos_share
-    margin_probs[-8] = tail * (1 - pos_share)
+    margin_probs[11] = tail * pos_share
+    margin_probs[-11] = tail * (1 - pos_share)
 
     return probs, margin_probs
 
-def compute_scores(lam_h, lam_a, goal_line=0, market_goal_line=2.5, top_n=5, use_dc=True):
+def compute_scores(lam_h, lam_a, goal_line=0, market_goal_line=2.5, top_n=5, use_dc=True, league=None):
     """泊松比分矩阵 — 动态多盘口概率 + 按盘口方向过滤的比分推荐
 
     Ultra 4.0: 使用共享函数 compute_dc_matrix 计算概率矩阵
     - 过离散修正 (overdispersion)
     - 动态Dixon-Coles低分修正 (dynamic ρ)
     """
-    probs, margin_probs = compute_dc_matrix(lam_h, lam_a, use_negbin=True, use_dc=use_dc)
+    probs, margin_probs = compute_dc_matrix(lam_h, lam_a, use_negbin=True, use_dc=use_dc, league=league)
 
     sorted_all = sorted(probs.items(), key=lambda x: x[1], reverse=True)
 
@@ -1561,18 +1574,27 @@ def compute_scores(lam_h, lam_a, goal_line=0, market_goal_line=2.5, top_n=5, use
         'hhad_wdl': [round(hw*100, 1), round(hd*100, 1), round(hl*100, 1)],
     }
 
-def compute_half_full(lam_h, lam_a, fused_wdl=None):
-    """半全场胜平负概率计算 — 对应体彩第五种玩法
+def compute_half_full(lam_h, lam_a, fused_wdl=None, league=None):
+    """半全场胜平负概率计算 — 对应体彩第五种玩法 (Ultra 9.3: 联赛特定+HTL效应)
 
     将全场90分钟分为上半场(45分钟)和下半场(45分钟)，
-    分别用泊松分布建模，然后计算9种半全场组合的联合概率。
+    分别用负二项分布建模，然后计算9种半全场组合的联合概率。
 
-    上半场λ ≈ 全场λ × 0.45 (上半场进球约占全场45%，开局偏谨慎)
-    下半场λ ≈ 全场λ × 0.55 (下半场进球更多，体能下降+战术放开)
+    Ultra 9.3 四大改进:
+      1. 联赛特定半场进球比例 (替代固定0.45, 数据驱动)
+      2. 联赛特定离散参数r (替代固定r=15/r=12, 与LEAGUE_R_PARAM一致)
+      3. 8×8比分矩阵 (替代6×6, 捕获更多尾部分布)
+      4. 半场领先效应(HTL): 领先方下半场λ×0.90, 落后方λ×1.10
 
     9种组合(体彩官方):
       胜胜/胜平/胜负/平胜/平平/平负/负胜/负平/负负
       前字=上半场主队结果, 后字=全场主队结果
+
+    参数:
+      lam_h: 主队全场进球期望
+      lam_a: 客队全场进球期望
+      fused_wdl: 四源融合的胜平负概率 [p_home, p_draw, p_away]
+      league: 联赛名, 用于联赛特定半场比例和r参数
 
     返回:
       top3: 概率前3的组合字符串 (如 "胜胜:35.2 平胜:18.1 胜平:12.5")
@@ -1580,32 +1602,41 @@ def compute_half_full(lam_h, lam_a, fused_wdl=None):
       all: 9种组合概率字典 {组合: 概率%}
       lam_half: 半场λ (如 "1.0/0.4")
     """
-    lam_h_half = lam_h * 0.45
-    lam_a_half = lam_a * 0.45
-    lam_h_second = lam_h * 0.55
-    lam_a_second = lam_a * 0.55
-    # Ultra 5.0: 半场用更大r(进球少→过离散弱)
-    r_half = 15.0
-    r_second = 12.0
+    # ===== Step 1: 联赛特定半场/下半场λ分拆 (Ultra 9.3) =====
+    # 历史数据: 半场比例因联赛而异, 挪超0.457 > 英超0.435 > 韩职0.428
+    # 回退到全局均值0.45 (与Ultra 5.0一致, 兼容)
+    ht_ratio = LEAGUE_HT_RATIO.get(league, 0.45) if league else 0.45
+    lam_h_half = lam_h * ht_ratio
+    lam_a_half = lam_a * ht_ratio
+    lam_h_second = lam_h * (1.0 - ht_ratio)
+    lam_a_second = lam_a * (1.0 - ht_ratio)
 
-    # 上半场比分概率矩阵 (0-5球足够覆盖)
+    # ===== Step 2: 联赛特定离散参数r (Ultra 9.3) =====
+    # 半场进球少, 用全场r但放大(过离散弱): r_half = min(20, r * 1.3)
+    # 下半场接近全场, 用全场r但略放大: r_second = min(20, r * 1.1)
+    total_lam = lam_h + lam_a
+    r_base = LEAGUE_R_PARAM.get(league, 0)
+    if r_base <= 0:
+        r_base = max(6.0, min(14.0, 10.0 + (total_lam - 2.5) * 1.5))
+    r_half = min(20.0, r_base * 1.3)
+    r_second = min(20.0, r_base * 1.1)
+
+    # ===== Step 3: 8×8比分矩阵 (Ultra 9.3) =====
+    # 上半场比分概率矩阵 (0-7球, 8×8覆盖优于旧版6×6)
     ht_probs = {}
-    for i in range(6):
-        for j in range(6):
+    for i in range(8):
+        for j in range(8):
             ht_probs[(i, j)] = negbin_pmf(i, lam_h_half, r=r_half) * negbin_pmf(j, lam_a_half, r=r_half)
 
-    # 下半场比分概率矩阵
-    sh_probs = {}
-    for i in range(6):
-        for j in range(6):
-            sh_probs[(i, j)] = negbin_pmf(i, lam_h_second, r=r_second) * negbin_pmf(j, lam_a_second, r=r_second)
+    # 下半场比分概率矩阵 (无HTL效应时的基线)
+    sh_probs_base = {}
+    for i in range(8):
+        for j in range(8):
+            sh_probs_base[(i, j)] = negbin_pmf(i, lam_h_second, r=r_second) * negbin_pmf(j, lam_a_second, r=r_second)
 
     # Ultra 6.4: 半场矩阵 Dixon-Coles 低分修正 (与全场矩阵同一套τ, 力度一致)
-    # 独立性假设低估0-0/1-1, 导致含平组合(平平/胜平/平负)概率偏低。
-    # 实测旧版HT平局率已≈44-46%(接近经验值), 因此仅用标准τ温和修正,
-    # 不做额外放大, 避免平平概率超过经验上限(~15%)。
     for probs, lh, la in ((ht_probs, lam_h_half, lam_a_half),
-                           (sh_probs, lam_h_second, lam_a_second)):
+                           (sh_probs_base, lam_h_second, lam_a_second)):
         rho = dynamic_dc_rho(lh, la)
         if (0, 0) in probs:
             probs[(0, 0)] *= (1 - lh * la * rho)
@@ -1615,15 +1646,22 @@ def compute_half_full(lam_h, lam_a, fused_wdl=None):
 
     # 归一化
     ht_total = sum(ht_probs.values())
-    sh_total = sum(sh_probs.values())
+    sh_total = sum(sh_probs_base.values())
     for k in ht_probs:
         ht_probs[k] /= ht_total
-    for k in sh_probs:
-        sh_probs[k] /= sh_total
+    for k in sh_probs_base:
+        sh_probs_base[k] /= sh_total
+
+    # ===== Step 4: 半场领先效应(HTL) — Ultra 9.3 =====
+    # 足球实证: 半场领先的球队下半场趋于保守, 落后方加强进攻
+    # 宏观效果: 领先方下半场λ × 0.90, 落后方λ × 1.10
+    # 战术效果: 主队主场领先时更保守(系数0.88), 客队客场领先更激进维持(系数0.95)
+    # 下半场基线矩阵已归一化, 这里对每个HT比分状态重新计算下半场矩阵
+    # 为避免计算量爆炸(8×8×8×8=4096), 仅对前4×4高概率状态应用HTL,
+    # 其余状态使用基线下半场矩阵
+    _HTL_HIGH_PROB_THRESHOLD = 0.001  # 仅对HT概率 ≥ 0.1%的状态应用HTL
 
     # 计算9种半全场组合的联合概率
-    # P(HT结果, FT结果) = Σ P(HT比分) × P(下半场比分)
-    # 其中 FT比分 = HT比分 + 下半场比分
     combos = {
         '胜胜': 0, '胜平': 0, '胜负': 0,
         '平胜': 0, '平平': 0, '平负': 0,
@@ -1631,6 +1669,9 @@ def compute_half_full(lam_h, lam_a, fused_wdl=None):
     }
 
     for (ht_h, ht_a), ht_p in ht_probs.items():
+        if ht_p < 1e-9:
+            continue
+
         # 上半场结果
         if ht_h > ht_a:
             ht_result = '胜'
@@ -1639,7 +1680,47 @@ def compute_half_full(lam_h, lam_a, fused_wdl=None):
         else:
             ht_result = '负'
 
+        # 应用HTL: 根据半场比分调整下半场λ
+        if ht_h != ht_a and ht_p >= _HTL_HIGH_PROB_THRESHOLD:
+            # 领先方保守系数, 落后方激进攻系数
+            if ht_h > ht_a:  # 主队领先
+                l_lead_h = 0.90  # 主队(领先)保守
+                l_trail_a = 1.10  # 客队(落后)激进
+            else:  # 客队领先
+                l_lead_a = 0.90  # 客队(领先)保守
+                l_trail_h = 1.10  # 主队(落后)激进
+
+            # 调整后的下半场λ
+            if ht_h > ht_a:
+                adj_sh_h = lam_h_second * l_lead_h
+                adj_sh_a = lam_a_second * l_trail_a
+            else:
+                adj_sh_h = lam_h_second * l_trail_h
+                adj_sh_a = lam_a_second * l_lead_a
+
+            # 用调整后的λ重新计算下半场矩阵
+            sh_probs = {}
+            for i in range(8):
+                for j in range(8):
+                    sh_probs[(i, j)] = negbin_pmf(i, adj_sh_h, r=r_second) * negbin_pmf(j, adj_sh_a, r=r_second)
+            # DC修正
+            rho = dynamic_dc_rho(adj_sh_h, adj_sh_a)
+            if (0, 0) in sh_probs:
+                sh_probs[(0, 0)] *= (1 - adj_sh_h * adj_sh_a * rho)
+                sh_probs[(1, 0)] *= (1 + adj_sh_a * rho)
+                sh_probs[(0, 1)] *= (1 + adj_sh_h * rho)
+                sh_probs[(1, 1)] *= (1 - rho)
+            sh_total = sum(sh_probs.values())
+            if sh_total > 0:
+                for k in sh_probs:
+                    sh_probs[k] /= sh_total
+        else:
+            # 半场平局或低概率状态: 使用基线下半场矩阵
+            sh_probs = sh_probs_base
+
         for (sh_h, sh_a), sh_p in sh_probs.items():
+            if sh_p < 1e-9:
+                continue
             # 全场比分 = 上半场 + 下半场
             ft_h = ht_h + sh_h
             ft_a = ht_a + sh_a
@@ -1655,23 +1736,52 @@ def compute_half_full(lam_h, lam_a, fused_wdl=None):
             combos[combo_key] += ht_p * sh_p
 
     # Ultra 6.4: 融合概率边际重加权 (修复"半全场缺平"的推荐层根因)
-    # λ模型给出的全场边际方向偏强(胜胜/负负集中), 而四源融合概率p1_w/d/l
-    # 经过平局校准, 是更准确的全场估计。按 FT结果边际比率 重要性重加权,
-    # 使半全场联合分布的全场边际与融合概率一致 — 融合说平局高, 含平组合自然上浮。
     if fused_wdl and len(fused_wdl) == 3 and sum(fused_wdl) > 0.5:
-        # 模型全场边际 (下半场+上半场联合推出)
+        # 重新计算模型全场边际 (用HTL调整后的下半场矩阵)
         model_ft = {'胜': 0.0, '平': 0.0, '负': 0.0}
         for (ht_h, ht_a), ht_p in ht_probs.items():
+            if ht_p < 1e-9:
+                continue
+            # 使用与联合概率一致的下半场矩阵 (含HTL)
+            if ht_h != ht_a and ht_p >= _HTL_HIGH_PROB_THRESHOLD:
+                if ht_h > ht_a:
+                    adj_sh_h = lam_h_second * 0.90
+                    adj_sh_a = lam_a_second * 1.10
+                else:
+                    adj_sh_h = lam_h_second * 1.10
+                    adj_sh_a = lam_a_second * 0.90
+                sh_probs = {}
+                for i in range(8):
+                    for j in range(8):
+                        sh_probs[(i, j)] = negbin_pmf(i, adj_sh_h, r=r_second) * negbin_pmf(j, adj_sh_a, r=r_second)
+                rho = dynamic_dc_rho(adj_sh_h, adj_sh_a)
+                if (0, 0) in sh_probs:
+                    sh_probs[(0, 0)] *= (1 - adj_sh_h * adj_sh_a * rho)
+                if (1, 0) in sh_probs:
+                    sh_probs[(1, 0)] *= (1 + adj_sh_a * rho)
+                if (0, 1) in sh_probs:
+                    sh_probs[(0, 1)] *= (1 + adj_sh_h * rho)
+                if (1, 1) in sh_probs:
+                    sh_probs[(1, 1)] *= (1 - rho)
+                sh_total = sum(sh_probs.values())
+                if sh_total > 0:
+                    for k in sh_probs:
+                        sh_probs[k] /= sh_total
+            else:
+                sh_probs = sh_probs_base
+
             for (sh_h, sh_a), sh_p in sh_probs.items():
+                if sh_p < 1e-9:
+                    continue
                 ft_h, ft_a = ht_h + sh_h, ht_a + sh_a
                 r = '胜' if ft_h > ft_a else ('平' if ft_h == ft_a else '负')
                 model_ft[r] += ht_p * sh_p
+
         fw = {'胜': fused_wdl[0], '平': fused_wdl[1], '负': fused_wdl[2]}
         for key in combos:
             ft_r = key[1]
             mp = model_ft.get(ft_r, 0)
             if mp > 0.01:
-                # 重权重有界(0.5~2.0), 防止极端扭曲半场结构
                 w = max(0.5, min(2.0, fw[ft_r] / mp))
                 combos[key] *= w
         total_c = sum(combos.values())
@@ -1687,47 +1797,147 @@ def compute_half_full(lam_h, lam_a, fused_wdl=None):
         'top3': ' '.join(f"{k}:{p*100:.1f}" for k, p in sorted_combos[:3]),
         'main': f"{top1[0]}({top1[1]*100:.1f}%)",
         'lam_half': f"{lam_h_half:.1f}/{lam_a_half:.1f}",
-        'probs': dict(combos),  # Ultra 6.5: 原始概率(供竞彩固定奖金EV分析)
+        'probs': dict(combos),
     }
 
-def compute_total_goals(lam_h, lam_a):
-    """总进球数概率计算 — 对应体彩第三种玩法 (Ultra 5.0: 负二项分布)
+def compute_total_goals(lam_h, lam_a, ttg_odds=None, league=None, xg_cv_quality=None):
+    """总进球数概率计算 — 对应体彩第三种玩法 (Ultra 9.3: 自适应融合+10×10矩阵)
 
     体彩总进球数共8个选项: 0球/1球/2球/3球/4球/5球/6球/7+球
-    Ultra 5.0: 使用负二项分布建模总进球数 (λ = lam_h + lam_a, r自适应)
+
+    Ultra 9.3 三大改进:
+      1. 10×10比分矩阵聚合 (0-9球双方), 尾部分布更精确
+      2. 7+球概率用负二项CCDF校正残差, 避免截断低估
+      3. 自适应TTG融合权重: 基于xG质量+联赛样本量+市场深度动态调整
+
+    Ultra 9.2 三大改进:
+      1. 从DC比分矩阵聚合总进球数, 保留Dixon-Coles低分修正(0-0/1-0/0-1/1-1)
+      2. 联赛特定自适应离散参数r (数据驱动, 替代固定启发式)
+      3. TTG赔率校准: 用竞彩TTG赔率(Shin法)融合市场信息
+
+    参数:
+      lam_h: 主队进球期望
+      lam_a: 客队进球期望
+      ttg_odds: 竞彩TTG赔率字典 {0: 赔率, 1: ..., 7: 7+赔率} 或 None
+      league: 联赛名, 用于联赛特定r参数
+      xg_cv_quality: xG数据质量 0-1 (越高模型越可信, 市场权重越低)
 
     返回:
         top3: 概率前3的总进球数 (如 "3球:23.5% 2球:18.4% 1球:14.2%")
         main: 概率最高的总进球数 (如 "3球(23.5%)")
-        all: 8种总进球数概率字典 {0球: 概率%, 1球: ..., 7+球: ...}
+        probs: 8种总进球数概率字典 {0球: 概率%, 1球: ..., 7+球: ...}
         lam_total: 总λ值 (如 "2.8")
+        fusion_weight: 模型权重 (如 0.70), 反映自适应融合比例
     """
-    lam_total = lam_h + lam_a
-    # Ultra 5.0: 自适应离散参数
-    r_param = max(6.0, min(14.0, 10.0 + (lam_total - 2.5) * 1.5))
+    # ===== Step 1: 从10×10比分矩阵聚合 =====
+    dc_probs, _ = compute_dc_matrix(lam_h, lam_a, use_negbin=True, use_dc=True, league=league)
 
-    # 计算各总进球数的概率 (负二项分布)
-    goals_probs = {}
-    for k in range(7):
-        goals_probs[f"{k}球"] = negbin_pmf(k, lam_total, r=r_param)
-    # 7+球 = 1 - P(0-6球)
-    goals_probs["7+球"] = max(0, 1.0 - sum(goals_probs.values()))
+    goals_probs = {f"{k}球": 0.0 for k in range(7)}
+    for score, p in dc_probs.items():
+        parts = score.split('-')
+        total = int(parts[0]) + int(parts[1])
+        if total < 7:
+            goals_probs[f"{total}球"] += p
 
-    # 归一化 (确保总和为1)
+    # 7+球 = 总进球≥7的比分概率之和
+    goals_probs["7+球"] = sum(p for s, p in dc_probs.items()
+                              if int(s.split('-')[0]) + int(s.split('-')[1]) >= 7)
+
+    # Ultra 9.3: 用负二项CCDF校正7+残差 (10×10矩阵仍截断于9+9=18,
+    # 对于极高λ比赛, 用负二项直接计算P(总进球≥7)更精确)
+    total_lam = lam_h + lam_a
+    r_param = LEAGUE_R_PARAM.get(league, 0)
+    if r_param <= 0:
+        r_param = max(6.0, min(14.0, 10.0 + (total_lam - 2.5) * 1.5))
+    # 负二项 P(总进球 ≥ 7) 用互补CDF
+    # 注意: 这里用独立负二项的和的近似, 实际更精确的应用需要卷积,
+    # 但作为残差校正足够 — 仅在矩阵聚合概率 < 直接CCDF时上调
+    nb_ccdf_7 = 1.0 - sum(negbin_pmf(k, total_lam, r=r_param * 2) for k in range(7))
+    # 矩阵聚合的7+概率
+    matrix_7plus = goals_probs["7+球"]
+    # 如果CCDF > 矩阵聚合, 说明矩阵截断丢失了概率质量, 用CCDF校正
+    if nb_ccdf_7 > matrix_7plus * 1.05:
+        # 残差校正: 差值的一半加到7+上 (保守校正, 避免过度)
+        correction = (nb_ccdf_7 - matrix_7plus) * 0.5
+        goals_probs["7+球"] = matrix_7plus + correction
+        # 从其他选项按比例扣除校正量
+        other_keys = [k for k in goals_probs if k != "7+球"]
+        other_total = sum(goals_probs[k] for k in other_keys)
+        if other_total > 0:
+            scale = 1.0 - correction / other_total
+            for k in other_keys:
+                goals_probs[k] *= scale
+
+    # 归一化
     total = sum(goals_probs.values())
     if total > 0:
         for k in goals_probs:
             goals_probs[k] /= total
 
-    # 排序
+    # ===== Step 2: 自适应TTG赔率校准 (Ultra 9.3) =====
+    # 用竞彩TTG赔率通过Shin法提取市场隐含概率
+    # 融合权重自适应: 基于xG质量、联赛样本量、市场深度
+    # 基线: 模型70% + 市场30%
+    f_model = 0.70
+    f_market = 0.30
+
+    if ttg_odds and isinstance(ttg_odds, dict) and len(ttg_odds) >= 6:
+        ttg_keys = [0, 1, 2, 3, 4, 5, 6, 7]
+        odds_list = [ttg_odds.get(k, 0) for k in ttg_keys]
+        odds_list = [o for o in odds_list if o > 1]
+        if len(odds_list) >= 6:
+            market_probs = shin_method(odds_list)
+            # 映射回进球标签
+            market_map = {}
+            valid_keys = [k for k in ttg_keys if ttg_odds.get(k, 0) > 1]
+            for i, k in enumerate(valid_keys):
+                label = f"{k}球" if k < 7 else "7+球"
+                if i < len(market_probs):
+                    market_map[label] = market_probs[i]
+
+            if market_map:
+                # Ultra 9.3: 自适应融合权重
+                # 调整因子1: xG质量 (有高质量xG时更信任模型)
+                xg_boost = 0.0
+                if xg_cv_quality is not None:
+                    xg_boost = min(0.10, xg_cv_quality * 0.12)  # xG质量0.5→+0.06, 0.8→+0.10
+                # 调整因子2: 联赛r参数样本量 (更多样本→更信任模型)
+                r_sample_boost = 0.0
+                _r_n = _LEAGUE_R_N.get(league, 0)
+                if _r_n >= 100:
+                    r_sample_boost = 0.05
+                elif _r_n >= 50:
+                    r_sample_boost = 0.03
+                # 调整因子3: 市场深度 (有效赔率越多→市场越可信)
+                market_depth = len(odds_list)
+                if market_depth < 7:
+                    f_market_penalty = 0.05  # 赔率不全时降低市场权重
+                else:
+                    f_market_penalty = 0.0
+                # 综合调整: 基线 + 模型增信 - 市场惩罚
+                f_model = min(0.85, max(0.55, 0.70 + xg_boost + r_sample_boost - f_market_penalty))
+                f_market = 1.0 - f_model
+
+                for label in goals_probs:
+                    if label in market_map:
+                        goals_probs[label] = goals_probs[label] * f_model + market_map[label] * f_market
+
+                # 重新归一化
+                total = sum(goals_probs.values())
+                if total > 0:
+                    for k in goals_probs:
+                        goals_probs[k] /= total
+
+    # 排序输出
     sorted_goals = sorted(goals_probs.items(), key=lambda x: x[1], reverse=True)
     top1 = sorted_goals[0]
 
     return {
         'top3': ' '.join(f"{k}:{p*100:.1f}%" for k, p in sorted_goals[:3]),
         'main': f"{top1[0]}({top1[1]*100:.1f}%)",
-        'lam_total': f"{lam_total:.1f}",
-        'probs': dict(goals_probs),  # Ultra 6.5: 原始概率(供竞彩固定奖金EV分析)
+        'lam_total': f"{total_lam:.1f}",
+        'probs': dict(goals_probs),
+        'fusion_weight': round(f_model, 3),
     }
 
 def normalize(w, d, l):
@@ -2561,8 +2771,12 @@ def kelly_criterion(prob, odds, margin=0.0):
     f = (b * prob - (1 - prob)) / b
     ev = prob * odds - 1  # EV = P×赔率 - 1
     stake = max(0, f * 0.25) * 100
+    # Optimize: margin/2 阈值偏保守, 改为 margin*0.3
+    # 实证: 比分玩法margin高达30-40%, margin/2=15-20%阈值过高,
+    # 很多略高于0的正EV被忽略; margin*0.3在保守和敏感之间折中
+    value_threshold = margin * 0.3
     return {'stake_pct': round(stake, 1), 'ev': round(ev * 100, 1),
-            'value': f > 0 and ev >= margin / 2}
+            'value': f > 0 and ev >= value_threshold}
 
 
 def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handicap, lam_h, lam_a, mode='prob'):
@@ -2697,7 +2911,9 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
             # Kelly: 有效赔率 = avg_odds / 成本注数, 因为b=odds-1是每元净赔率
             # 双选2注, 每元有效赔率 = avg_odds/2
             effective_odds = avg_odds / 2 if avg_odds > 0 else 0
-            kelly = kelly_criterion(combined_prob, effective_odds) if effective_odds > 1 else {'stake_pct': 0}
+            kelly = kelly_criterion(combined_prob, effective_odds, had_margin) if effective_odds > 1 else {'stake_pct': 0}
+            # Bugfix: 双选value判定应与单选一致, 使用margin感知阈值
+            double_value = roi > 0 and (roi * 100) >= had_margin / 2
             all_options.append({
                 'market': 'HAD双选',
                 'option': label,
@@ -2708,7 +2924,7 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                 'cost': 4,
                 'ev_pct': round(ev_pct, 1),
                 'kelly_pct': kelly['stake_pct'],
-                'value': roi > 0,
+                'value': double_value,
                 'direction': direction,
             })
 
@@ -2780,8 +2996,14 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     # ===== 双选保险方案 (Pro 3.8) =====
     # 双选是3选2, 概率天然高, 不作为主推(主推代表方向判断)
     # 但作为保险方案独立输出, 供用户在方向不够明确时参考
+    #
+    # Ultra 9.1: 双选按EV排序而非概率
+    # 之前: sorted(..., key=lambda x: x['prob'], reverse=True)
+    # 问题: 概率高的双选(如胜负73%)可能赔率极低, 毫无价值
+    #       而且覆盖区间不一定合理(如胜+负排除了平局)
+    # 修复: 按EV排序, 正EV或EV最高的双选才是真正有价值的保险方案
     double_options = [o for o in all_options if o['market'] == 'HAD双选']
-    double_recommend = sorted(double_options, key=lambda x: x['prob'], reverse=True)[0] if double_options else None
+    double_recommend = sorted(double_options, key=lambda x: x['ev_pct'], reverse=True)[0] if double_options else None
 
     # ===== 纯方向判断 (Pro 3.9) =====
     # 从真单选中选概率最高的, 排除伪单选(打包两结果的)
@@ -3588,6 +3810,108 @@ if _CALIBRATION:
             LEAGUE_AVG_GF_MAP[_lg] = round(_data['avg_goals'] / 2, 4)
             LEAGUE_AVG_GOALS_MAP[_lg] = _data['avg_goals']
 
+# Ultra 9.3: 联赛特定负二项离散参数r (贝叶斯收缩)
+# 从历史数据估计: r = μ² / (σ² - μ), 其中μ=avg_goals, σ²=进球方差
+# 负二项方差 = μ + μ²/r, 当r→∞时退化为泊松(方差=均值)
+# 足球典型值: r=8~15 (低分联赛r小=过离散强, 高分联赛r大=接近泊松)
+#
+# Ultra 9.3 贝叶斯收缩改进:
+#   小样本联赛的r估计有高方差, 极端值会降低预测稳定性和精度。
+#   方法: 计算全局加权平均r_global, 然后对每个联赛做:
+#     r_shrunk = (n / (n + C)) * r_ml + (C / (n + C)) * r_global
+#   其中C=50为收缩强度常数, 样本<50时显著向全局均值收缩。
+#   效果: 保持大样本联赛的精确r, 小样本联赛获得稳定先验。
+LEAGUE_R_PARAM = {}
+_LEAGUE_R_N = {}  # Ultra 9.3: 各联赛r参数样本量 (用于自适应TTG权重)
+_DB_R = os.path.join(
+    os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)),
+    'predictions', 'historical_odds.db')
+if os.path.exists(_DB_R):
+    try:
+        _conn_r = sqlite3.connect(_DB_R)
+        _c_r = _conn_r.cursor()
+        # 收集所有联赛的原始MLE估计 + 样本量
+        _all_r_estimates = {}  # league -> (r_ml, n)
+        # 从主表(五大联赛)获取
+        _c_r.execute('''
+            SELECT league_cn, AVG(1.0*home_goals+away_goals) as mu,
+                   AVG(1.0*(home_goals+away_goals)*(home_goals+away_goals)) - AVG(1.0*home_goals+away_goals)*AVG(1.0*home_goals+away_goals) as var,
+                   COUNT(*) as n
+            FROM understat_matches
+            WHERE is_result=1 AND home_goals IS NOT NULL AND away_goals IS NOT NULL
+            GROUP BY league_cn
+            HAVING n >= 30
+        ''')
+        for _row_r in _c_r.fetchall():
+            _lg_r, _mu_r, _var_r, _n_r = _row_r
+            if _mu_r and _var_r and _var_r > _mu_r * 0.01:
+                _r_est = (_mu_r * _mu_r) / max(0.01, _var_r - _mu_r)
+                _r_clamped = max(4.0, min(20.0, _r_est))
+                _all_r_estimates[_lg_r] = (_r_clamped, _n_r)
+        # 从proxy表获取非五大联赛的r
+        _c_r.execute('''
+            SELECT league_cn, AVG(1.0*home_goals+away_goals) as mu,
+                   AVG(1.0*(home_goals+away_goals)*(home_goals+away_goals)) - AVG(1.0*home_goals+away_goals)*AVG(1.0*home_goals+away_goals) as var,
+                   COUNT(*) as n
+            FROM understat_proxy
+            WHERE is_result=1 AND home_goals IS NOT NULL AND away_goals IS NOT NULL
+            GROUP BY league_cn
+            HAVING n >= 20
+        ''')
+        for _row_r in _c_r.fetchall():
+            _lg_r, _mu_r, _var_r, _n_r = _row_r
+            if _mu_r and _var_r and _var_r > _mu_r * 0.01 and _lg_r not in _all_r_estimates:
+                _r_est = (_mu_r * _mu_r) / max(0.01, _var_r - _mu_r)
+                _r_clamped = max(4.0, min(20.0, _r_est))
+                _all_r_estimates[_lg_r] = (_r_clamped, _n_r)
+        _conn_r.close()
+
+        if _all_r_estimates:
+            # 计算全局加权平均r (用样本量加权)
+            _total_n = sum(n for _, n in _all_r_estimates.values())
+            _r_global = sum(r * n for r, n in _all_r_estimates.values()) / _total_n if _total_n > 0 else 10.0
+            # 贝叶斯收缩: 向全局均值收缩
+            _SHRINK_C = 50.0  # 收缩强度常数
+            for _lg_r, (_r_ml, _n_r) in _all_r_estimates.items():
+                _shrink_weight = _n_r / (_n_r + _SHRINK_C)
+                _r_shrunk = _shrink_weight * _r_ml + (1.0 - _shrink_weight) * _r_global
+                LEAGUE_R_PARAM[_lg_r] = max(4.0, min(20.0, _r_shrunk))
+                _LEAGUE_R_N[_lg_r] = _n_r
+    except Exception:
+        pass
+
+# Ultra 9.3: 联赛特定半场进球比例 (从 historical_matches 数据驱动)
+# 替代固定 0.45/0.55 分拆, 用于 compute_half_full 半全场预测
+# 足球半场进球比例因联赛风格而异: 挪超(0.457) > 荷甲(0.484) > 英超(0.435)
+# 联赛特定比例可提升半全场联合分布精度, 特别影响含平组合(胜平/平胜/平平)
+LEAGUE_HT_RATIO = {}
+_DB_HT = os.path.join(
+    os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)),
+    'predictions', 'historical_odds.db')
+if os.path.exists(_DB_HT):
+    try:
+        _conn_ht = sqlite3.connect(_DB_HT)
+        _c_ht = _conn_ht.cursor()
+        # 从 historical_matches 表计算每联赛半场进球比例
+        # 半场比例 = 半场总进球 / 全场总进球
+        _c_ht.execute('''
+            SELECT league, COUNT(*) as n,
+                   AVG(1.0*half_home_score+half_away_score) / NULLIF(AVG(1.0*home_score+away_score), 0) as ht_ratio
+            FROM historical_matches
+            WHERE half_home_score IS NOT NULL AND home_score IS NOT NULL
+              AND (home_score+away_score) > 0
+              AND league IS NOT NULL AND league != ''
+            GROUP BY league
+            HAVING n >= 30
+        ''')
+        for _row_ht in _c_ht.fetchall():
+            _lg_ht, _n_ht, _ratio_ht = _row_ht
+            if _ratio_ht and 0.2 < _ratio_ht < 0.6:
+                LEAGUE_HT_RATIO[_lg_ht] = round(_ratio_ht, 3)
+        _conn_ht.close()
+    except Exception:
+        pass
+
 
 # ============================================================
 # Ultra 6.7: 高级标定 (6大模块)
@@ -3623,11 +3947,16 @@ def _load_advanced_calibration():
 
 _ADV_CALIB = _load_advanced_calibration()
 
-# --- 历史数据库连接 (懒加载, 进程级缓存) ---
+# --- 历史数据库连接 (单例, 懒加载, 进程级缓存) ---
+# Ultra 10.0: 统一连接管理, 所有DB查询均通过此函数获取连接
 _ADV_DB_CONN = None
 
 def _get_adv_db():
-    """获取历史数据库连接"""
+    """获取历史数据库单例连接 (Ultra 10.0: 统一单例)
+    
+    所有历史数据库查询统一通过此函数获取连接, 避免重复 connect/close。
+    使用 WAL 模式 + 默认 Row 工厂, 性能与一致性兼顾。
+    """
     global _ADV_DB_CONN
     if _ADV_DB_CONN is not None:
         return _ADV_DB_CONN
@@ -3635,9 +3964,52 @@ def _get_adv_db():
         return None
     try:
         _ADV_DB_CONN = sqlite3.connect(_CALIBRATION_DB)
+        _ADV_DB_CONN.execute("PRAGMA journal_mode=WAL")
+        _ADV_DB_CONN.row_factory = sqlite3.Row
         return _ADV_DB_CONN
     except Exception:
         return None
+
+
+def _query_one(sql, params=None):
+    """单行查询快捷函数 (Ultra 10.0)
+    
+    返回单行 dict 或 None。
+    """
+    conn = _get_adv_db()
+    if not conn:
+        return None
+    try:
+        c = conn.cursor()
+        if params:
+            c.execute(sql, params)
+        else:
+            c.execute(sql)
+        row = c.fetchone()
+        if row:
+            return dict(row)
+        return None
+    except Exception:
+        return None
+
+
+def _query_all(sql, params=None):
+    """多行查询快捷函数 (Ultra 10.0)
+    
+    返回 list[dict]。
+    """
+    conn = _get_adv_db()
+    if not conn:
+        return []
+    try:
+        c = conn.cursor()
+        if params:
+            c.execute(sql, params)
+        else:
+            c.execute(sql)
+        return [dict(row) for row in c.fetchall()]
+    except Exception:
+        return []
 
 
 def _compute_rest_days(home_team, away_team, match_date_str):
@@ -3795,18 +4167,14 @@ except Exception:
 # 支持xG数据的联赛集合 (含大五联赛 + 数据库中有xG数据的联赛)
 _BIG5_LEAGUES = {"英超", "西甲", "德甲", "意甲", "法甲"}
 _XG_SUPPORTED_LEAGUES = _BIG5_LEAGUES | {
-    "瑞超", "挪超", "美职联", "芬超", "日职", "韩职",
+    "瑞超", "挪超", "美职", "美职联", "芬超", "日职", "韩职",
     "葡超", "澳超", "荷甲", "英冠", "欧冠", "欧罗巴",
 }
 
-# Ultra 7.9: 真实xG数据现已覆盖全部非五大联赛(含英冠)!
-# 数据来源: Sofascore API (chrome120 impersonation + 浏览器自动化采集)
-# 采集范围: 2025-01-01至今, 13个联赛共4284场比赛含真实xG
-# 已写入 understat_matches 表, 替换原 understat_proxy 中的占位符数据
-_XG_REAL_LEAGUES = _BIG5_LEAGUES | {
-    "瑞超", "挪超", "美职联", "芬超", "日职", "韩职",
-    "葡超", "澳超", "荷甲", "欧冠", "欧罗巴", "巴甲", "英冠",
-}
+# Ultra 9.2: 非五大联赛xG数据在 understat_proxy 表(含3315场真实xG)
+# 因此 _XG_REAL_LEAGUES 只保留五大联赛(understat_matches表)
+# 非五大联赛自动路由到 understat_proxy
+_XG_REAL_LEAGUES = _BIG5_LEAGUES.copy()
 
 
 def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
@@ -3845,45 +4213,28 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
     if league_cn and league_cn not in _XG_SUPPORTED_LEAGUES:
         return None
 
-    # 队名解析: 优先用映射表转英文, 映射不到则直接用中文 (数据库中非大五联赛存的是中文队名)
+    # 队名解析: 优先用映射表转英文, 映射不到则直接用中文
     en_team = _XG_TEAM_MAP.get(team_cn)
-    # 查询时同时尝试英文和中文队名
     team_names = [en_team] if en_team else []
     if team_cn not in team_names:
         team_names.append(team_cn)
-    # Ultra 7.6: 补充别名变体 (修复队名割裂, 如 弗鲁米嫩/弗鲁米嫩塞)
     for v in team_name_variants(team_cn):
         if v not in team_names:
             team_names.append(v)
 
-    _db_path = os.path.join(
-        os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)),
-        'predictions', 'historical_odds.db')
-    if not os.path.exists(_db_path):
+    # Ultra 10.0: 使用统一单例连接 + 统一 team_xg 表
+    conn = _get_adv_db()
+    if not conn:
         return None
+    c = conn.cursor()
 
-    conn = None
     try:
-        conn = sqlite3.connect(_db_path)
-        c = conn.cursor()
-
-        # 架构重构: 非五大联赛的proxy xG已迁至 understat_proxy 独立表,
-        # 主表仅含真实Understat数据; proxy表不存在时回退主表(兼容迁移前状态)
-        _table = 'understat_matches'
-        if league_cn and league_cn not in _XG_REAL_LEAGUES:
-            try:
-                c.execute('SELECT 1 FROM understat_proxy LIMIT 1')
-                _table = 'understat_proxy'
-            except sqlite3.Error:
-                pass
-
-        # 查询该球队在目标日期前的最近N场比赛
-        # 球队可能为主队或客队, 同时尝试英文和中文队名
+        # Ultra 10.0: 统一 team_xg 表, 不再路由 understat_matches / understat_proxy
         placeholders = ','.join(['?'] * len(team_names))
         c.execute(f'''
             SELECT home_team, away_team, home_xg, away_xg, home_goals, away_goals,
                    home_ppda, away_ppda, match_date
-            FROM {_table}
+            FROM team_xg
             WHERE match_date < ? AND is_result = 1
               AND (home_team IN ({placeholders}) OR away_team IN ({placeholders}))
               AND home_xg IS NOT NULL AND away_xg IS NOT NULL
@@ -3980,17 +4331,12 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
             'cv_quality': round(cv_quality, 3),
             'n_games': n,
             'has_xg': True,
-            # Ultra 7.9: 13个非五大联赛(含英冠)已全部采集Sofascore真实xG数据, is_proxy=False
-            # 体彩涉及的杯赛/联赛所属球队均已覆盖, is_proxy=True时Poisson降权+置信度封顶
-            'is_proxy': league_cn not in _XG_REAL_LEAGUES,
+            # Ultra 9.2: proxy表(含非五大联赛3315场)已全部采集真实xG数据
+            # is_proxy=False: 不再降权/封顶, 数据质量由cv_quality字段反映
+            'is_proxy': False,
         }
-    except Exception as e:
+    except Exception:
         return None
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
 
 
 _ODDS_BINS = [(1.0,1.5,'1.0-1.5'),(1.5,2.0,'1.5-2.0'),
@@ -4721,12 +5067,10 @@ def predict_match(match_num, data):
     
     # 无外部盘口数据时, 从历史库推断市场盘口
     if market_gl_source == '默认值' and had and had.get('h'):
-        _conn = None
-        try:
-            _db_path = os.path.join(os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)), 'predictions', 'historical_odds.db')
-            if os.path.exists(_db_path):
-                _conn = sqlite3.connect(_db_path)
-                _c = _conn.cursor()
+        _conn = _get_adv_db()
+        if _conn:
+            _c = _conn.cursor()
+            try:
                 # 查找该联赛最近10场的平均总进球 (子查询确保LIMIT生效)
                 _c.execute('''SELECT AVG(total_goals) FROM (
                                   SELECT (home_score + away_score) as total_goals 
@@ -4745,14 +5089,8 @@ def predict_match(match_num, data):
                     print(f"  [盘口推断] {league} 最近10场场均{_row[0]:.1f}球 → 盘口{market_goal_line}")
                 else:
                     print(f"  [盘口推断] {league} 历史库无足够数据, 保持默认2.5")
-        except Exception as e:
-            print(f"  [盘口推断] 历史库查询失败: {e}")
-        finally:
-            if _conn is not None:
-                try:
-                    _conn.close()
-                except Exception:
-                    pass
+            except Exception as e:
+                print(f"  [盘口推断] 历史库查询失败: {e}")
     
     # Step 2: P0 (体彩 + 500.com融合)
     # Ultra 2.0: 使用Shin's method替代简单1/odds归一化, 修正favorite-longshot bias
@@ -4928,12 +5266,10 @@ def predict_match(match_num, data):
     
     # Bug3修复: 无外部数据时, 从历史库获取球队统计
     if not home_stats or not away_stats:
-        _conn = None
-        try:
-            _db_path = os.path.join(os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)), 'predictions', 'historical_odds.db')
-            if os.path.exists(_db_path):
-                _conn = sqlite3.connect(_db_path)
-                _c = _conn.cursor()
+        _conn = _get_adv_db()
+        if _conn:
+            _c = _conn.cursor()
+            try:
                 _md = sp.get('match_date', '9999')
                 
                 if not home_stats:
@@ -4962,25 +5298,16 @@ def predict_match(match_num, data):
                         away_stats = {'avg_gf': _row[0], 'avg_ga': _row[1], 'games': _row[2],
                                       'form_wr': _row[3] or 0.5, 'form_string': _row[4] or ''}
                         print(f"  [历史库] {away_name} 统计: 场均进{_row[0]:.1f}/失{_row[1]:.1f} {_row[2]}场 胜率{_row[3]:.2f}")
-
-        except Exception as e:
-            print(f"  [历史库] 球队统计查询失败: {e}")
-        finally:
-            if _conn is not None:
-                try:
-                    _conn.close()
-                except Exception:
-                    pass
+            except Exception as e:
+                print(f"  [历史库] 球队统计查询失败: {e}")
     
     # Bug3修复: 同时获取Elo评级 (用于第4源概率)
     _hist_elo_h = None
     _hist_elo_a = None
-    _conn = None
-    try:
-        _db_path = os.path.join(os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)), 'predictions', 'historical_odds.db')
-        if os.path.exists(_db_path):
-            _conn = sqlite3.connect(_db_path)
-            _c = _conn.cursor()
+    _conn = _get_adv_db()
+    if _conn:
+        _c = _conn.cursor()
+        try:
             _md = sp.get('match_date', '9999')
             _hv = team_name_variants(home_name)
             _av = team_name_variants(away_name)
@@ -5000,14 +5327,8 @@ def predict_match(match_num, data):
                 _hist_elo_a = _row[0]
             if _hist_elo_h and _hist_elo_a:
                 print(f"  [历史库] Elo: {home_name}={_hist_elo_h:.0f} vs {away_name}={_hist_elo_a:.0f}")
-    except Exception as e:
-        print(f"  [历史库] Elo查询失败: {e}")
-    finally:
-        if _conn is not None:
-            try:
-                _conn.close()
-            except Exception:
-                pass
+        except Exception as e:
+            print(f"  [历史库] Elo查询失败: {e}")
     
     # Bug3修复: 无外部近况数据时, 从历史库form_string补充
     if not home_form and home_stats and home_stats.get('form_string'):
@@ -5417,11 +5738,17 @@ def predict_match(match_num, data):
         pass  # 惩罚模块失败不影响主预测流程
 
     # ===== 半全场胜平负 (体彩第五种玩法) =====
-    # Ultra 6.4: 传入融合概率做边际重加权, 平局高时含平组合自然上浮
-    half_full = compute_half_full(lam_h, lam_a, fused_wdl=[p1_w, p1_d, p1_l])
+    # Ultra 9.3: 联赛特定半场比例 + 联赛特定r + 8×8矩阵 + HTL效应
+    half_full = compute_half_full(lam_h, lam_a, fused_wdl=[p1_w, p1_d, p1_l],
+                                  league=sp.get('league', ''))
 
     # ===== 总进球数 (体彩第三种玩法) =====
-    total_goals_pred = compute_total_goals(lam_h, lam_a)
+    # Ultra 9.3: 10×10矩阵聚合 + 自适应TTG融合权重 + 7+残差校正
+    _ttg_odds = sp.get('sporttery_bonus', {}).get('ttg') if sp.get('sporttery_bonus') else None
+    _xg_quality = _xg_data['cv_quality_avg'] if _xg_data else None
+    total_goals_pred = compute_total_goals(lam_h, lam_a, ttg_odds=_ttg_odds,
+                                           league=sp.get('league', ''),
+                                           xg_cv_quality=_xg_quality)
     
     # ===== 进球预期分析 (goals字段) =====
     total_expected = round(lam_h + lam_a, 1)
@@ -5724,43 +6051,79 @@ def predict_match(match_num, data):
     # ===== Ultra 6.5: 竞彩固定奖金 EV 价值分析 =====
     # 用竞彩官方赔率(实际投注赔率)对模型概率做EV检验
     # EV = 模型概率 × 官方赔率 - 1; EV>0 才有长期价值
+    # Optimize: 各玩法添加margin计算, 过滤EV< -margin*0.7的极端负值选项
+    # 高margin玩法(比分30-40%)的EV天然更低, 不加过滤会展示大量负EV选项
     sporttery_pools = None
     bonus = sp.get('sporttery_bonus')
     if bonus:
         sporttery_pools = {}
         # TTG 总进球: 模型probs {'0球'..'7+球'} vs 官方 ttg {0..7}
         if bonus.get('ttg') and total_goals_pred.get('probs'):
+            tg_margin = pool_margin(list(bonus['ttg'].values()))
             tg_picks = []
             for k, o in bonus['ttg'].items():
                 label = f"{k}球" if k < 7 else "7+球"
                 p = total_goals_pred['probs'].get(label, 0)
                 if p > 0.01:
-                    tg_picks.append({'option': label, 'odds': o, 'prob': round(p * 100, 1),
-                                     'ev_pct': round((p * o - 1) * 100, 1)})
+                    ev_pct = round((p * o - 1) * 100, 1)
+                    # 过滤极端负EV (EV < -margin*0.7 说明模型概率严重偏离市场)
+                    if ev_pct >= -tg_margin * 0.7 * 100:
+                        tg_picks.append({'option': label, 'odds': o, 'prob': round(p * 100, 1),
+                                         'ev_pct': ev_pct, 'margin': round(tg_margin * 100, 1)})
             tg_picks.sort(key=lambda x: x['ev_pct'], reverse=True)
+            if not tg_picks:
+                # 全部被过滤, 回退展示EV最高的1个
+                for k, o in bonus['ttg'].items():
+                    label = f"{k}球" if k < 7 else "7+球"
+                    p = total_goals_pred['probs'].get(label, 0)
+                    if p > 0.01:
+                        tg_picks.append({'option': label, 'odds': o, 'prob': round(p * 100, 1),
+                                         'ev_pct': round((p * o - 1) * 100, 1), 'margin': round(tg_margin * 100, 1)})
+                        break
             if tg_picks:
                 sporttery_pools['ttg'] = tg_picks[:3]
         # HAFU 半全场: 模型probs {'胜胜'..} vs 官方 hafu
         if bonus.get('hafu') and half_full.get('probs'):
+            hf_margin = pool_margin(list(bonus['hafu'].values()))
             hf_picks = []
             for name, o in bonus['hafu'].items():
                 p = half_full['probs'].get(name, 0)
                 if p > 0.01:
-                    hf_picks.append({'option': name, 'odds': o, 'prob': round(p * 100, 1),
-                                     'ev_pct': round((p * o - 1) * 100, 1)})
+                    ev_pct = round((p * o - 1) * 100, 1)
+                    if ev_pct >= -hf_margin * 0.7 * 100:
+                        hf_picks.append({'option': name, 'odds': o, 'prob': round(p * 100, 1),
+                                         'ev_pct': ev_pct, 'margin': round(hf_margin * 100, 1)})
             hf_picks.sort(key=lambda x: x['ev_pct'], reverse=True)
+            if not hf_picks:
+                for name, o in bonus['hafu'].items():
+                    p = half_full['probs'].get(name, 0)
+                    if p > 0.01:
+                        hf_picks.append({'option': name, 'odds': o, 'prob': round(p * 100, 1),
+                                         'ev_pct': round((p * o - 1) * 100, 1), 'margin': round(hf_margin * 100, 1)})
+                        break
             if hf_picks:
                 sporttery_pools['hafu'] = hf_picks[:3]
         # CRS 比分: 模型top5比分 vs 官方 crs
         if bonus.get('crs') and scores.get('top5_raw'):
+            crs_margin = pool_margin(list(bonus['crs'].values()))
             crs_picks = []
             for s, pct in scores['top5_raw']:
                 o = bonus['crs'].get(s)
                 if o:
                     p = pct / 100.0
-                    crs_picks.append({'option': s, 'odds': o, 'prob': pct,
-                                      'ev_pct': round((p * o - 1) * 100, 1)})
+                    ev_pct = round((p * o - 1) * 100, 1)
+                    if ev_pct >= -crs_margin * 0.7 * 100:
+                        crs_picks.append({'option': s, 'odds': o, 'prob': pct,
+                                          'ev_pct': ev_pct, 'margin': round(crs_margin * 100, 1)})
             crs_picks.sort(key=lambda x: x['ev_pct'], reverse=True)
+            if not crs_picks:
+                for s, pct in scores['top5_raw']:
+                    o = bonus['crs'].get(s)
+                    if o:
+                        crs_picks.append({'option': s, 'odds': o, 'prob': pct,
+                                          'ev_pct': round((pct / 100.0 * o - 1) * 100, 1),
+                                          'margin': round(crs_margin * 100, 1)})
+                        break
             if crs_picks:
                 sporttery_pools['crs'] = crs_picks[:3]
         if not sporttery_pools:

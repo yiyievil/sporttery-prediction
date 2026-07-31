@@ -68,53 +68,59 @@ def parse_prob_from_p(p_str, direction):
 def score_option(name, market, direction, odds, conf_str, prob, swot_consistency, ev_pct, coverage_type='单选'):
     """综合评分一个投注选项
     
-    评分 = 置信度×15 + 概率×0.4 + SWOT加成 + EV微调 + 覆盖加成
+    Ultra 9.0: EV(期望值) 为核心评分标准
+    评分 = EV分 + 置信度分 + SWOT加成 + 覆盖加成
+    - EV分 = max(ev_pct, 0) × 3.0  (正EV才有价值分)
+    - EV罚分 = min(ev_pct, 0) × 1.0  (负EV重罚)
+    - 置信度分 = conf × 5
+    - SWOT一致 +10, 不一致 -8
+    - 双选覆盖 +5
     """
     conf = parse_conf_stars(conf_str)
+    ev = ev_pct if ev_pct is not None else 0
     
-    # 置信度权重最高
-    conf_score = conf * 15
+    # EV核心分: 正EV高倍奖励, 负EV重罚
+    ev_score = max(ev, 0) * 3.0 + min(ev, 0) * 1.0
     
-    # 概率
-    prob_score = prob * 0.4
+    # 置信度分 (权重降低, EV才是核心)
+    conf_score = conf * 5
     
     # SWOT一致性加成
     swot_bonus = 0
     if swot_consistency == '一致':
-        swot_bonus = 15
+        swot_bonus = 10
     elif swot_consistency == '不一致':
-        swot_bonus = -12
+        swot_bonus = -8
     elif swot_consistency == '部分一致':
         swot_bonus = 0
     
-    # EV微调 (负EV轻微扣分)
-    ev_penalty = 0
-    if ev_pct is not None and ev_pct < 0:
-        ev_penalty = -abs(ev_pct) * 0.15
+    # 覆盖加成
+    coverage_bonus = 5 if '双选' in coverage_type else 0
     
-    # 覆盖加成: 双选覆盖面广, 适合做第二推荐
-    coverage_bonus = 0
-    if '双选' in coverage_type:
-        coverage_bonus = 8
+    total = ev_score + conf_score + swot_bonus + coverage_bonus
     
-    total = conf_score + prob_score + swot_bonus + ev_penalty + coverage_bonus
+    # 隐含概率 = 1/赔率 (庄家概率)
+    implied_prob = round(1 / odds * 100, 1) if odds > 0 else 0
+    # 模型优势 = 模型概率 - 庄家隐含概率
+    edge = round(prob - implied_prob, 1)
     
     return {
         'name': name,
         'market': market,
         'direction': direction,
         'odds': odds,
+        'implied_prob': implied_prob,  # 新增: 赔率隐含概率
+        'edge': edge,                 # 新增: 模型优势(正=模型更看好)
         'conf': conf_str,
         'conf_num': conf,
         'prob': prob,
         'swot_consistency': swot_consistency,
-        'ev_pct': ev_pct,
+        'ev_pct': round(ev, 1),
         'coverage_type': coverage_type,
         'score': round(total, 1),
+        'ev_score': round(ev_score, 1),
         'conf_score': round(conf_score, 1),
-        'prob_score': round(prob_score, 1),
         'swot_bonus': swot_bonus,
-        'ev_penalty': round(ev_penalty, 1),
         'coverage_bonus': coverage_bonus,
     }
 
@@ -263,13 +269,37 @@ def rank_match(key, meta, result):
     # 按分数排序
     options.sort(key=lambda x: x['score'], reverse=True)
     
-    # Ultra 6.5: 推荐规则改为纯概率排序 (用户决策)
-    # 第一推 = HAD/HHAD单选中概率最高, 第二推 = 概率第二高
-    # 不再强制不同类型/不同市场 — 概率是唯一标准 (EV仅供参考展示)
+    # Ultra 9.0: 按EV(期望值)排序，不再按概率
+    # 同一场比赛只选一个市场 (HAD 或 HHAD)
+    # 避免出现 HAD胜 + HHAD让负 这种矛盾推荐 — 投注只能选一个市场
+    # 规则: 比较 HAD 和 HHAD 各自EV最高的纯单选, 选EV更高的那个市场
+    # 第一推 = 该市场EV最高的纯单选; 第二推 = 同市场第二单选 or 双选
     single_opts = [o for o in options if '双选' not in o.get('coverage_type', '')]
-    single_opts.sort(key=lambda x: x.get('prob', 0), reverse=True)
-    first = single_opts[0] if single_opts else (options[0] if options else None)
-    second = single_opts[1] if len(single_opts) > 1 else (options[1] if len(options) > 1 else None)
+    had_singles = [o for o in single_opts if o.get('market') in ('胜平负', 'HAD方向')]
+    hhad_singles = [o for o in single_opts if o.get('market') == '让球胜平负']
+    had_best = max(had_singles, key=lambda x: x.get('ev_pct', 0)) if had_singles else None
+    hhad_best = max(hhad_singles, key=lambda x: x.get('ev_pct', 0)) if hhad_singles else None
+    # 选择最佳市场: HHAD 的EV更高则选 HHAD, 否则选 HAD (含HAD未开盘时)
+    if hhad_best and (not had_best or hhad_best['ev_pct'] > had_best['ev_pct']):
+        selected_markets = ('让球胜平负',)
+    else:
+        selected_markets = ('胜平负', 'HAD方向')
+    # 第一推: 选中市场的纯单选, 按EV排序取最高
+    market_singles = [o for o in single_opts if o.get('market') in selected_markets]
+    market_singles.sort(key=lambda x: x.get('ev_pct', 0), reverse=True)
+    first = market_singles[0] if market_singles else (options[0] if options else None)
+    # 第二推: 同市场第二单选 > 同市场双选 > None
+    second = None
+    if len(market_singles) > 1:
+        second = market_singles[1]
+    else:
+        # 同市场双选作为补充次推
+        market_doubles = [o for o in options if '双选' in o.get('coverage_type', '') and
+                          (o.get('market') in selected_markets or
+                           (o.get('market') == 'HAD双选' and '胜平负' in selected_markets))]
+        if market_doubles:
+            market_doubles.sort(key=lambda x: x.get('ev_pct', 0), reverse=True)
+            second = market_doubles[0]
     
     # 额外信息
     goals = result.get('goals', {})

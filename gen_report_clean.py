@@ -183,7 +183,7 @@ def conf_to_color(conf_str):
     return C_TEXT_LIGHT
 
 
-# ============ 汇总表 (推荐+赔率合并一格) ============
+# ============ 汇总表 (推荐+赔率合并一格, Ultra 9.0: 加EV/价值标签) ============
 def build_summary_table(matches, styles):
     """汇总表: 推荐选项和赔率放在同一个格子里, 更直观"""
     data = [[
@@ -204,35 +204,35 @@ def build_summary_table(matches, styles):
         vs_text = f'{normalize_text(m["home"])}<br/>vs<br/>{normalize_text(m["away"])}'
         vs_style = ParagraphStyle('vs', parent=styles['td'], fontSize=7.5, leading=10)
 
-        # 主推荐: 选项 + 赔率 + 概率 + 星 合并一格
+        # 主推荐: 选项 + 赔率 + 概率 + EV + 星 合并一格
         if first:
             first_conf = normalize_text(first.get('conf', ''))
             first_conf_color = conf_to_color(first_conf)
+            first_ev = first.get('ev_pct', 0)
+            first_ev_color = '#16a34a' if first_ev > 0 else '#dc2626'
+            first_ev_tag = '价值' if first_ev > 0 else '负EV'
             first_html = (
                 f'<font name="CJK-Bold" color="#16a34a" size="8">{normalize_text(first["name"])}</font><br/>'
                 f'<font name="CJK-Bold" color="#ea580c" size="11">@{first["odds"]}</font> '
-                f'<font color="#475569" size="7">P{first["prob"]:.0f}%</font><br/>'
-                f'<font color="{first_conf_color.hexval()[2:]}" size="7">{first_conf}</font>'
-            )
-            # hexval returns 0xRRGGBB, need #RRGGBB
-            first_html = (
-                f'<font name="CJK-Bold" color="#16a34a" size="8">{normalize_text(first["name"])}</font><br/>'
-                f'<font name="CJK-Bold" color="#ea580c" size="11">@{first["odds"]}</font> '
-                f'<font color="#475569" size="7">P{first["prob"]:.0f}%</font><br/>'
+                f'<font color="#475569" size="7">P{first["prob"]:.0f}%</font> '
+                f'<font color="{first_ev_color}" size="7">EV{first_ev:+.0f}%</font><br/>'
                 f'<font color="#{first_conf_color.hexval()[2:]}" size="7">{first_conf}</font>'
             )
             first_cell = Paragraph(first_html, styles['td'])
         else:
             first_cell = Paragraph('-', styles['td'])
 
-        # 次推荐: 同样合并, 也加星
+        # 次推荐: 同样合并, 也加EV
         if second:
             second_conf = normalize_text(second.get('conf', ''))
             second_conf_color = conf_to_color(second_conf)
+            second_ev = second.get('ev_pct', 0)
+            second_ev_color = '#16a34a' if second_ev > 0 else '#475569'
             second_html = (
                 f'<font name="CJK-Bold" color="#2563eb" size="8">{normalize_text(second["name"])}</font><br/>'
                 f'<font name="CJK-Bold" color="#ea580c" size="11">@{second["odds"]}</font> '
-                f'<font color="#475569" size="7">P{second["prob"]:.0f}%</font><br/>'
+                f'<font color="#475569" size="7">P{second["prob"]:.0f}%</font> '
+                f'<font color="{second_ev_color}" size="7">EV{second_ev:+.0f}%</font><br/>'
                 f'<font color="#{second_conf_color.hexval()[2:]}" size="7">{second_conf}</font>'
             )
             second_cell = Paragraph(second_html, styles['td'])
@@ -246,8 +246,8 @@ def build_summary_table(matches, styles):
             second_cell,
         ])
 
-    # A6宽度 ~95mm: 场次18mm, 对阵24mm, 主推26mm, 次推27mm
-    col_widths = [16*mm, 22*mm, 28*mm, 29*mm]
+    # A6宽度 ~95mm: 场次18mm, 对阵24mm, 主推28mm, 次推29mm (EV挤一挤)
+    col_widths = [16*mm, 22*mm, 29*mm, 28*mm]
     table = LongTable(data, colWidths=col_widths, repeatRows=1)
 
     table.setStyle([
@@ -299,23 +299,33 @@ def build_match_card(m, styles):
         conf = normalize_text(rec.get('conf', ''))
         prob = rec.get('prob', 0)
         ev = rec.get('ev_pct', 0)
+        implied = rec.get('implied_prob', 0)
 
-        ev_flag = ''
-        ev_color = C_TEXT_LIGHT
-        if ev is not None and ev > 0:
-            ev_flag = ' [价值]'
-            ev_color = C_GREEN
-
-        ev_style = ParagraphStyle('ev', parent=styles['rec_detail'], textColor=ev_color)
+        # Ultra 9.0: EV为正显示绿色价值标签, 为负显示红色
+        if ev > 0:
+            ev_label = '✓价值'
+            ev_color = '#16a34a'
+            ev_bg = '#d1fae5'
+        else:
+            ev_label = f'EV{ev:+.0f}%'
+            ev_color = '#dc2626'
+            ev_bg = '#fee2e2'
 
         conf_color = conf_to_color(conf)
         conf_html = f'<font color="#{conf_color.hexval()[2:]}">{conf}</font>'
+
+        # Edge: 模型概率 - 隐含概率
+        edge = prob - implied
+        edge_color = '#16a34a' if edge > 0 else '#475569'
 
         inner = [
             [Paragraph(label, styles['rec_label'])],
             [Paragraph(name, styles['rec_name'])],
             [Paragraph(f'@{odds}', styles['rec_odds'])],
-            [Paragraph(f'P{prob:.0f}%  {conf_html}{ev_flag}', ev_style)],
+            [Paragraph(f'P{prob:.0f}%  {conf_html}', styles['rec_detail'])],
+            [Paragraph(f'<font color="{ev_color}">{ev_label}</font> | '
+                       f'<font color="{edge_color}">优势{edge:+.0f}%</font>',
+                       styles['rec_detail'])],
         ]
         inner_table = Table(inner, colWidths=[CW * 0.48])
         inner_table.setStyle([
