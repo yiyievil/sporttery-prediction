@@ -592,11 +592,11 @@ def main():
         all_opts = ' | '.join('{}@{}({})'.format(o['name'], o['odds'], o['score']) for o in m['all_options'])
         print(f"  全部选项: {all_opts}")
     
-    # Ultra 8.2: 不再生成HTML, 直接调用 gen_report_pdf 生成手机优化PDF
-    print(f"\n→ 生成PDF报告 (手机阅读优化版)...")
+    # Ultra 8.2: 不再生成HTML, 直接调用 gen_pred_pdf 生成手机优化PDF (详细卡片格式)
+    print(f"\n→ 生成PDF报告 (详细卡片格式)...")
     import subprocess
     result = subprocess.run(
-        [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gen_report_pdf.py'),
+        [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gen_pred_pdf.py'),
          PRED_FILE, OUTPUT_PDF],
         capture_output=True, text=True, timeout=60
     )

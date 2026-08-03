@@ -36,9 +36,11 @@ from v215_e2e import stars_to_score
 # ============================================================
 # Phase 0: 用户输入
 # ============================================================
-# 方式1: 直接指定matchNumStr (如 "周二205,周二206,周二207")
-# 方式2: 日期+编号 (如 "2026-07-22 205,206,207")
-# 支持命令行参数: python3 v215_verify.py "周二205,周二206,周二207"
+# 方式1: 直接指定matchNumStr (如 "周六001-003" 或 "周六001,周六002,周六003")
+# 方式2: 日期+编号 (如 "2026-07-22 001,002,003")
+# 方式3: 6位日期码+编号 (如 "260731001-003" 或 "260731001,002,003")
+# 支持范围展开: "周六001-003" 自动展开为 "周六001,周六002,周六003"
+# 统一格式: 预测用 "260801周六001-003", 验证用 "周六001-003"
 INPUT = "周二205,周二206,周二207"
 
 # 命令行参数覆盖
@@ -77,49 +79,152 @@ ZQBFZB_HEADERS = {
 # Ultra-Opt: 通用路径 — 优先 SPORTTERY_WORKSPACE 环境变量, 缺省脚本所在目录
 _WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__))
 PREDICTIONS_DIR = os.path.join(_WORKSPACE, 'predictions')
-REPORT_DIR = _WORKSPACE
+REPORT_DIR = '/workspace'  # PDF 输出到 /workspace/ 根目录, 便于手机端直接访问
 DB_PATH = os.path.join(PREDICTIONS_DIR, 'regression.db')
+
+def find_match_keys_by_date(target_date, target_nums):
+    """从预测文件中按比赛日期查找match_key
+
+    体彩的match_key(如'周四001')基于开盘日星期, 不基于比赛实际日期。
+    从预测文件按比赛实际日期反查是最可靠的方式, 不受星期前缀偏移影响。
+
+    Args:
+        target_date: 比赛日期 '2026-07-31'
+        target_nums: 比赛编号列表 ['001', '002', '003']
+    Returns:
+        [match_key, ...] 按用户输入顺序, 或 None
+    """
+    if not os.path.exists(PREDICTIONS_DIR):
+        return None
+    pred_files = sorted([f for f in os.listdir(PREDICTIONS_DIR)
+                         if f.startswith('pred_') and f.endswith('.json')],
+                        reverse=True)
+    for pf in pred_files:
+        filepath = os.path.join(PREDICTIONS_DIR, pf)
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except:
+            continue
+        meta = data.get('meta', {})
+        matched = {}
+        for key, m in meta.items():
+            if m.get('match_date', '') != target_date:
+                continue
+            num_m = re.search(r'(\d{3})$', key)
+            if num_m and num_m.group(1) in target_nums:
+                matched[num_m.group(1)] = key
+        if matched:
+            return [matched[n] for n in target_nums if n in matched]
+    return None
+
+
+def expand_range(input_str):
+    """展开编号范围表示法 (001-003 → 001,002,003)
+    支持格式: 周X001-003, 260731001-003, 001-003
+    """
+    # 周X001-003 → 周四001,周四002,周四003
+    m = re.match(r'(周[一二三四五六日])(\d{3})-(\d{3})', input_str)
+    if m:
+        prefix = m.group(1)
+        start, end = int(m.group(2)), int(m.group(3))
+        return ','.join(f"{prefix}{i:03d}" for i in range(start, end + 1))
+    # 6位日期码+范围 260731001-003
+    m = re.match(r'(\d{6})(\d{3})-(\d{3})', input_str)
+    if m:
+        dc = m.group(1)
+        start, end = int(m.group(2)), int(m.group(3))
+        return ','.join(f"{dc}{i:03d}" for i in range(start, end + 1))
+    return input_str
+
 
 def parse_input(input_str):
     """解析用户输入, 返回 (match_keys, date_range)
     支持格式:
-      '周二205,周二206,周二207'  → match_keys, date_range
-      '2026-07-22 205,206,207'  → match_keys(自动构造周X编号), date_range
+      '周二205,周二206,周二207'      → match_keys(周X编号), date_range
+      '2026-07-22 205,206,207'      → match_keys(自动构造周X), date_range
+      '260731001-003'               → 从预测文件反查match_key, date_range
+      '260731001,260731002,260731003' → 同上
+      '260731 001,002,003'          → 同上
 
     关键: matchNumStr(如"周三201")基于体彩开盘日期(businessDate)的星期,
-    不是比赛实际日期(matchDate)。比赛可能在开盘日前一天或当天进行。
-    因此查询范围需覆盖开盘日±3天, 确保sporttery API能返回所有相关比赛。
+    不是比赛实际日期(matchDate)。因此260731(周五)的match_key实际可能是周四001。
+    本函数优先从预测文件按比赛日期反查, 确保key正确。
     """
     input_str = input_str.strip()
     weekdays_map = {'一': 0, '二': 1, '三': 2, '四': 3, '五': 4, '六': 5, '日': 6}
     weekday_cn = ['一', '二', '三', '四', '五', '六', '日']
+
+    # 先展开范围表示法
+    input_str = expand_range(input_str)
 
     # 格式2: 日期+编号 (日期=体彩开盘日)
     date_match = re.match(r'(\d{4}-\d{2}-\d{2})\s+(.+)', input_str)
     if date_match:
         business_date_str = date_match.group(1)
         nums = re.findall(r'\d{3}', date_match.group(2))
-        # 计算开盘日的星期几, 构造matchNumStr
         bd = datetime.strptime(business_date_str, '%Y-%m-%d')
         wd_cn = weekday_cn[bd.weekday()]
         match_keys = [f"周{wd_cn}{num}" for num in nums]
-        # 查询范围: 开盘日前3天到后3天 (确保覆盖所有比赛)
         date_range = ((bd - timedelta(days=3)).strftime('%Y-%m-%d'),
                       (bd + timedelta(days=3)).strftime('%Y-%m-%d'))
         return match_keys, date_range
 
+    # 格式3: 6位日期码+编号 (如 '260731001-003' 经expand_range展开后)
+    # 支持: '260731001,002,003' 或 '260731001,260731002,260731003'
+    yymmdd_match = re.match(r'(\d{6})(\d{3}(?:[,，]\s*\d{3})*)$', input_str)
+    # 也支持 '260731 001,002,003' (空格分隔)
+    if not yymmdd_match:
+        yymmdd_match = re.match(r'(\d{6})\s+(\d{3}(?:[,，]\s*\d{3})*)$', input_str)
+    # 支持 '260731001,260731002,260731003' (重复日期码)
+    if not yymmdd_match:
+        parts = [p.strip() for p in re.split(r'[,，]', input_str) if p.strip()]
+        if len(parts) >= 2 and all(re.match(r'^\d{6}\d{3}$', p) for p in parts):
+            yymmdd_match = [True]
+            date_code = parts[0][:6]
+            nums = [p[6:9] for p in parts]
+    else:
+        date_code = yymmdd_match.group(1)
+        nums = re.findall(r'\d{3}', yymmdd_match.group(2))
+
+    if yymmdd_match:
+        # 转成完整日期
+        y, m, d = int(date_code[:2]), int(date_code[2:4]), int(date_code[4:6])
+        full_date = f"20{y:02d}-{m:02d}-{d:02d}"
+
+        # 从预测文件反查match_key (优先, 不受星期前缀偏移影响)
+        pred_keys = find_match_keys_by_date(full_date, nums)
+        if pred_keys:
+            print(f"  [日期反查] 从预测文件匹配到 {pred_keys}")
+            try:
+                bd = datetime.strptime(full_date, '%Y-%m-%d')
+                date_range = ((bd - timedelta(days=3)).strftime('%Y-%m-%d'),
+                              (bd + timedelta(days=3)).strftime('%Y-%m-%d'))
+            except:
+                date_range = None
+            return pred_keys, date_range
+
+        # 降级: 按实际日期推算星期
+        try:
+            dt = datetime.strptime(full_date, '%Y-%m-%d')
+            wd_cn = weekday_cn[dt.weekday()]
+            keys = [f"周{wd_cn}{n}" for n in nums]
+            print(f"  [日期推算] 无预测文件, 按星期{wd_cn}构造: {keys}")
+            date_range = ((dt - timedelta(days=3)).strftime('%Y-%m-%d'),
+                          (dt + timedelta(days=3)).strftime('%Y-%m-%d'))
+            return keys, date_range
+        except:
+            return [f"{date_code}{n}" for n in nums], None
+
     # 格式1: 周X编号 (直接指定matchNumStr)
-    keys = [k.strip() for k in input_str.split(',') if k.strip()]
-    # 从key中推算开盘日期
+    keys = [k.strip() for k in re.split(r'[,，]', input_str) if k.strip()]
     today = datetime.now()
     for k in keys:
         m = re.match(r'周([一二三四五六日])(\d{3})', k)
         if m:
             wd = weekdays_map[m.group(1)]
-            # 找到本周该weekday的日期(开盘日)
             diff = (today.weekday() - wd) % 7
             business_date = today - timedelta(days=diff)
-            # 查询范围: 开盘日前3天到后3天
             date_range = ((business_date - timedelta(days=3)).strftime('%Y-%m-%d'),
                           (business_date + timedelta(days=3)).strftime('%Y-%m-%d'))
             return keys, date_range
@@ -2023,7 +2128,7 @@ def generate_html_report(verified_matches, stats, date_str, brier_result=None, c
 </div>
 """
 
-    html = f"""<!DOCTYPE html>
+    html_output = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -2150,7 +2255,7 @@ def generate_html_report(verified_matches, stats, date_str, brier_result=None, c
     </table>
   </div>""")
 
-    html += f"""
+    html_output += f"""
 <div class="section">
   <h2><span class="num">02</span> 逐场详细分析</h2>
   {''.join(detail_cards)}
@@ -2192,7 +2297,7 @@ def generate_html_report(verified_matches, stats, date_str, brier_result=None, c
 </div>
 </body>
 </html>"""
-    return html
+    return html_output
 
 
 def generate_lessons(verified_matches, stats):
@@ -3224,9 +3329,12 @@ def settle_sim_bets(verified_matches):
     conn.execute("PRAGMA busy_timeout=5000")
     c = conn.cursor()
 
-    # 获取所有待结算投注
-    c.execute("SELECT bet_id, bet_type, stake, multiplier, total_odds, potential_payout, matches_json FROM sim_bets WHERE status='pending'")
-    pending_bets = c.fetchall()
+    # 获取所有待结算投注 (表可能不存在)
+    try:
+        c.execute("SELECT bet_id, bet_type, stake, multiplier, total_odds, potential_payout, matches_json FROM sim_bets WHERE status='pending'")
+        pending_bets = c.fetchall()
+    except sqlite3.OperationalError:
+        pending_bets = []
 
     if not pending_bets:
         print("  无待结算的模拟投注")

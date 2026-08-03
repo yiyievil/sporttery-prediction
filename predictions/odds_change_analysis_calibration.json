@@ -56,5 +56,31 @@
       "2~5pp": {"n": 579, "home_rate": 0.447, "draw_rate": 0.313, "away_rate": 0.240},
       ">5pp": {"n": 155, "home_rate": 0.484, "draw_rate": 0.329, "away_rate": 0.187}
     }
+  },
+  "odds_movement": {
+    "description": "体彩初赔→终赔变动方向与命中率关系 (4222场分析)",
+    "version": "Ultra 11.0",
+    "threshold": 0.05,
+    "baseline_home": 0.429,
+    "baseline_draw": 0.256,
+    "baseline_away": 0.315,
+    "h": {
+      "description": "主胜: 终赔 vs 初赔变动方向",
+      "上升": {"n": 1586, "hit_rate": 0.317, "lr": 0.739},
+      "下降": {"n": 1207, "hit_rate": 0.454, "lr": 1.058},
+      "不变": {"n": 1429, "hit_rate": 0.534, "lr": 1.245}
+    },
+    "d": {
+      "description": "平局: 终赔 vs 初赔变动方向",
+      "上升": {"n": 1585, "hit_rate": 0.233, "lr": 0.910},
+      "下降": {"n": 1340, "hit_rate": 0.275, "lr": 1.074},
+      "不变": {"n": 1297, "hit_rate": 0.260, "lr": 1.016}
+    },
+    "a": {
+      "description": "客胜: 终赔 vs 初赔变动方向",
+      "上升": {"n": 1706, "hit_rate": 0.249, "lr": 0.790},
+      "下降": {"n": 1594, "hit_rate": 0.349, "lr": 1.108},
+      "不变": {"n": 922, "hit_rate": 0.383, "lr": 1.216}
+    }
   }
 }

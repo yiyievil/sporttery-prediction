@@ -40,6 +40,15 @@ else:
 # 字体注册 (复用 gen_report_pdf 逻辑)
 # ============================================================
 def register_cjk_font():
+    # 霞鹜文楷 (LxgwWenKai) — 与预测PDF保持一致
+    font_reg = '/usr/share/fonts/truetype/LXGWWenKai-Regular.ttf'
+    font_bold = '/usr/share/fonts/truetype/LXGWWenKai-Medium.ttf'
+    if os.path.exists(font_reg) and os.path.exists(font_bold):
+        pdfmetrics.registerFont(TTFont('CJK', font_reg))
+        pdfmetrics.registerFont(TTFont('CJK-Bold', font_bold))
+        return 'CJK'
+
+    # 回退: 系统字体查找
     from pathlib import Path
     candidates = []
     env_dir = os.environ.get('SPORTTERY_FONT_DIR')
@@ -378,7 +387,7 @@ def build_stat_grid(stats, styles):
             parts = value.split('/')
             if len(parts) == 2:
                 hit, total = int(parts[0]), int(parts[1])
-                if hit / total >= 0.5:
+                if total > 0 and hit / total >= 0.5:
                     bg_color = BG_HIT
                     text_color = ACCENT_GREEN
                 else:

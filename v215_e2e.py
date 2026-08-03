@@ -168,16 +168,48 @@ def apply_cli_mode():
 
 
 def apply_cli_match_input():
-    """命令行编号日期输入 → 覆盖 TARGET_WEEKDAY / MATCH_NUMBERS (无参数时用顶部配置)"""
+    """命令行编号日期输入 → 覆盖 TARGET_WEEKDAY / MATCH_NUMBERS (无参数时用顶部配置)
+    
+    支持格式:
+      260728001,260728002          → 完整编号
+      260728 001,002               → 编号日期+场次
+      260801周六001-003             → 编号日期+周几+范围 (Ultra 11.1)
+      260801周六001,002,003        → 编号日期+周几+场次 (Ultra 11.1)
+      260801 周六 001-016           → 编号日期+周几+范围 (带空格, Ultra 11.2)
+    """
     global TARGET_WEEKDAY, MATCH_NUMBERS
     args = [a for a in sys.argv[1:] if a.strip()]
     if not args:
         return
     text = ' '.join(args).replace('，', ',').replace('、', ',').strip()
+
+    # 先尝试去除空格匹配: 260801 周六 001-016 → 260801周六001-016
+    text_no_space = text.replace(' ', '')
+
+    # 形式3 (Ultra 11.1): 编号日期+周几+范围 260801周六001-003
+    m3 = re.match(r'^(\d{6})(周[一二三四五六日])(\d{3})-(\d{3})$', text_no_space)
+    if m3:
+        d, wd = parse_code_date(m3.group(1))
+        if wd and wd == m3.group(2):
+            start, end = int(m3.group(3)), int(m3.group(4))
+            TARGET_WEEKDAY = wd
+            MATCH_NUMBERS = [f"{i:03d}" for i in range(start, end + 1)]
+            print(f"  [输入] {m3.group(1)}{wd} {MATCH_NUMBERS[0]}-{MATCH_NUMBERS[-1]} → {wd}, 场次 {MATCH_NUMBERS}")
+            return
+    m3b = re.match(r'^(\d{6})(周[一二三四五六日])([0-9,]+)$', text_no_space)
+    if m3b:
+        d, wd = parse_code_date(m3b.group(1))
+        if wd and wd == m3b.group(2):
+            nums = sorted(set([x.strip()[-3:] for x in m3b.group(3).split(',') if x.strip()]))
+            TARGET_WEEKDAY = wd
+            MATCH_NUMBERS = nums
+            print(f"  [输入] {m3b.group(1)}{wd} {nums} → {wd}, 场次 {MATCH_NUMBERS}")
+            return
+
     # 形式1: 完整编号 260728001,260728002 (同日多场)
-    full = re.findall(r'(\d{6})(\d{3})', text)
+    full = re.findall(r'(\d{6})(\d{3})', text_no_space)
     if full and len(full) >= 1 and len({f[0] for f in full}) == 1 and \
-       ''.join(f[0] + f[1] for f in full) == text.replace(',', '').replace(' ', ''):
+       ''.join(f[0] + f[1] for f in full) == text_no_space.replace(',', ''):
         d, wd = parse_code_date(full[0][0])
         if wd:
             TARGET_WEEKDAY = wd
@@ -195,7 +227,7 @@ def apply_cli_match_input():
             print(f"  [输入] 编号日期 {m.group(1)} → {wd}, 场次 {MATCH_NUMBERS}")
             return
     print(f"  [输入] ⚠️ 无法解析 '{text}', 回退文件顶部配置 "
-          f"(正确格式: 260728 001,002 或 260728001,260728002)")
+          f"(正确格式: 260728 001,002 或 260728001,260728002 或 260801周六001-003)")
 
 
 def inject_memory_context():
@@ -426,6 +458,7 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
                     'HAD': had,
                     'HHAD': hhad,
                     'had_in_list': had_in_list,  # Ultra 7.10: HAD是否在体彩开盘列表
+                    'data_source': 'sporttery',  # 核心赔率来源
                 }
             except Exception as _e:
                 print(f"  [错误] 解析场次 {s.get('matchNum', '?')} 失败, 跳过: {_e}")
@@ -686,19 +719,29 @@ def fetch_sporttery_fixed_bonus(match_id):
 
         out = {}
 
-        # HAD 胜平负终赔 (从hadList提取最新一条)
+        # HAD 胜平负终赔+初赔 (从hadList提取)
+        # 初赔=第一条(seq=0), 终赔=最新一条(最后)
         had_list = v.get('hadList') or []
         if had_list:
-            had_latest = had_list[-1]  # 最后一条=最新
+            # 终赔
+            had_latest = had_list[-1]
             had_h = float(had_latest.get('h', 0)) if had_latest.get('h') else 0
             had_d = float(had_latest.get('d', 0)) if had_latest.get('d') else 0
             had_a = float(had_latest.get('a', 0)) if had_latest.get('a') else 0
             if had_h > 0:
                 out['had'] = {'h': had_h, 'd': had_d, 'a': had_a}
+            # 初赔 (第一条)
+            had_first = had_list[0]
+            had_init_h = float(had_first.get('h', 0)) if had_first.get('h') else 0
+            had_init_d = float(had_first.get('d', 0)) if had_first.get('d') else 0
+            had_init_a = float(had_first.get('a', 0)) if had_first.get('a') else 0
+            if had_init_h > 0:
+                out['had_init'] = {'h': had_init_h, 'd': had_init_d, 'a': had_init_a}
 
-        # HHAD 让球胜平负终赔 (从hhadList提取最新一条)
+        # HHAD 让球胜平负终赔+初赔 (从hhadList提取)
         hhad_list = v.get('hhadList') or []
         if hhad_list:
+            # 终赔
             hhad_latest = hhad_list[-1]
             hhad_h = float(hhad_latest.get('h', 0)) if hhad_latest.get('h') else 0
             hhad_d = float(hhad_latest.get('d', 0)) if hhad_latest.get('d') else 0
@@ -706,6 +749,13 @@ def fetch_sporttery_fixed_bonus(match_id):
             gl = float(hhad_latest.get('goalLine', 0) or 0)
             if hhad_h > 0:
                 out['hhad'] = {'h': hhad_h, 'd': hhad_d, 'a': hhad_a, 'goalLine': gl}
+            # 初赔 (第一条)
+            hhad_first = hhad_list[0]
+            hhad_init_h = float(hhad_first.get('h', 0)) if hhad_first.get('h') else 0
+            hhad_init_d = float(hhad_first.get('d', 0)) if hhad_first.get('d') else 0
+            hhad_init_a = float(hhad_first.get('a', 0)) if hhad_first.get('a') else 0
+            if hhad_init_h > 0:
+                out['hhad_init'] = {'h': hhad_init_h, 'd': hhad_init_d, 'a': hhad_init_a, 'goalLine': gl}
 
         # TTG 总进球: s0..s7 (7=7+球), f后缀为停售标记
         ttg_raw = (v.get('ttgList') or [{}])[0]
@@ -2550,12 +2600,12 @@ def calibrate_probabilities(probs, source='poisson', lam_total=None, lam_h=None,
 
     if source == 'poisson':
         # Poisson源: 标准校准
-        shift = min(0.50, draw_gap * 2.5)
+        shift = min(0.65, draw_gap * 2.5)
     elif source == 'market':
         # Ultra 6.2: 市场源赔率本身压平局, 需更强校准
-        shift = min(0.50, draw_gap * 3.0)
+        shift = min(0.65, draw_gap * 3.0)
     else:
-        shift = min(0.40, draw_gap * 2.5)
+        shift = min(0.55, draw_gap * 2.5)
 
     # Ultra 6.3: 两队λ接近时额外平局加成
     # 势均力敌的比赛平局概率最高, 但模型最容易低估
@@ -2577,7 +2627,7 @@ def calibrate_probabilities(probs, source='poisson', lam_total=None, lam_h=None,
     p_l_new = _sigmoid(logit_l)
 
     # Ultra 6.3: 最低平局概率保底 (防止极端情况平局概率过低)
-    p_d_new = max(0.15, p_d_new)
+    p_d_new = max(0.18, p_d_new)
 
     p_w_new = max(0.01, p_w_new)
     p_l_new = max(0.01, p_l_new)
@@ -3046,9 +3096,13 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
             p_max = max(o['prob'] for o in single_options)
             for o in single_options:
                 o['hybrid_in_band'] = o['prob'] >= p_max - HYBRID_PROB_TOLERANCE
-                # 展示用score: 误差带内按EV排, 带外按prob降序排在带内之后
-                o['hybrid_score'] = round((1 if o['hybrid_in_band'] else 0) * 1000
-                                          + (o['ev_pct'] if o['hybrid_in_band'] else o['prob'] - 100), 3)
+                # 平局偏好: 当平局在误差带内且EV>=-10%时, 优先平局
+                if o['option'] == '平' and o['hybrid_in_band'] and o['ev_pct'] >= -10:
+                    o['hybrid_score'] = round(1000 + 100 + o['ev_pct'], 3)
+                else:
+                    # 展示用score: 误差带内按EV排, 带外按prob降序排在带内之后
+                    o['hybrid_score'] = round((1 if o['hybrid_in_band'] else 0) * 1000
+                                              + (o['ev_pct'] if o['hybrid_in_band'] else o['prob'] - 100), 3)
             all_ranked = sorted(single_options, key=lambda x: x['hybrid_score'], reverse=True)
             primary_bet = all_ranked[0]
         else:
@@ -4261,13 +4315,14 @@ _ODDS_CHANGE_ANALYSIS_CALIB_PATH = os.path.join(
 )
 
 def _load_odds_change_analysis_calibration():
-    """加载赔率变动特征分析校准因子 (Ultra 10.6)
+    """加载赔率变动特征分析校准因子 (Ultra 10.6 → 11.0)
     
     包含:
     - draw_change: 平局赔率变动信号 (平赔下降→主胜44.1%)
     - conflict_signal: HAD/HHAD/亚盘矛盾信号 (三方向一致55.9%)
     - had_hhad_linkage: HAD-HHAD联动信号 (同时上升→主胜45.9%)
     - had_change_detail: HAD赔率变动幅度分层信号
+    - odds_movement: 体彩初赔→终赔变动方向校准 (Ultra 11.0)
     """
     if not os.path.exists(_ODDS_CHANGE_ANALYSIS_CALIB_PATH):
         print('  [赔率变动分析] 校准文件不存在, 跳过')
@@ -5290,13 +5345,17 @@ def post_fusion_hhad_draw_calibration(probs, had, hhad, handicap, league):
 
 
 def apply_odds_change_analysis_calibration(probs, had, hhad, league, odds_change, 
-                                            had_hhad_change=None, sp_had_probs=None, sp_hhad_probs=None):
-    """体彩赔率变动特征 + 玩法矛盾信号校准 (Ultra 10.6)
+                                            had_hhad_change=None, sp_had_probs=None, sp_hhad_probs=None,
+                                            had_init=None, hhad_init=None):
+    """体彩赔率变动特征 + 玩法矛盾信号校准 (Ultra 10.6 → 11.0)
     
     基于3274场数据分析的3个全新校准信号:
     1. draw_change: 平局赔率变动 → 平赔下降时看好分出胜负
     2. conflict_signal: HAD/HHAD矛盾 → HAD自信度更高时以HAD为准
     3. had_hhad_linkage: 联动信号 → 同时上升时信号更强
+    
+    Ultra 11.0: 新增第4个信号 — 体彩初赔→终赔变动方向校准
+    基于4222场分析: 终赔相对初赔方向与命中率显著相关
     
     参数:
       probs: [pw, pd, pl] 当前概率
@@ -5307,6 +5366,8 @@ def apply_odds_change_analysis_calibration(probs, had, hhad, league, odds_change
       had_hhad_change: dict含 'had_h'/'hhad_h' 方向 或 None (用于联动信号)
       sp_had_probs: HAD Shin概率 [pw, pd, pl] 或 None (用于矛盾信号)
       sp_hhad_probs: HHAD Shin概率 [pw, pd, pl] 或 None (用于矛盾信号)
+      had_init: 体彩HAD初赔dict {'h':, 'd':, 'a':} 或 None (用于变动方向校准)
+      hhad_init: 体彩HHAD初赔dict {'h':, 'd':, 'a':} 或 None
     """
     if not _ODDS_CHANGE_ANALYSIS_CALIB:
         return probs, []
@@ -5314,6 +5375,74 @@ def apply_odds_change_analysis_calibration(probs, had, hhad, league, odds_change
     pw, pd, pl = probs
     notes = []
     calib = _ODDS_CHANGE_ANALYSIS_CALIB
+    
+    # ===== 0. Ultra 11.0: 体彩初赔→终赔变动方向校准 =====
+    # 基于4222场历史分析: 终赔相对初赔的变动方向与命中率显著相关
+    # 主胜上升→31.7%, 下降→45.4%, 不变→53.4%
+    # 平局上升→23.3%, 下降→27.5%, 不变→26.0%
+    # 客胜上升→24.9%, 下降→34.9%, 不变→38.3%
+    om_calib = calib.get('odds_movement')
+    if om_calib and had_init and had:
+        threshold = om_calib.get('threshold', 0.05)
+        om_notes = []
+        
+        # 判断每个选项的变动方向
+        def _get_dir(init_val, final_val, thresh):
+            if init_val is None or final_val is None or init_val <= 0 or final_val <= 0:
+                return None
+            diff = final_val - init_val
+            if diff > thresh:
+                return '上升'
+            elif diff < -thresh:
+                return '下降'
+            else:
+                return '不变'
+        
+        h_dir = _get_dir(had_init.get('h'), had.get('h'), threshold)
+        d_dir = _get_dir(had_init.get('d'), had.get('d'), threshold)
+        a_dir = _get_dir(had_init.get('a'), had.get('a'), threshold)
+        
+        # 获取每个选项的LR (likelihood ratio)
+        h_lr = None
+        d_lr = None
+        a_lr = None
+        if h_dir and h_dir in om_calib.get('h', {}):
+            h_lr = om_calib['h'][h_dir]['lr']
+        if d_dir and d_dir in om_calib.get('d', {}):
+            d_lr = om_calib['d'][d_dir]['lr']
+        if a_dir and a_dir in om_calib.get('a', {}):
+            a_lr = om_calib['a'][a_dir]['lr']
+        
+        # 用LR调整概率 (保守系数15%)
+        conservative = 0.15
+        if h_lr and d_lr and a_lr:
+            # 计算调整量: 相对于1.0的偏差
+            h_adj = (h_lr - 1.0) * conservative
+            d_adj = (d_lr - 1.0) * conservative
+            a_adj = (a_lr - 1.0) * conservative
+            
+            # 限制最大调整幅度 ±3pp
+            h_adj = max(-0.03, min(0.03, h_adj))
+            d_adj = max(-0.03, min(0.03, d_adj))
+            a_adj = max(-0.03, min(0.03, a_adj))
+            
+            pw *= (1.0 + h_adj)
+            pd *= (1.0 + d_adj)
+            pl *= (1.0 + a_adj)
+            
+            # 记录变动方向
+            dir_strs = []
+            if h_dir: dir_strs.append(f'主{h_dir}')
+            if d_dir: dir_strs.append(f'平{d_dir}')
+            if a_dir: dir_strs.append(f'客{a_dir}')
+            adj_strs = []
+            if abs(h_adj) >= 0.005: adj_strs.append(f'主{h_adj*100:+.1f}pp')
+            if abs(d_adj) >= 0.005: adj_strs.append(f'平{d_adj*100:+.1f}pp')
+            if abs(a_adj) >= 0.005: adj_strs.append(f'客{a_adj*100:+.1f}pp')
+            if adj_strs:
+                om_notes.append(f'初终赔变动校准: {",".join(dir_strs)} → {",".join(adj_strs)}')
+        
+        notes.extend(om_notes)
     
     # ===== 1. 平局赔率变动校准 (Part 5) =====
     # 平赔下降→主胜44.1%, 平赔上升→平局38.9%
@@ -6225,14 +6354,16 @@ def predict_match(match_num, data):
     _adv_probs, _adv_notes = apply_advanced_calibration([p1_w, p1_d, p1_l], sp, had, hhad)
     p1_w, p1_d, p1_l = _adv_probs
 
-    # Ultra 10.6: 赔率变动特征分析校准 — 平局赔率变动 + HAD-HHAD联动
+    # Ultra 10.6 → 11.0: 赔率变动特征分析校准 — 平局赔率变动 + HAD-HHAD联动 + 初终赔变动方向
     # 注: 平赔变动信号需odds_change_history数据, 预测时无逐场数据则跳过
     _oca_notes = []
     if _ODDS_CHANGE_ANALYSIS_CALIB and had and 'h' in had:
-        # 预测时无法获取逐场draw_change信号, 跳过变动校准, 仅保留框架
+        # Ultra 11.0: 获取体彩初赔数据 (用于初赔→终赔变动方向校准)
+        _had_init = sp.get('sporttery_bonus', {}).get('had_init')
+        _hhad_init = sp.get('sporttery_bonus', {}).get('hhad_init')
         _oca_probs, _oca_notes, _ = apply_odds_change_analysis_calibration(
             [p1_w, p1_d, p1_l], had, hhad, _league_for_cal, 
-            odds_change=None, had_hhad_change=None)
+            odds_change=None, had_hhad_change=None, had_init=_had_init, hhad_init=_hhad_init)
         p1_w, p1_d, p1_l = _oca_probs
     if _oca_notes:
         _adv_notes.extend(_oca_notes)
@@ -6415,16 +6546,20 @@ def predict_match(match_num, data):
     hhad_final_probs = post_fusion_hhad_draw_calibration(
         hhad_final_probs, had, hhad, handicap, _league_for_cal)
 
-    # Ultra 10.6: HAD/HHAD矛盾信号 → HHAD可靠性调整
+    # Ultra 10.6 → 11.0: HAD/HHAD矛盾信号 → HHAD可靠性调整 + 初终赔变动方向
     # 当HAD自信度>5pp高于HHAD时, HAD准确率56.4% vs HHAD仅33.5%
     # 此时降低HHAD置信度, 让HAD预测主导
+    _oca_hhad_notes = []
     if _ODDS_CHANGE_ANALYSIS_CALIB and hhad and 'h' in hhad and had and 'h' in had:
         try:
             _sp_had_shin = shin_method([had['h'], had['d'], had['a']])
             _sp_hhad_shin = shin_method([hhad['h'], hhad['d'], hhad['a']])
+            _had_init = sp.get('sporttery_bonus', {}).get('had_init')
+            _hhad_init = sp.get('sporttery_bonus', {}).get('hhad_init')
             _oca_hhad, _oca_hhad_notes, _hhad_rel = apply_odds_change_analysis_calibration(
                 hhad_final_probs, had, hhad, _league_for_cal,
-                odds_change=None, sp_had_probs=_sp_had_shin, sp_hhad_probs=_sp_hhad_shin)
+                odds_change=None, sp_had_probs=_sp_had_shin, sp_hhad_probs=_sp_hhad_shin,
+                had_init=_had_init, hhad_init=_hhad_init)
             if _hhad_rel < 0.5:
                 # HHAD不可靠, 降低其置信度: 向均匀分布收缩
                 _hhad_pull = (1.0 - _hhad_rel) * 0.15  # 最多收缩15%
@@ -6798,7 +6933,7 @@ def predict_match(match_num, data):
         },
         'market_gl_source': market_gl_source,
         'initial_gl': round(initial_goal_line, 2),
-        'ev': evidence[:4] + [consistency_note] + ([lam_calib_note] if lam_recalibrated else []) + _adv_notes + v611_notes
+        'ev': evidence[:4] + [consistency_note] + ([lam_calib_note] if lam_recalibrated else []) + _adv_notes + v611_notes + _oca_hhad_notes
               + ([f"[xG] 使用xG替代进球(质量{_xg_data['cv_quality_avg']:.2f}), 超额修正"
                   if _xg_data and _xg_data['cv_quality_avg'] > 0 else ""] if _xg_data else []),
         'initial': _build_initial_summary(init_ouzhi, init_yazhi, init_daxiao),
@@ -6836,7 +6971,9 @@ def _fetch_one_nowscore(key, mi):
             for k, v in mi.items():
                 if k not in ns:
                     ns[k] = v
-            ns['data_source'] = 'nowscore'
+            # 保留原始数据源 (sporttery), 不覆盖
+            if 'data_source' not in ns or ns.get('data_source') in ('nowscore', None):
+                ns['data_source'] = 'nowscore'
             return key, ns, None
         else:
             # P1-4: 记录降级原因
@@ -7406,6 +7543,30 @@ def main():
                 fuse_swot_into_predictions(pred_file)
         except Exception as ex:
             print(f"  [SWOT] 自动获取/融合失败 (不影响预测结果): {ex}")
+
+    # ===== Phase 6: 自动生成PDF报告 (Ultra 11.2 — 保证PDF与预测场次一致) =====
+    # PDF 输出到 /workspace/ 根目录, 便于手机端直接访问
+    _pdf_basename = os.path.basename(pred_file).replace('.json', '.pdf')
+    pdf_path = os.path.join('/workspace', _pdf_basename)
+    try:
+        # 先检查字体, 缺失则自动安装
+        _font_check = os.path.join('/usr/share/fonts/truetype', 'LXGWWenKai-Regular.ttf')
+        if not os.path.exists(_font_check):
+            print("  [PDF] 字体缺失, 尝试自动安装...")
+            _ret = os.system('git clone --depth=1 https://github.com/lxgw/LxgwWenKai.git /tmp/lxgw 2>/dev/null && '
+                             'cp /tmp/lxgw/fonts/TTF/*.ttf /usr/share/fonts/truetype/ 2>/dev/null && '
+                             'fc-cache -f 2>/dev/null')
+            if _ret == 0 and os.path.exists(_font_check):
+                print("  [PDF] 字体安装成功")
+            else:
+                raise RuntimeError("字体安装失败, 请手动安装 LxgwWenKai")
+        # 动态导入PDF生成器 (模块级会注册字体, 字体存在才能成功)
+        import importlib
+        gen_pdf = importlib.import_module('gen_pred_pdf')
+        gen_pdf.generate_pdf(pred_data, pdf_path)
+        print(f"  [PDF] 已自动生成: {pdf_path} ({len(results)}场)")
+    except Exception as ex:
+        print(f"  [PDF] 自动生成失败 (不影响预测结果, 可手动运行 `python3 gen_pred_pdf.py {pred_file} {pdf_path}`): {ex}")
 
 if __name__ == '__main__':
     main()
