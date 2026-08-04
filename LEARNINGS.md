@@ -36,6 +36,13 @@
 - **预防**: 概率函数入口统一加边界防护; 新增功能必须同步所有消费方; 所有脚本加__main__保护
 
 
+### ERR-20260804-001: leisu WAF 求解失败 — jsdom 未安装 (严重)
+- **症状**: 浏览器能正常打开 leisu /guide 与 /news, 但程序 leisu_get 返回 ok=False, SWOT 卡片发现 0 张
+- **根因**: 页面触发阿里云 WAF 挑战 (arg1 + renderData), solve_waf_jsdom_v2.js 需要 jsdom 运行; 但 node_modules 为空 (从未执行 `npm install`), 脚本运行时抛 `MODULE_NOT_FOUND`, 求解失败 → 返回 WAF 挑战页而非真实内容
+- **关键判断**: 浏览器天然执行 JS, 所以能打开; 程序必须靠 jsdom 求解 acw_sc__v2 cookie。排查时先看 `npm ls jsdom` 是否为空
+- **修复**: `cd /workspace/sporttery && npm install` (安装 jsdom ^29.1); 验证 `/guide` 从 ok=False 23682B→ok=True 22054B, 卡片发现 5 张
+- **预防**: ① package.json 已声明 jsdom 依赖, 新环境必须 `npm install`; ② solve_waf_*.js 已从 .gitignore 移除并纳入版本控制(同时解决 ERR-20260731-001 的复发风险), 重新 clone 后须确认文件存在且 node_modules 已安装
+
 ### ERR-20260731-001: leisu SWOT 全为"解析为空" — solve_waf_jsdom_v2.js 缺失 (严重)
 - **症状**: 预测时 leisu 卡片发现正常(23张)且匹配成功, 但所有详情页解析为空, 全部降级 stats 备用
 - **根因**: .gitignore 第45行 `solve_waf_*.js` 排除 WAF 求解脚本 → 提交 d526e82 (Ultra 7.8-7.9 仓库清理) 删除 solve_waf_jsdom_v2.js → 仓库副本缺失该文件 → leisu_get 遇 WAF 挑战页时 subprocess.run(node 脚本) 因文件不存在抛异常 → solve_waf 失败 → 详情页返回 WAF 挑战页 → parse_swot_from_html 解析 0 条

@@ -53,7 +53,7 @@ predictions/report_*.html
 
 # --- 临时/调试文件 ---
 downloaded_files/
-solve_waf_*.js
+# 注意: solve_waf_*.js 是运行必需依赖, 必须纳入版本控制 (ERR-20260731-001/ERR-20260804-001)
 waf_script_*.js
 analysis_report_*.html
 renderData.json
