@@ -104,23 +104,30 @@ def match_guides_to_sporttery(guides, matches):
     return result
 
 
-def fetch_leisu_swot(session, guide):
-    """获取并解析单个leisu SWOT页"""
+def fetch_leisu_swot(session, guide, retries=2):
+    """获取并解析单个leisu SWOT页 (带重试, 应对WAF间歇性挑战失败)
+
+    WAF cookie 可能对个别并发请求失效 (acw_sc__v2 有时效/按页面绑定),
+    解析为空或获取失败时重试 retries 次, 每次重新求解WAF以提高成功率.
+    """
     if parse_swot_from_html is None:
         return None
-    try:
-        html, ok = leisu_get(session, guide['url'])
-        if not ok:
-            return None
-        swot = parse_swot_from_html(html, guide['url'])
-        n = (len(swot.get('home_strengths', [])) + len(swot.get('home_weaknesses', [])) +
-             len(swot.get('away_strengths', [])) + len(swot.get('away_weaknesses', [])))
-        if n == 0:
-            return None
-        swot['source'] = 'leisu'
-        return swot
-    except Exception:
-        return None
+    for attempt in range(retries + 1):
+        try:
+            html, ok = leisu_get(session, guide['url'])
+            if not ok:
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            swot = parse_swot_from_html(html, guide['url'])
+            n = (len(swot.get('home_strengths', [])) + len(swot.get('home_weaknesses', [])) +
+                 len(swot.get('away_strengths', [])) + len(swot.get('away_weaknesses', [])))
+            if n > 0:
+                swot['source'] = 'leisu'
+                return swot
+            time.sleep(0.5 * (attempt + 1))
+        except Exception:
+            time.sleep(0.5 * (attempt + 1))
+    return None
 
 
 # ============ 备用: 统计数据型情报 (500/nowscore shuju) ============

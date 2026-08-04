@@ -36,6 +36,13 @@
 - **预防**: 概率函数入口统一加边界防护; 新增功能必须同步所有消费方; 所有脚本加__main__保护
 
 
+### ERR-20260804-002: leisu SWOT 匹配失败 — 队名简称差异 + 并发WAF间歇失败 (严重)
+- **症状**: leisu 卡片发现正常(5张), 但匹配到 sporttery 场次仅 2/5, 其余 3 场降级 stats 备用
+- **根因**: ① 队名简写差异: sporttery「里莫」vs leisu「雷莫」、「圣吉联合」vs「圣吉罗斯」、「布斯巴达」vs「布拉格斯巴达」, 别名表 TEAM_NAME_ALIASES 无映射 → 匹配失败; ② 修复匹配后仍有 2 场(002/003)"leisu页解析为空", 单独请求却正常 → 并发线程复制 WAF cookie 对个别详情页间歇性失效, 解析为空直接返回 None 无重试
+- **修复**: ① 别名表补 3 支球队: 里莫(雷莫/Remo/雷莫队)、圣吉联合(圣吉罗斯/Union SG/Union Saint-Gilloise)、布斯巴达(布拉格斯巴达/Sparta Prague/斯巴达布拉格); ② fetch_leisu_swot 加 retries=2 重试, 解析为空或获取失败时 sleep 后重试
+- **验证**: 匹配从 2/5 → 5/5; SWOT leisu 解析从 3/5 → 5/5 (002米亚尔比6条/003奥林匹亚11条/004圣吉8条/005布拉格13条/001雷莫3条), 0 场降级
+- **预防**: ① 新增联赛/球队时检查别名表, 补全简称差异; ② 网络请求(WAF)必须带重试, 不能一次失败即降级
+
 ### ERR-20260804-001: leisu WAF 求解失败 — jsdom 未安装 (严重)
 - **症状**: 浏览器能正常打开 leisu /guide 与 /news, 但程序 leisu_get 返回 ok=False, SWOT 卡片发现 0 张
 - **根因**: 页面触发阿里云 WAF 挑战 (arg1 + renderData), solve_waf_jsdom_v2.js 需要 jsdom 运行; 但 node_modules 为空 (从未执行 `npm install`), 脚本运行时抛 `MODULE_NOT_FOUND`, 求解失败 → 返回 WAF 挑战页而非真实内容
