@@ -20,8 +20,8 @@ from reportlab.lib import colors
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, LongTable,
 )
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+
+from pdf_fonts import register_cjk_font
 
 # ============================================================
 # 路径配置
@@ -35,56 +35,6 @@ if len(sys.argv) > 2:
 else:
     _base = os.path.basename(VERIFY_HTML).replace('.html', '.pdf')
     OUTPUT_PDF = os.path.join(os.path.dirname(VERIFY_HTML) or _WORKSPACE, _base)
-
-# ============================================================
-# 字体注册 (复用 gen_report_pdf 逻辑)
-# ============================================================
-def register_cjk_font():
-    # 霞鹜文楷 (LxgwWenKai) — 与预测PDF保持一致
-    font_reg = '/usr/share/fonts/truetype/LXGWWenKai-Regular.ttf'
-    font_bold = '/usr/share/fonts/truetype/LXGWWenKai-Medium.ttf'
-    if os.path.exists(font_reg) and os.path.exists(font_bold):
-        pdfmetrics.registerFont(TTFont('CJK', font_reg))
-        pdfmetrics.registerFont(TTFont('CJK-Bold', font_bold))
-        return 'CJK'
-
-    # 回退: 系统字体查找
-    from pathlib import Path
-    candidates = []
-    env_dir = os.environ.get('SPORTTERY_FONT_DIR')
-    if env_dir:
-        candidates.append(Path(env_dir))
-    candidates.append(Path(os.path.dirname(os.path.abspath(__file__))) / 'fonts')
-    candidates.append(Path(sys.executable).parent / 'fonts')
-    candidates.append(Path(sys.executable).parent.parent / 'fonts')
-
-    names = [
-        ('NotoSansSC-Regular.ttf', 'NotoSansSC-Bold.ttf'),
-        ('NotoSansCJKsc-Regular.ttf', 'NotoSansCJKsc-Bold.ttf'),
-    ]
-    for d in candidates:
-        for reg, bold in names:
-            if (d / reg).exists() and (d / bold).exists():
-                pdfmetrics.registerFont(TTFont('CJK', str(d / reg)))
-                pdfmetrics.registerFont(TTFont('CJK-Bold', str(d / bold)))
-                return 'CJK'
-
-    os_fonts = [
-        ('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'),
-        ('/usr/share/fonts/truetype/wqy/wqy-microhei.ttc', '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc'),
-        ('/data/user/work/NotoSansCJKsc-Regular.ttf', '/data/user/work/NotoSansCJKsc-Bold.ttf'),
-        ('C:/Windows/Fonts/simhei.ttf', 'C:/Windows/Fonts/simhei.ttf'),
-        ('C:/Windows/Fonts/msyh.ttf', 'C:/Windows/Fonts/msyhbd.ttf'),
-    ]
-    for reg, bold in os_fonts:
-        if os.path.exists(reg):
-            try:
-                pdfmetrics.registerFont(TTFont('CJK', reg, subfontIndex=0))
-                pdfmetrics.registerFont(TTFont('CJK-Bold', bold if os.path.exists(bold) else reg, subfontIndex=0))
-                return 'CJK'
-            except Exception:
-                continue
-    raise RuntimeError('未找到可用CJK字体, 请设置 SPORTTERY_FONT_DIR 或将字体放入 ./fonts/')
 
 # ============================================================
 # 页面常量 (手机优化: 减小边距, 增大内容区)

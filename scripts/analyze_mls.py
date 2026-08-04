@@ -2,7 +2,7 @@
 """验证美职联校准参数并输出分析结果"""
 import sqlite3, json, os
 
-_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__)))
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
 
 

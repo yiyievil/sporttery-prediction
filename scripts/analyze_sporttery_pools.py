@@ -12,7 +12,6 @@
 """
 
 import json
-import os
 import sqlite3
 from datetime import datetime
 from collections import defaultdict
@@ -33,7 +32,6 @@ def get_conn():
 
 def shin_method(odds):
     """Shin's method: 从赔率提取隐含概率, 修正favorite-longshot bias"""
-    import math
     n = len(odds)
     # 迭代求解eta
     inv_odds = [1.0 / o for o in odds]

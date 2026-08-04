@@ -12,7 +12,7 @@ deep_analysis.py — 历史数据深度利用 (任务1/2/3/5, 一切为了命中
 import os, json, sqlite3
 from collections import defaultdict
 
-_WS = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__))
+_WS = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HDB = os.path.join(_WS, 'predictions', 'sporttery_history.db')
 RDB = os.path.join(_WS, 'predictions', 'regression.db')
 OUT_MD = os.path.join(_WS, 'predictions', 'deep_analysis.md')

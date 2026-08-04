@@ -20,8 +20,8 @@ import sqlite3
 from datetime import datetime
 from collections import defaultdict
 
-# 将父目录加入sys.path以支持从v215_e2e导入
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# 将 sporttery 根目录加入sys.path以支持从v215_e2e导入 (脚本位于 scripts/)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from v215_e2e import shin_method
 
 DB_PATH = '/workspace/sporttery/predictions/historical_odds.db'

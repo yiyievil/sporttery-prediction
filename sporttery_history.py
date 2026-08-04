@@ -134,6 +134,9 @@ def fetch_one(mid):
             continue
         rows.append((mid, pool, json.dumps(arr[0], ensure_ascii=False),
                      json.dumps(arr[-1], ensure_ascii=False)))
+    # 无任何玩法赔率数据 → 返回 None (与"抓取失败"同语义), 避免被标记为 odds_fetched=1 无法重跑补抓
+    if not rows:
+        return mid, None
     return mid, rows
 
 def odds(limit=500):

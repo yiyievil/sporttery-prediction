@@ -19,12 +19,25 @@ from collections import defaultdict
 # ============================================================
 # 加载校准数据 (路径通用: SPORTTERY_WORKSPACE 或脚本所在目录)
 # ============================================================
-_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__)))
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CALIBRATION_PATH = os.path.join(_WORKSPACE, 'predictions', 'league_calibration.json')
 DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
 
-with open(CALIBRATION_PATH, 'r', encoding='utf-8') as f:
-    CALIBRATION = json.load(f)
+_CALIBRATION = None
+
+
+def _get_calibration():
+    """惰性加载校准数据 (文件由 analyze_mls.py 生成, 可选).
+    文件不存在或损坏时返回空 dict, 不阻断 import/回测."""
+    global _CALIBRATION
+    if _CALIBRATION is not None:
+        return _CALIBRATION
+    try:
+        with open(CALIBRATION_PATH, 'r', encoding='utf-8') as f:
+            _CALIBRATION = json.load(f)
+    except (OSError, ValueError):
+        _CALIBRATION = {}
+    return _CALIBRATION
 
 # ============================================================
 # Shin's method (与 v215_e2e.py 一致)
@@ -65,6 +78,7 @@ def normalize(pw, pd, pl):
 # ============================================================
 def calibrate_global_odds_bias(probs, home_odds):
     """全局赔率区间偏差校准"""
+    CALIBRATION = _get_calibration()
     if not CALIBRATION or not home_odds or home_odds <= 1:
         return probs
     
@@ -114,6 +128,7 @@ def calibrate_global_odds_bias(probs, home_odds):
 
 def calibrate_odds_change_signal(probs, init_odds, final_odds):
     """赔率变动信号校准"""
+    CALIBRATION = _get_calibration()
     if not CALIBRATION:
         return probs
     

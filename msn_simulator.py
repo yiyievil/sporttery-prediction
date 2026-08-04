@@ -174,15 +174,24 @@ def simulate_combo(bets, folds, unit=2.0):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith('--')]
-    pred_file = args[0] if args else None
+    # 解析 --top N 参数, 并剔除所有 -- 开头的参数, 剩下的才是预测文件
+    top_n = 10
+    positional = []
+    argv = sys.argv[1:]
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == '--top' and i + 1 < len(argv):
+            top_n = int(argv[i + 1])
+            i += 2
+            continue
+        if not a.startswith('--'):
+            positional.append(a)
+        i += 1
+    pred_file = positional[0] if positional else None
     if not pred_file or not os.path.exists(pred_file):
         print("用法: python msn_simulator.py <pred文件> [--top N]")
         return
-    top_n = 10
-    for i, a in enumerate(sys.argv):
-        if a == '--top' and i + 1 < len(sys.argv):
-            top_n = int(sys.argv[i + 1])
 
     bets = extract_had_bets(pred_file)
     M = len(bets)

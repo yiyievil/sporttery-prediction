@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """leisu 会话工具 — WAF自动求解 + 页面获取 (供探索与生产共用)"""
-import requests, re, json, subprocess, os
+import requests, re, subprocess, os
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',

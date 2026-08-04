@@ -18,7 +18,7 @@ import sqlite3
 import os
 from collections import defaultdict
 
-_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__)))
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
 
 LEAGUES = ['英超', '意甲', '西甲', '德甲', '法甲']

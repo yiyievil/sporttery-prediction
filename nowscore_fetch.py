@@ -743,11 +743,13 @@ def fetch_3in1_odds(match_id):
                 with open(json_cache, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 if 'asian' in data and 'overunder' in data and 'european' in data:
-                    return {
-                        'asian': data['asian'],
-                        'overunder': data['overunder'],
-                        'european': data['european'],
-                    }
+                    # 空缓存壳 (三表全空) 视为未命中, 返回 None 走后续路径, 避免被误判为 nowscore 成功
+                    if data['asian'] or data['overunder'] or data['european']:
+                        return {
+                            'asian': data['asian'],
+                            'overunder': data['overunder'],
+                            'european': data['european'],
+                        }
             except (json.JSONDecodeError, KeyError):
                 pass
         # JSON缓存过期, 继续尝试其他途径
@@ -1054,6 +1056,10 @@ def convert_nowscore_to_500_format(nowscore_odds, match_id=None):
     }
     """
     if not nowscore_odds:
+        return None
+    
+    # 空壳校验: 三表全空视为无效数据, 返回 None 让调用方触发降级
+    if not (nowscore_odds.get('asian') or nowscore_odds.get('overunder') or nowscore_odds.get('european')):
         return None
     
     result = {'source': 'nowscore'}

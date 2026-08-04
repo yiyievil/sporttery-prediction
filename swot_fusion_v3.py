@@ -24,6 +24,14 @@ SWOT_MAX_SHIFT = 0.08         # 迁移上限 ±8pp
 SWOT_MIN_DIFF = 2.0           # 评分差低于此值不调整 (噪音区)
 
 
+def _parse_pct(v):
+    """健壮解析百分比字符串(如 '33%' / '33.5%'), 失败返回0"""
+    try:
+        return int(float(str(v).replace('%', '').strip()))
+    except (ValueError, TypeError):
+        return 0
+
+
 def determine_swot_lean_v3(swot_data):
     """v3: 优化SWOT倾向判断
     
@@ -39,8 +47,8 @@ def determine_swot_lean_v3(swot_data):
     away_w = swot_data.get('away_weaknesses', [])
     trend = swot_data.get('trend', {})
     
-    home_pct = int(trend.get('home_win_pct', '0%').replace('%', '')) if trend else 0
-    away_pct = int(trend.get('away_win_pct', '0%').replace('%', '')) if trend else 0
+    home_pct = _parse_pct(trend.get('home_win_pct', '0%')) if trend else 0
+    away_pct = _parse_pct(trend.get('away_win_pct', '0%')) if trend else 0
     
     # 评分系统
     home_score = 0

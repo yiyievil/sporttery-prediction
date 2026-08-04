@@ -511,7 +511,7 @@ def main():
     def fetch_one_update(key):
         """单场更新数据获取"""
         if key not in meta:
-            return key, None
+            return key, None, False
 
         fid = meta[key].get('fid', 0)
         if not fid:
@@ -563,7 +563,7 @@ def main():
                 meta[key]['fid'] = fid  # 更新meta供后续保存
                 meta[key]['fallback_reason'] = 'nowscore无数据/失败, 降级500.com'
             else:
-                return key, None
+                return key, None, False
 
         # 从sporttery获取即时HAD/HHAD
         match_info = sporttery_matches.get(key, {})
@@ -812,9 +812,15 @@ def main():
         if key in new_results:
             merged_results[key] = new_results[key]
 
+    # 更新计数: 从上次文件读取, 无则首次更新记为1
+    prev_update_count = pred_data.get('update_count', 0)
+    update_count = prev_update_count + 1
+
     updated_pred = {
         'saved_at': time.strftime('%Y-%m-%d %H:%M:%S'),
         'updated_from': pred_data.get('saved_at', ''),
+        'mode': 'update',
+        'update_count': update_count,
         'meta': meta,
         'results': merged_results,
         'cache': updated_cache,

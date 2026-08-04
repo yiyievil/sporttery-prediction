@@ -20,10 +20,9 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, LongTable,
 )
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 
 from gen_report_v2 import rank_match, REPORT_TITLE
+from pdf_fonts import register_cjk_font
 
 _WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__))
 _PRED_DIR = os.path.join(_WORKSPACE, 'predictions')
@@ -34,46 +33,6 @@ if len(sys.argv) > 2:
 else:
     _base = os.path.basename(PRED_FILE).replace('pred_', 'report_').replace('.json', '_mobile.pdf')
     OUTPUT_PDF = os.path.join(os.path.dirname(PRED_FILE) or _PRED_DIR, _base)
-
-
-def register_cjk_font():
-    from pathlib import Path
-    candidates = []
-    env_dir = os.environ.get('SPORTTERY_FONT_DIR')
-    if env_dir:
-        candidates.append(Path(env_dir))
-    candidates.append(Path(os.path.dirname(os.path.abspath(__file__))) / 'fonts')
-    candidates.append(Path(sys.executable).parent / 'fonts')
-    candidates.append(Path(sys.executable).parent.parent / 'fonts')
-
-    names = [
-        ('NotoSansSC-Regular.ttf', 'NotoSansSC-Bold.ttf'),
-        ('NotoSansCJKsc-Regular.ttf', 'NotoSansCJKsc-Bold.ttf'),
-    ]
-    for d in candidates:
-        for reg, bold in names:
-            if (d / reg).exists() and (d / bold).exists():
-                pdfmetrics.registerFont(TTFont('CJK', str(d / reg)))
-                pdfmetrics.registerFont(TTFont('CJK-Bold', str(d / bold)))
-                return 'CJK'
-
-    os_fonts = [
-        ('C:/Windows/Fonts/simhei.ttf', 'C:/Windows/Fonts/simhei.ttf'),
-        ('C:/Windows/Fonts/msyh.ttf', 'C:/Windows/Fonts/msyhbd.ttf'),
-        ('/System/Library/Fonts/PingFang.ttc', '/System/Library/Fonts/PingFang.ttc'),
-        ('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'),
-        ('/usr/share/fonts/truetype/wqy/wqy-microhei.ttc', '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc'),
-        ('/data/user/work/NotoSansCJKsc-Regular.ttf', '/data/user/work/NotoSansCJKsc-Bold.ttf'),
-    ]
-    for reg, bold in os_fonts:
-        if os.path.exists(reg):
-            try:
-                pdfmetrics.registerFont(TTFont('CJK', reg, subfontIndex=0))
-                pdfmetrics.registerFont(TTFont('CJK-Bold', bold if os.path.exists(bold) else reg, subfontIndex=0))
-                return 'CJK'
-            except Exception:
-                continue
-    raise RuntimeError('未找到可用CJK字体')
 
 
 # ============ 配色 (明亮) ============
@@ -210,7 +169,6 @@ def build_summary_table(matches, styles):
             first_conf_color = conf_to_color(first_conf)
             first_ev = first.get('ev_pct', 0)
             first_ev_color = '#16a34a' if first_ev > 0 else '#dc2626'
-            first_ev_tag = '价值' if first_ev > 0 else '负EV'
             first_html = (
                 f'<font name="CJK-Bold" color="#16a34a" size="8">{normalize_text(first["name"])}</font><br/>'
                 f'<font name="CJK-Bold" color="#ea580c" size="11">@{first["odds"]}</font> '
@@ -305,11 +263,9 @@ def build_match_card(m, styles):
         if ev > 0:
             ev_label = '✓价值'
             ev_color = '#16a34a'
-            ev_bg = '#d1fae5'
         else:
             ev_label = f'EV{ev:+.0f}%'
             ev_color = '#dc2626'
-            ev_bg = '#fee2e2'
 
         conf_color = conf_to_color(conf)
         conf_html = f'<font color="#{conf_color.hexval()[2:]}">{conf}</font>'
@@ -434,7 +390,7 @@ def build_match_card(m, styles):
 # ============ M串N精简 ============
 def build_msn_section(pred_file, styles):
     try:
-        from msn_simulator import extract_had_bets, simulate_combo, poisson_binomial_probs, COMBO_TABLE
+        from msn_simulator import extract_had_bets, simulate_combo, COMBO_TABLE
     except ImportError:
         return None
     try:

@@ -6,8 +6,7 @@ from datetime import datetime
 WS = os.path.dirname(os.path.abspath(__file__))
 PATH = os.path.join(WS, 'predictions', 'swot_data_refreshed.json')
 
-with open(PATH, 'r', encoding='utf-8') as f:
-    data = json.load(f)
+# 注意: 不在模块顶层读取文件, 避免 import 副作用 (仅 main() 内读取一次)
 
 FIRST_LEG = {
     "周二001": {

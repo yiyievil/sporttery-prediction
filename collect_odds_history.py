@@ -28,6 +28,17 @@ import requests
 # 配置
 # ============================================================
 _WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__)))
+
+
+def _safe_float(v):
+    """健壮浮点转换: 非数字/None/空串返回 None, 避免 float() 抛 ValueError"""
+    if v is None:
+        return None
+    try:
+        f = float(v)
+        return f
+    except (ValueError, TypeError):
+        return None
 DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
 RESULT_URL = "https://webapi.sporttery.cn/gateway/uniform/football/getUniformMatchResultV1.qry"
 BONUS_URL = "https://webapi.sporttery.cn/gateway/uniform/football/getFixedBonusV1.qry"
@@ -362,18 +373,18 @@ def fetch_odds_history(match_id):
     for item in oh.get('hadList', []):
         result['had'].append({
             'time': f"{item.get('updateDate', '')} {item.get('updateTime', '')}".strip(),
-            'h': float(item.get('h', 0)) if item.get('h') else None,
-            'd': float(item.get('d', 0)) if item.get('d') else None,
-            'a': float(item.get('a', 0)) if item.get('a') else None,
+            'h': _safe_float(item.get('h')),
+            'd': _safe_float(item.get('d')),
+            'a': _safe_float(item.get('a')),
         })
     
     # HHAD (让球胜平负)
     for item in oh.get('hhadList', []):
         result['hhad'].append({
             'time': f"{item.get('updateDate', '')} {item.get('updateTime', '')}".strip(),
-            'h': float(item.get('h', 0)) if item.get('h') else None,
-            'd': float(item.get('d', 0)) if item.get('d') else None,
-            'a': float(item.get('a', 0)) if item.get('a') else None,
+            'h': _safe_float(item.get('h')),
+            'd': _safe_float(item.get('d')),
+            'a': _safe_float(item.get('a')),
             'goal_line': str(item.get('goalLine', '')),
         })
     

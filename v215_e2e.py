@@ -1372,7 +1372,6 @@ def skellam_pmf(k, lam_h, lam_a):
     """
     if lam_h <= 0 or lam_a <= 0:
         # 边界防护: 任一 λ ≤ 0 时退化为确定性分布
-        diff = 0 if lam_h == 0 else 1
         if lam_h <= 0 and lam_a <= 0:
             return 1.0 if k == 0 else 0.0
         lam_pos = lam_h if lam_h > 0 else lam_a
@@ -1398,8 +1397,9 @@ def _iv(n, x):
     if x == 0:
         return 1.0 if n == 0 else 0.0
     # I_n(x) = Σ_{m=0}^∞ (x/2)^{2m+n} / (m! × Γ(m+n+1))
+    # 用 lgamma 计算阶乘, 支持任意 n (避免 n≥15 时 math.factorial 溢出/截断)
     half_x = x / 2.0
-    term = (half_x ** n) / math.factorial(n) if n < 15 else 0.0
+    term = (half_x ** n) / math.exp(math.lgamma(n + 1))
     result = term
     for m in range(1, 30):
         term *= (half_x * half_x) / (m * (m + n))
@@ -2130,8 +2130,11 @@ def shin_method(odds_list):
         # z异常, 回退到简单归一化
         return [io / sum_inv for io in inv_odds]
 
-    # Shin修正概率
-    probs = [(io - z) / (1.0 - N * z) for io in inv_odds]
+    # Shin修正概率 (denom 趋近0时回退归一化, 避免除零放大)
+    denom = 1.0 - N * z
+    if denom < 1e-6:
+        return [io / sum_inv for io in inv_odds]
+    probs = [(io - z) / denom for io in inv_odds]
 
     # 确保非负并归一化
     probs = [max(0, p) for p in probs]
@@ -2183,7 +2186,7 @@ def detect_defensive_away(away_form, away_stats):
     recent = away_form[-4:] if len(away_form) >= 4 else away_form
     w_count = recent.count('W')
     d_count = recent.count('D')
-    avg_ga = away_stats.get('avg_ga', 99) if isinstance(away_stats, dict) else away_stats.get('avg_ga', 99)
+    avg_ga = away_stats.get('avg_ga', 99) if isinstance(away_stats, dict) else 99
 
     if w_count >= 3 and avg_ga < 1.0:
         factor = 0.83 if w_count == 4 else 0.85  # 实证标定: ×0.83/×0.85
@@ -2203,9 +2206,8 @@ def parse_h2h_record(h2h_str):
     """
     if not h2h_str:
         return None
-    import re as _re
     # 先尝试从带前缀的格式提取
-    m = _re.search(r'(\d+)胜(\d+)(?:和|平)(\d+)负', h2h_str)
+    m = re.search(r'(\d+)胜(\d+)(?:和|平)(\d+)负', h2h_str)
     if not m:
         return None
     w, d, l = int(m.group(1)), int(m.group(2)), int(m.group(3))
@@ -4347,10 +4349,22 @@ def _get_adv_db():
     
     所有历史数据库查询统一通过此函数获取连接, 避免重复 connect/close。
     使用 WAL 模式 + 默认 Row 工厂, 性能与一致性兼顾。
+    
+    注意: DB 文件暂时不存在时返回 None, 但不缓存 None, 下次调用会重试;
+    若连接建立后文件被删除/损坏, 关闭连接并清空缓存以便重建。
     """
     global _ADV_DB_CONN
     if _ADV_DB_CONN is not None:
-        return _ADV_DB_CONN
+        try:
+            _ADV_DB_CONN.execute("SELECT 1")
+            return _ADV_DB_CONN
+        except Exception:
+            # 连接已失效(文件被删/损坏), 关闭并重建
+            try:
+                _ADV_DB_CONN.close()
+            except Exception:
+                pass
+            _ADV_DB_CONN = None
     if not os.path.exists(_CALIBRATION_DB):
         return None
     try:
@@ -5560,13 +5574,15 @@ def query_draw_bias():
             return 0.0
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
-        c.execute("""SELECT pred_had_p, had_result FROM verify_history
-            WHERE pred_had_p IS NOT NULL AND pred_had_p != ''
+        c.execute("""SELECT pred_had_probs, pred_had_p, had_result FROM verify_history
+            WHERE (pred_had_probs IS NOT NULL AND pred_had_probs != ''
+                   OR pred_had_p IS NOT NULL AND pred_had_p != '')
               AND had_result IN ('胜','平','负')""")
         rows = c.fetchall()
         preds, draws = [], 0
-        for p, r in rows:
-            m = re.findall(r'(\d+(?:\.\d+)?)%', str(p))
+        for probs_s, p_s, r in rows:
+            # 优先用独立概率字段 pred_had_probs, 失败再用 pred_had_p 显示字符串
+            m = re.findall(r'(\d+(?:\.\d+)?)%', str(probs_s or p_s))
             if len(m) == 3:
                 preds.append(float(m[1]) / 100.0)
                 draws += (r == '平')
@@ -5865,10 +5881,16 @@ def predict_match(match_num, data):
     away_form = shuju.get('form_away', '')
     rec = shuju.get('recommendation', '')
     
-    # 根据赔率判断方向
+    # 根据赔率判断方向 (仅用 >0 的有效赔率, 避免 0 值停售档位被 min 选中)
     if had and 'h' in had:
-        had_list = [had['h'], had['d'], had['a']]
-        had_min_idx = had_list.index(min(had_list))
+        _valid_had = [x for x in [had['h'], had['d'], had['a']] if x and x > 0]
+        if len(_valid_had) == 3:
+            had_list = [had['h'], had['d'], had['a']]
+            had_min_idx = had_list.index(min(had_list))
+        else:
+            # 部分档位无效(停售/未开盘), 回退到欧指概率方向
+            had_list = [ow, od, ol]
+            had_min_idx = had_list.index(min(had_list))
     elif ouzhi and ouzhi_is_rr:
         # 用返还率转换的概率判断方向
         had_list = [pw5, pd5, pl5]
@@ -5878,8 +5900,13 @@ def predict_match(match_num, data):
         had_min_idx = had_list.index(min(had_list))
     
     if hhad and 'h' in hhad:
-        hhad_list = [hhad['h'], hhad['d'], hhad['a']]
-        hhad_min_idx = hhad_list.index(min(hhad_list))
+        _valid_hhad = [x for x in [hhad['h'], hhad['d'], hhad['a']] if x and x > 0]
+        if len(_valid_hhad) == 3:
+            hhad_list = [hhad['h'], hhad['d'], hhad['a']]
+            hhad_min_idx = hhad_list.index(min(hhad_list))
+        else:
+            hhad_list = [ow, od, ol]
+            hhad_min_idx = had_min_idx
     else:
         hhad_list = [ow, od, ol]
         hhad_min_idx = had_min_idx
@@ -6164,7 +6191,6 @@ def predict_match(match_num, data):
             if abs(scale - 1.0) > 0.02:  # 偏差>2%才调整
                 lam_h *= scale
                 lam_a *= scale
-                lam_market_calibrated = True
     
     # ===== Ultra 6.11: 五大场景修正 (2026-07-28) =====
     # 在市场盘口校准后、compute_scores前施加, 修正系统性盲区
@@ -7271,7 +7297,10 @@ def main():
         monitor.append(('Phase3-fallback', 0, 0, f"sporttery保底{len(dropped)}场: {dropped}"))
 
     # 🔒 数据源策略自检 (锁定策略: sporttery核心/nowscore主力/500仅降级)
-    _check_data_source_policy(all_data)
+    policy_violations = _check_data_source_policy(all_data)
+    results = {}  # 必须先初始化, 供下方 policy_violations 记录使用 (原顺序引用会 NameError)
+    if policy_violations:
+        results.setdefault('_policy_violations', policy_violations)
     
     # ===== Phase 4: 七步预测 =====
     # Ultra 7.4: 清除杯赛首回合惩罚缓存 (每次运行使用最新SWOT数据)
@@ -7281,7 +7310,6 @@ def main():
         pass
 
     t4 = time.time()
-    results = {}
     for key in all_data:
         try:
             results[key] = predict_match(key, all_data[key])
@@ -7459,6 +7487,7 @@ def main():
         pred_data = {
             'saved_at': time.strftime('%Y-%m-%d %H:%M:%S'),
             'mode': 'predict',
+            'update_count': 0,  # 全新预测: 更新次数从0开始
             'meta': meta,
             'results': results,
             'cache': cache,
@@ -7512,6 +7541,10 @@ def main():
             'updated_at': time.strftime('%Y-%m-%d %H:%M:%S'),
         })
 
+        # 更新计数器: 从上次文件读取, 无则首次更新记为1
+        prev_update_count = prev_data.get('update_count', 0) if prev_data else 0
+        update_count = prev_update_count + 1
+
         results = merged_results
         meta = merged_meta
         cache = merged_cache
@@ -7519,6 +7552,7 @@ def main():
         pred_data = {
             'saved_at': time.strftime('%Y-%m-%d %H:%M:%S'),
             'mode': 'update',
+            'update_count': update_count,  # 第N次更新
             'meta': meta,
             'results': results,
             'cache': cache,
@@ -7528,7 +7562,8 @@ def main():
 
     with open(pred_file, 'w', encoding='utf-8') as f:
         json.dump(pred_data, f, ensure_ascii=False, indent=1)
-    print(f"  已保存: {pred_file} (共{len(results)}场, 含{len(cache)}场缓存, 模式={PRED_MODE})")
+    _uc = pred_data.get('update_count', 0)
+    print(f"  已保存: {pred_file} (共{len(results)}场, 含{len(cache)}场缓存, 模式={PRED_MODE}, 第{_uc}次更新)")
 
     # ===== Phase 5: SWOT 全自动获取+融合 (Ultra 6.5) =====
     # leisu情报为主, 500/nowscore统计数据型情报为备用兜底

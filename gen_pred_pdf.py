@@ -15,27 +15,23 @@
 import json
 import os
 import sys
-import math
 from datetime import datetime
 
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm, cm
-from reportlab.lib.colors import HexColor, white, black, Color
+from reportlab.lib.units import mm
+from reportlab.lib.colors import HexColor, white
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    PageBreak, KeepTogether, Flowable, Frame, PageTemplate,
-    BaseDocTemplate
+    PageBreak, Flowable,
 )
-from reportlab.lib import colors
+
+from pdf_fonts import register_cjk_font
 
 # ── 字体注册 ──
-# 霞鹜文楷 (LxgwWenKai)
-pdfmetrics.registerFont(TTFont('CJK', '/usr/share/fonts/truetype/LXGWWenKai-Regular.ttf'))
-pdfmetrics.registerFont(TTFont('CJKBold', '/usr/share/fonts/truetype/LXGWWenKai-Medium.ttf'))
+# 复用公共模块 pdf_fonts (优先霞鹜文楷, 缺失回退其他CJK字体), 避免 import 崩溃
+register_cjk_font(bold_name='CJKBold')
 
 # ====================================================================
 # 配色方案
@@ -229,12 +225,12 @@ def extract_match(data, match_id):
     total_exp = goals.get('total_expected', '')
     key_insight = goals.get('key_insight', '')
 
-    cm = res.get('cross_market', {})
-    primary = cm.get('primary_bet', {})
-    double_rec = cm.get('double_recommend', {})
-    hhad_primary = cm.get('hhad_primary_bet', {})
-    insight = cm.get('insight', '')
-    margin_dist = cm.get('margin_dist', {})
+    cmb = res.get('cross_market', {})
+    primary = cmb.get('primary_bet', {})
+    double_rec = cmb.get('double_recommend', {})
+    hhad_primary = cmb.get('hhad_primary_bet', {})
+    insight = cmb.get('insight', '')
+    margin_dist = cmb.get('margin_dist', {})
 
     sp = res.get('sporttery_pools', {})
     dq = res.get('data_quality', {})

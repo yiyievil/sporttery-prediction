@@ -161,7 +161,7 @@ def build_stats_swot(match_data):
         h2h = {'home_wins': int(m.group(1)), 'draws': int(m.group(2)), 'away_wins': int(m.group(3))} if m else None
     if h2h:
         hw_, d_, aw_ = h2h.get('home_wins'), h2h.get('draws'), h2h.get('away_wins')
-        if hw_ is not None and (hw_ + d_ + aw_) >= 3:
+        if hw_ is not None and d_ is not None and aw_ is not None and (hw_ + d_ + aw_) >= 3:
             if hw_ >= aw_ + 2:
                 hs.append(f"交锋占优: 历史{hw_}胜{d_}平{aw_}负")
             elif aw_ >= hw_ + 2:

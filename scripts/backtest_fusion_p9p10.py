@@ -8,7 +8,7 @@ D: 混合融合 (P9) + JS散度一致性 (P10)
 """
 import sqlite3, math, os
 
-DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'predictions', 'historical_odds.db')
+DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'predictions', 'historical_odds.db')
 BASE_W = [1.5, 0.8, 1.2, 1.0]  # market, power, poisson, elo
 
 def geo_fuse(probs_list, weights):

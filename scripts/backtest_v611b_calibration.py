@@ -19,7 +19,7 @@ import math
 import os
 from collections import defaultdict
 
-_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__)))
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
 
 TTG_VALUES = {'s0': 0, 's1': 1, 's2': 2, 's3': 3, 's4': 4, 's5': 5, 's6': 6, 's7': 7.3}

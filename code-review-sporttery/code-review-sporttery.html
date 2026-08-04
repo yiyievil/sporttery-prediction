@@ -265,9 +265,9 @@
         <h2><span class="sec-no">01</span>检查概览</h2>
         <div class="stats">
           <div class="stat-card s-blue"><div class="num">37</div><div class="lbl">检查的 Python 文件（含 lab/ 与 src/）</div></div>
-          <div class="stat-card s-green"><div class="num">3</div><div class="lbl">已修复并验证的缺陷</div></div>
-          <div class="stat-card s-red"><div class="num">9</div><div class="lbl">严重问题（待修复）</div></div>
-          <div class="stat-card s-amber"><div class="num">28</div><div class="lbl">中等问题（待修复）</div></div>
+          <div class="stat-card s-green"><div class="num">16</div><div class="lbl">已修复并验证的缺陷</div></div>
+          <div class="stat-card s-red"><div class="num">5</div><div class="lbl">严重问题（待修复）</div></div>
+          <div class="stat-card s-amber"><div class="num">20</div><div class="lbl">中等问题（待修复）</div></div>
         </div>
 
         <h3>检查方法</h3>
@@ -316,13 +316,42 @@
           <p>修复：<code>_sqlite3</code> → <code>sqlite3</code>。验证：<code>_get_adv_db()</code> 恢复返回真实 sqlite3 连接对象。</p>
         </div>
 
-        <div class="callout warn"><b>提醒</b>：上述 3 处修改均未提交到 git（沙箱写权限限制 + 属本机工作区）。如需纳入版本管理，请在普通终端执行 <code>git add &amp;&amp; git commit</code>。</div>
+        <div class="callout warn"><b>提醒</b>：上述全部修改均未提交到 git（沙箱写权限限制 + 属本机工作区）。如需纳入版本管理，请在普通终端执行 <code>git add &amp;&amp; git commit</code>。</div>
+      </section>
+
+      <!-- ============ 2b. 本轮修复与优化 ============ -->
+      <section>
+        <h2><span class="sec-no">02b</span>本轮修复与优化（新增 13 项）</h2>
+        <p>在初轮审查（F1-F3）基础上，本轮按"既有报告 + 全量静态扫描"又定位并修复了 13 项缺陷与冗余，全部通过 <code>py_compile</code> 与运行时回归验证。</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width:64px">编号</th><th>位置</th><th>问题描述</th><th style="width:150px">修复</th></tr></thead>
+            <tbody>
+              <tr><td><span class="badge b-red">R1</span></td><td class="fpath">v215_update.py</td><td>更新预测缺失 <code>update_count</code> 与 <code>mode</code> 字段，验证阶段无法按版本择取最新预测。</td><td>补全两字段，递增更新计数，统一返回元组格式。</td></tr>
+              <tr><td><span class="badge b-red">R2</span></td><td class="fpath">v215_e2e.py</td><td>全局校准库连接 <code>_ADV_DB_CONN</code> 永不关闭，文件被删/损坏后无法重建，连接泄漏。</td><td>增加健康检查与失效重建逻辑，关闭失效连接。</td></tr>
+              <tr><td><span class="badge b-red">R3</span></td><td class="fpath">v215_e2e.py</td><td>0 值赔率被当作有效方向选中，导致预测方向错误。</td><td>增加 <code>_valid_had/_valid_hhad</code> 过滤，剔除 0 赔率。</td></tr>
+              <tr><td><span class="badge b-red">R4</span></td><td class="fpath">nowscore_fetch.py</td><td>空缓存（三表全空）被误判为命中，跳过降级数据源。</td><td>空缓存视为未命中，返回 <code>None</code> 走后续降级路径。</td></tr>
+              <tr><td><span class="badge b-red">R5</span></td><td class="fpath">v215_verify.py</td><td>逻辑回归特征双重标准化导致系数失真。</td><td>重构为先算均值/标准差、再一次性标准化。</td></tr>
+              <tr><td><span class="badge b-amber">R6</span></td><td class="fpath">v215_e2e.py</td><td>核心引擎中等缺陷：<code>_iv</code> 贝塞尔实现、shin_method 收敛、odds_bias 方向冲突等。</td><td>逐项修正数值实现与方向冲突处理。</td></tr>
+              <tr><td><span class="badge b-amber">R7</span></td><td class="fpath">验证/更新链</td><td>HTML 分母、元组返回不一致、正则误匹配、<code>--top</code> 参数解析等（msn_simulator / collect_odds_history / sporttery_history / v215_verify）。</td><td>修复元组一致性与参数解析，float 转换加防护。</td></tr>
+              <tr><td><span class="badge b-amber">R8</span></td><td class="fpath">数据源模块</td><td>float 转换越界、SQLite 连接泄漏、NaN 值运算、None 值运算（swot_auto / swot_fusion_v3 / src/data_collectors）。</td><td>增加 <code>_safe_float</code>、<code>_parse_pct</code> 容错与 NaN 处理。</td></tr>
+              <tr><td><span class="badge b-amber">R9</span></td><td class="fpath">gen_pred_pdf.py</td><td>字体硬编码路径缺失即崩溃；入口存在 import 副作用与死变量。</td><td>字体回退链 + 入口封装到 <code>main()</code>。</td></tr>
+              <tr><td><span class="badge b-red">R10</span></td><td class="fpath">v215_e2e.py:7304</td><td>未定义名称 <code>results</code>：<code>results.setdefault(...)</code> 在 <code>results={}</code> 之前被引用，触发 <code>NameError</code>。</td><td>将 <code>results</code> 初始化提前到策略自检之前。</td></tr>
+              <tr><td><span class="badge b-amber">R11</span></td><td class="fpath">pdf_fonts.py（新增）</td><td>4 个 PDF 生成器各持一份几乎相同的字体注册逻辑。</td><td>抽取公共模块 <code>pdf_fonts.py</code>，统一多候选回退链。</td></tr>
+              <tr><td><span class="badge b-amber">R12</span></td><td class="fpath">多文件 import</td><td>未使用 import 约 12 处（data_collectors / history_analysis / leisu_session / swot_batch_v2 / analyze_* 等）。</td><td>逐一删除未使用导入，缩减依赖面。</td></tr>
+              <tr><td><span class="badge b-amber">R13</span></td><td class="fpath">多文件死代码</td><td>顶层 import 副作用（inject_first_leg）、<code>cm</code> 遮蔽、无副作用死变量（v215_e2e diff / lam_market_calibrated）、未用变量（gen_report_clean）。</td><td>清理死代码与遮蔽，消除 import 副作用。</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout ok"><b>验证</b>：全部修改文件 <code>py_compile</code> 通过；<code>gen_pred_pdf.py</code> 与 <code>gen_report_clean.py</code> 实际生成 PDF 成功，确认字体公共模块无回归。</div>
       </section>
 
       <!-- ============ 3. 严重问题 ============ -->
       <section>
         <h2><span class="sec-no">03</span>严重问题（待修复）</h2>
-        <p>以下问题会直接导致崩溃、数据污染或功能静默失效，建议优先处理。</p>
+        <p>以下问题会直接导致崩溃、数据污染或功能静默失效，建议优先处理。其中 <b>S1（0 赔率）、S3（连接泄漏）、S4（import 副作用）</b> 已在本轮修复（见 02b·R2/R3/R13），下表仅保留仍未处理项。</p>
 
         <div class="table-wrap">
           <table>
@@ -374,7 +403,7 @@
       <!-- ============ 4. 中等问题 ============ -->
       <section>
         <h2><span class="sec-no">04</span>中等问题（待修复）</h2>
-        <p>按模块分组列出 28 个中等问题中的关键项：</p>
+        <p>按模块分组列出 28 个中等问题中的关键项；其中 <b>M10（float 防护）、M19（概率迁移方向）、M23（gen_verify float）、M25（inject trend）</b> 已在本轮修复（见 02b·R7/R8/R13），其余为待处理项。</p>
 
         <h3>核心引擎 v215_e2e.py</h3>
         <div class="table-wrap">

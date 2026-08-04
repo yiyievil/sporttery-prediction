@@ -255,7 +255,6 @@ def build_coverage_parlay(selected, bet_type):
     n_bets = parlay_bets_count(bet_type, m)
     if n_bets <= 0:
         return None
-    from math import comb
     from itertools import combinations
     folds = PARLAY_FOLDS[m][bet_type]
     total_odds = 1.0

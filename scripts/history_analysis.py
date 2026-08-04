@@ -9,10 +9,9 @@ history_analysis.py — 基于 sporttery_history.db 的联赛校准分析
 4. 热门-冷门偏差: 按终赔赔率段统计投注热门方的实际 ROI
 输出: predictions/history_analysis.md
 """
-import os, sys, json, sqlite3
-from collections import defaultdict
+import os, json, sqlite3
 
-_WS = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__))
+_WS = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB = os.path.join(_WS, 'predictions', 'sporttery_history.db')
 OUT = os.path.join(_WS, 'predictions', 'history_analysis.md')
 

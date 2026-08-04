@@ -9,16 +9,12 @@ from __future__ import annotations
 import logging
 import sqlite3
 import time
-from datetime import datetime
-from pathlib import Path
 
 import pandas as pd
-import numpy as np
 
 from .config import (
     config, DB_PATH, LEAGUE_MAP, LEAGUE_MAP_REVERSE,
-    TEAM_NAME_MAP, TEAM_NAME_MAP_REVERSE,
-    cn_to_en_team, en_to_cn_team, cn_to_en_league,
+    TEAM_NAME_MAP_REVERSE,
 )
 
 logger = logging.getLogger("collectors")
@@ -257,6 +253,9 @@ class EloBuilder:
             league = m.get("league", "") or m.get("league_cn", "")
 
             if hg is None or ag is None or not home or not away:
+                continue
+            # NaN 比分视为无效, 跳过 (避免 NaN 被当作 0 分"负"更新 Elo)
+            if pd.isna(hg) or pd.isna(ag):
                 continue
 
             # 赛前评级

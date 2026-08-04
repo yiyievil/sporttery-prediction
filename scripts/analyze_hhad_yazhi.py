@@ -21,7 +21,7 @@ DB_PATH = '/workspace/sporttery/predictions/historical_odds.db'
 OUTPUT_PATH = '/workspace/sporttery/predictions/hhad_yazhi_analysis.json'
 
 # ── 导入 Shin method ──────────────────────────────────────────────
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from v215_e2e import shin_method
 
 

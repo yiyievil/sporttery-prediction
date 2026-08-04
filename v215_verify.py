@@ -668,6 +668,8 @@ def load_predictions(match_keys, results_data):
                         reverse=True)
 
     predictions = {}
+    # 记录每个match_key对应的 (update_count, file) 用于选取最后一次更新
+    key_updates = {}
     for pf in pred_files:
         filepath = os.path.join(PREDICTIONS_DIR, pf)
         try:
@@ -678,16 +680,20 @@ def load_predictions(match_keys, results_data):
 
         meta = data.get('meta', {})
         results = data.get('results', {})
+        # 该文件的更新次数 (predict=0, 每次update+1)
+        uc = data.get('update_count', 0 if data.get('mode') == 'predict' else 1)
 
         for key in match_keys:
-            if key in predictions:
+            if key not in results:
                 continue
-            # 按完整matchNumStr精确匹配
-            if key in results:
+            # 只保留最后一次更新(update_count最大)的版本
+            if key not in key_updates or uc > key_updates[key][0]:
+                key_updates[key] = (uc, pf)
                 predictions[key] = {
                     'prediction': results[key],
                     'meta': meta.get(key, {}),
                     'file': pf,
+                    'update_count': uc,
                 }
 
     return predictions
@@ -1607,7 +1613,7 @@ def logistic_factor_analysis(verified_matches):
         return {'coefficients': {}, 'importance': [], 'pseudo_r2': 0,
                 'interpretation': f'样本不足({n}<10), 无法拟合回归模型'}
 
-    # 标准化 (Z-score)
+    # 标准化 (Z-score) — 先算mean和std, 再一次性标准化
     n_feat = 4
     means = [0] * n_feat
     stds = [1] * n_feat
@@ -1616,14 +1622,9 @@ def logistic_factor_analysis(verified_matches):
             means[j] += f[j]
     for j in range(n_feat):
         means[j] /= n
-    for f in features:
-        for j in range(n_feat):
-            f[j] = (f[j] - means[j]) / max(stds[j], 0.01)
-    # 计算实际std
     for j in range(n_feat):
         var = sum((f[j] - means[j]) ** 2 for f in features) / n
         stds[j] = math.sqrt(max(var, 1e-10))
-    # 重新标准化
     for f in features:
         for j in range(n_feat):
             f[j] = (f[j] - means[j]) / max(stds[j], 0.01)
@@ -1995,7 +1996,8 @@ def generate_html_report(verified_matches, stats, date_str, brier_result=None, c
     避免重复计算(终端输出/HTML报告/数据库复用同一份结果); 未传入时回退到本地计算(向后兼容)。
     """
     # 修复: 只统计有预测的场次, 排除无预测的场次
-    pred_matches = [v for v in verified_matches if v.get('pred_had_dir')]
+    pred_matches = [v for v in verified_matches
+                    if v.get('pred_had_dir') and v['pred_had_dir'] != '无预测']
     total = len(pred_matches) if pred_matches else len(verified_matches)
     had_hits = sum(1 for v in pred_matches if v['had_hit'])
     hhad_hits = sum(1 for v in pred_matches if v['hhad_hit'])
