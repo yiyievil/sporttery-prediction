@@ -3153,8 +3153,32 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     # 问题: 概率高的双选(如胜负73%)可能赔率极低, 毫无价值
     #       而且覆盖区间不一定合理(如胜+负排除了平局)
     # 修复: 按EV排序, 正EV或EV最高的双选才是真正有价值的保险方案
+    #
+    # Ultra 9.4: 双选必须与主推方向一致 (ERR-20260804-003)
+    # 之前: 仅按EV排序, 导致 主推胜 + 双选平负(客队不败) 方向完全相反,
+    #       且"胜"+"平负"覆盖全部3种结果, 推荐失去意义
+    # 修复: 先过滤出包含主推方向的双选, 再在其中按EV选最高
     double_options = [o for o in all_options if o['market'] == 'HAD双选']
-    double_recommend = sorted(double_options, key=lambda x: x['ev_pct'], reverse=True)[0] if double_options else None
+    double_recommend = None
+    if double_options:
+        # 主推方向 → 双选必须包含该HAD结果 ('胜'/'平'/'负')
+        # HAD胜/平/负 与 HHAD让胜/让平/让负 的 option 均以 胜/平/负 结尾
+        primary_dir = (primary_bet or {}).get('option', '')
+        if primary_dir:
+            pref_result = primary_dir[-1]  # 胜/平/负
+            dbl_coverage = {
+                'HAD胜平双选': {'胜', '平'},
+                'HAD胜负双选': {'胜', '负'},
+                'HAD平负双选': {'平', '负'},
+            }
+            # 与主推方向一致的双选 (必须包含主推结果)
+            aligned = [o for o in double_options
+                       if pref_result in dbl_coverage.get(o.get('option', ''), set())]
+            if aligned:
+                double_recommend = sorted(aligned, key=lambda x: x['ev_pct'], reverse=True)[0]
+        if double_recommend is None:
+            # 无主推 或 无法对齐时, 回退到整体EV最高
+            double_recommend = sorted(double_options, key=lambda x: x['ev_pct'], reverse=True)[0]
 
     # ===== 纯方向判断 (Pro 3.9) =====
     # 从真单选中选概率最高的, 排除伪单选(打包两结果的)
