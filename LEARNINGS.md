@@ -50,12 +50,20 @@
 - **验证**: 匹配从 2/5 → 5/5; SWOT leisu 解析从 3/5 → 5/5 (002米亚尔比6条/003奥林匹亚11条/004圣吉8条/005布拉格13条/001雷莫3条), 0 场降级
 - **预防**: ① 新增联赛/球队时检查别名表, 补全简称差异; ② 网络请求(WAF)必须带重试, 不能一次失败即降级
 
+### ERR-20260804-004: node_modules 丢失导致 WAF 求解失败 (严重, 复发根因)
+- **症状**: 环境重置/新 clone 后 `node_modules` 被 .gitignore 排除, 导致 jsdom 缺失, WAF 求解失败, SWOT 降级 stats 备用
+- **根因**: `node_modules` 目录被 .gitignore 排除, 而 `package.json` 虽声明 jsdom 依赖但未自动安装; 每次环境重置/换机都必须手动 `npm install`, 一旦漏做即复发
+- **修复**: 在 `leisu_session.py` 中加入 `_ensure_jsdom()` 运行时自检: 检测到 jsdom 缺失(MODULE_NOT_FOUND 或 node_modules/jsdom 目录不存在)时自动执行 `npm install` 恢复, 失败才返回 False; `solve_waf()` 在调用 Node 求解前先触发自检
+- **验证**: 删除 node_modules 后运行预测, 程序自动检测并安装依赖, WAF 求解恢复正常, 无需人工干预
+- **预防**: 关键依赖必须有运行时自检和自动恢复机制, 不能依赖开发环境配置或人工 `npm install`
+
 ### ERR-20260804-001: leisu WAF 求解失败 — jsdom 未安装 (严重)
 - **症状**: 浏览器能正常打开 leisu /guide 与 /news, 但程序 leisu_get 返回 ok=False, SWOT 卡片发现 0 张
 - **根因**: 页面触发阿里云 WAF 挑战 (arg1 + renderData), solve_waf_jsdom_v2.js 需要 jsdom 运行; 但 node_modules 为空 (从未执行 `npm install`), 脚本运行时抛 `MODULE_NOT_FOUND`, 求解失败 → 返回 WAF 挑战页而非真实内容
 - **关键判断**: 浏览器天然执行 JS, 所以能打开; 程序必须靠 jsdom 求解 acw_sc__v2 cookie。排查时先看 `npm ls jsdom` 是否为空
 - **修复**: `cd /workspace/sporttery && npm install` (安装 jsdom ^29.1); 验证 `/guide` 从 ok=False 23682B→ok=True 22054B, 卡片发现 5 张
 - **预防**: ① package.json 已声明 jsdom 依赖, 新环境必须 `npm install`; ② solve_waf_*.js 已从 .gitignore 移除并纳入版本控制(同时解决 ERR-20260731-001 的复发风险), 重新 clone 后须确认文件存在且 node_modules 已安装
+- **根治**: 由 ERR-20260804-004 的 `_ensure_jsdom()` 运行时自检兜底, 不再依赖人工 `npm install`
 
 ### ERR-20260731-001: leisu SWOT 全为"解析为空" — solve_waf_jsdom_v2.js 缺失 (严重)
 - **症状**: 预测时 leisu 卡片发现正常(23张)且匹配成功, 但所有详情页解析为空, 全部降级 stats 备用
