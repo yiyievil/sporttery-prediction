@@ -54,25 +54,12 @@
  └─────────────┘ └─────────────┘ └─────────────┘
 ```
 
-### 数据源优先级（锁定策略）
-
-```
-sporttery(体彩) > nowscore > 500.com > sporttery(保底)
-```
-
-- **sporttery**：绝对核心，决定预测范围与赔率基准，不可替代
-- **nowscore**：主力辅助数据源，提供三合一盘口、近况、交锋、积分
-- **500.com**：仅当 nowscore 失败时降级使用
-- **leisu.com**：SWOT 情报源，通过 jsdom 绕过阿里云 WAF
-
----
-
 ## 🚀 快速开始
 
 ### 环境要求
 
 - Python 3.9+（`requests`, `reportlab`, `pandas`, `numpy`, `sqlite3`）
-- Node.js（`jsdom@29`，用于 leisu WAF 绕过）
+- Node.js（`jsdom@29`）
 
 ### 安装依赖
 
@@ -143,7 +130,7 @@ sporttery/
 | 步骤 | 输入 | 输出 | 核心算法 |
 |------|------|------|----------|
 | Step 1 | 初赔大小球优先 | goal_line（市场基准） | 盘口众数 |
-| Step 2 | 体彩 HAD + 500.com 欧指 | P0 贝叶斯先验 | Shin 方法修正 |
+| Step 2 | 体彩 HAD  | P0 贝叶斯先验 | Shin 方法修正 |
 | Step 3 | 近况战绩修正 | P1 + 近期进球/失球率 | 指数衰减权重 |
 | Step 4 | 对赛战绩修正 | P1 更新 + h2h 进球趋势 | 历史交锋特征 |
 | Step 5 | 盘口 + 动态主场优势 | λ_h, λ_a 泊松参数 | 贝叶斯收缩 |
@@ -173,14 +160,6 @@ sporttery/
 | [LEARNINGS.md](./LEARNINGS.md) | 经验教训库（跨会话持久化） |
 | [WORK_PROGRESS.md](./WORK_PROGRESS.md) | 工作进度与架构演进记录 |
 
----
-
-## 🛠️ 技术栈
-
-- **Python**：requests, reportlab, pandas, numpy, sqlite3
-- **Node.js**：jsdom（阿里云 WAF 绕过）
-- **数据库**：SQLite（历史赔率 / 回归验证 / 模拟投注）
-- **数据源**：sporttery.cn, nowscore.com, 500.com, leisu.com, Understat
 
 ---
 
