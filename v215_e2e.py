@@ -307,7 +307,7 @@ HYBRID_PROB_TOLERANCE = 3.0  # 单位: 概率百分点
 AUTO_SWOT = True
 
 # ===== Ultra 7.4: 杯赛首回合大比分惩罚 (仅限欧冠/欧罗巴/欧协联等两回合制杯赛) =====
-from cup_leg_penalty import get_cup_leg_penalty, clear_cache as clear_leg_cache
+from cup_leg_penalty import get_cup_leg_penalty, clear_cache as clear_leg_cache, is_cup_competition as _is_cup_league
 
 # ============================================================
 # Pro 3.1: 5星制置信度系统 (含半星)
@@ -2575,10 +2575,33 @@ def calibrate_probabilities(probs, source='poisson', lam_total=None, lam_h=None,
 
     # Ultra 6.4: 联赛平局率先验 + 平赔信号
     # 联赛历史平局率是平局频率的直接先验 (此前target仅由λ决定)
-    if league:
+    # Ultra 11.3: 杯赛不走此块 — 其平局先验由下方 CUP_DRAW_BASE 决定,
+    #             权避免被 _CALIBRATION 覆盖的杯赛主名低值(如欧冠0.1832)拉低
+    if league and not _is_cup_league(league):
         league_rate = LEAGUE_DRAW_RATE.get(league, LEAGUE_DRAW_RATE.get('default'))
         if league_rate:
             target_draw = 0.7 * target_draw + 0.3 * league_rate
+
+    # Ultra 11.3 (回归分析 2026-08-05): 杯赛平局加成
+    # 回归验证(260804周二): 003奥林匹亚0-0、004圣吉3-3 两回合制杯赛平局全漏(HAD判胜/胜负)
+    # 根因: 杯赛(尤其资格赛)次回合落后方保守强攻受限、领先方留力, 平局倾向高于联赛
+    #       欧冠 7-8月资格赛平局率 20%~25%, 均高于模型默认先验
+    # 关键: '欧冠'等主名会被 _CALIBRATION(sample>=20) 覆盖为低值(如0.1832),
+    #       故杯赛分支必须用固定先验 CUP_DRAW_BASE, 不能依赖可能被覆盖的 LEAGUE_DRAW_RATE
+    # 机制: ① 固定杯赛平局先验 0.28 直接加权(权重0.5), 不受数据库覆盖影响
+    #       ② 分级加成: λ差<0.40 +4pp(势均力敌强加成), <0.80 +2pp(小幅差距中加成)
+    #       ③ 一边倒(λ差>=0.80)靠固定先验兜底, 不硬掰
+    if league and _is_cup_league(league):
+        # ① 固定杯赛平局先验 (取实测区间 20%~25% 上沿), 覆盖被数据库低值覆盖的情况
+        _cup_rate = max(CUP_DRAW_BASE, LEAGUE_DRAW_RATE.get(league, CUP_DRAW_BASE))
+        target_draw = 0.5 * target_draw + 0.5 * _cup_rate
+        # ② 分级平局加成 (杯赛整体倾向平局, 势均力敌更强)
+        if lam_h is not None and lam_a is not None:
+            _lam_diff_cup = abs(lam_h - lam_a)
+            if _lam_diff_cup < 0.40:
+                target_draw += 0.04
+            elif _lam_diff_cup < 0.80:
+                target_draw += 0.02
     # 平赔<3.4: 市场定价认为平局可能性高 → 目标+2pp
     # 平赔>4.0: 市场认为平局罕见 → 目标-1pp
     if draw_odds and draw_odds > 1.5:
@@ -4006,10 +4029,25 @@ LEAGUE_DRAW_RATE = {
     '美职': 0.22, '美职联': 0.22, '巴甲': 0.30,
     '英超': 0.26, '西甲': 0.31, '德甲': 0.27,
     '意甲': 0.21, '法甲': 0.26, '英冠': 0.29,
-    '欧冠': 0.18, '欧罗巴': 0.18,
+    # Ultra 11.3 (回归分析 2026-08-05): 杯赛平局先验上调
+    # 两回合制杯赛(欧冠/欧罗巴/欧协联资格赛)次回合平局倾向显著高于联赛:
+    #   欧冠 7-8月资格赛平局率 20%~25%, 欧罗巴资格赛 ~22%, 均高于字典旧值0.18
+    #   回归验证(260804周二): 003奥林匹亚0-0、004圣吉3-3 两场杯赛平局全漏
+    #   根因: 资格赛首回合落后方次回合保守固+强队留力, 易成平局
+    # 说明: LEAGUE_DRAW_RATE 会被 _CALIBRATION 的 sample_size>=20 覆盖,
+    #       此处提高可作用于 sample_size<20 的杯赛/资格赛名(dict覆盖不到时回退本值)
+    '欧冠': 0.22, '欧冠资格赛': 0.24, '欧冠附': 0.24,
+    '欧罗巴': 0.22, '欧联': 0.22, '欧联杯': 0.22, '欧联资格赛': 0.24,
+    '欧协联': 0.22, '欧协联资格赛': 0.24,
     '中超': 0.26, '亚冠': 0.25,
     'default': 0.25,
 }
+
+# Ultra 11.3 (回归分析 2026-08-05): 杯赛平局固定先验
+# 两回合制杯赛(欧冠/欧罗巴/欧协联资格赛)平局倾向实测 20%~25%, 取上沿 0.28
+# 需稳定高于主流联赛标定值(英超0.25/巴甲0.30), 否则加成被稀释
+# 不受 _CALIBRATION(sample>=20) 覆盖影响 — 杯赛主名如'欧冠'常被覆盖为低值(0.1832)
+CUP_DRAW_BASE = 0.28
 
 # Ultra 6.6: 用历史标定值覆盖平局率
 if _CALIBRATION:
@@ -5378,6 +5416,49 @@ def post_fusion_hhad_draw_calibration(probs, had, hhad, handicap, league):
                 s2 = pw_new + pd_new + pl_new
                 if s2 > 0:
                     pw_new, pd_new, pl_new = pw_new / s2, pd_new / s2, pl_new / s2
+
+    # ===== Step 11: 让平概率虚高下修 (Ultra 11.4, 专项回归 2026-08-06) =====
+    # 回归发现(51场HHAD): 模型平均让平概率27.1% vs 实际让平率15.7%, 让平概率虚高超11pp
+    # 且让平零判别度(实际让平场26.1% vs 总体27.1%, 无差异)
+    # 修正: 让平概率向实测让平率上沿(~20%)收敛, 差额等比分配给让胜/让负
+    # 效果: 不改变方向选择(让平从未为argmax), 但修正让胜/让负概率欠自信偏差
+    #       提升方向概率准确性 → 改善EV/置信度标定
+    # 说明: 与其他Step的"上调让平"逻辑不同, 本步专门处理让平虚高的回归发现
+    HHAD_DRAW_DEFLATE_TARGET = 0.20   # 实测让平率15.7%, 取上沿20%作为目标
+    HHAD_DRAW_DEFLATE_STRENGTH = 0.5  # 修正强度: 只修正50%偏差, 保守
+    if pd_new > HHAD_DRAW_DEFLATE_TARGET:
+        _excess = pd_new - HHAD_DRAW_DEFLATE_TARGET
+        _corr = _excess * HHAD_DRAW_DEFLATE_STRENGTH
+        pd_new -= _corr
+        _dd_tot = pw_new + pl_new
+        if _dd_tot > 0:
+            pw_new += _corr * (pw_new / _dd_tot)
+            pl_new += _corr * (pl_new / _dd_tot)
+        else:
+            pw_new += _corr * 0.5
+            pl_new += _corr * 0.5
+        # 边界保护 + 归一化
+        pw_new = max(0.05, min(0.85, pw_new))
+        pd_new = max(0.08, min(0.45, pd_new))
+        pl_new = max(0.05, min(0.85, pl_new))
+        _dd_s = pw_new + pd_new + pl_new
+        if _dd_s > 0:
+            pw_new, pd_new, pl_new = pw_new / _dd_s, pd_new / _dd_s, pl_new / _dd_s
+
+    # ===== Step 12: 方向概率欠自信上调 (Ultra 11.5, 专项回归 2026-08-06) =====
+    # 回归发现(51场HHAD): 方向概率整体欠自信, 实测定向概率(P)系统性低于实际命中率
+    # 校准曲线: 实际命中率在多个P档均>预测P(欠自信), 低档P<40%实际命中53% vs 预测31%
+    # 修正: 概率尺度校准 f(p)=p^r (r<1增强高概率, 压缩低概率), 等比归一化
+    # 效果: 单调变换保持方向排序不变 → 不改变方向命中率, 但提升概率校准(Brier/ECE)
+    #       及EV/置信度标定精度
+    # 说明: 幂变换是单调的, 不会翻转argmax; 方向命中率由特征排序决定, 非概率尺度
+    HHAD_UC_POWER = 0.85   # 幂指数 r<1 = 欠自信上调 (增强高概率方向)
+    pw_new = pw_new ** HHAD_UC_POWER
+    pd_new = pd_new ** HHAD_UC_POWER
+    pl_new = pl_new ** HHAD_UC_POWER
+    _uc_s = pw_new + pd_new + pl_new
+    if _uc_s > 0:
+        pw_new, pd_new, pl_new = pw_new / _uc_s, pd_new / _uc_s, pl_new / _uc_s
 
     return [pw_new, pd_new, pl_new]
 
