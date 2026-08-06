@@ -3197,6 +3197,22 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
             # 与主推方向一致的双选 (必须包含主推结果)
             aligned = [o for o in double_options
                        if pref_result in dbl_coverage.get(o.get('option', ''), set())]
+            # Ultra 11.8: 平局盲区低估补偿 (HAD专项回归 2026-08-06)
+            # 回归发现(51场): 预测平局仅4场(7.8%), 实际平局13场(25.5%), 11场平局被完全漏掉
+            # 根因: 模型平均平局概率27.8%标定良好, 但平局概率从未成为argmax(方向选择)
+            # 修正: 当平局概率进入前二且接近胜/负(top2差<容差)时, 双选优先覆盖平局
+            #       即 主推胜→胜平双选, 主推负→平负双选, 避免"硬砍平局"漏判
+            # 效果: 不改变主推方向(平局仍非argmax), 但双选保险覆盖平局盲区
+            if aligned and len(had_probs) >= 3:
+                _sp = sorted(had_probs, reverse=True)
+                _top2_gap = _sp[0] - _sp[1]
+                _draw_in_top2 = (had_probs[1] >= _sp[1] - 1e-9)  # 平局概率==第二大概率
+                if _draw_in_top2 and _top2_gap < HYBRID_PROB_TOLERANCE / 100.0:
+                    # 平局进入前二且接近主导 → 优先选覆盖平局的双选
+                    draw_covering = [o for o in aligned
+                                     if '平' in dbl_coverage.get(o.get('option', ''), set())]
+                    if draw_covering:
+                        aligned = draw_covering
             if aligned:
                 double_recommend = sorted(aligned, key=lambda x: x['ev_pct'], reverse=True)[0]
         if double_recommend is None:
@@ -6874,6 +6890,26 @@ def predict_match(match_num, data):
     elif difficulty < 40:
         had_conf_score = min(had_conf_score, 3.5)
         hhad_conf_score = min(hhad_conf_score, 3.5)
+
+    # ===== Ultra 11.6: 高赔价值陷阱降置信 (HAD专项回归 2026-08-06) =====
+    # 回归发现(51场HAD): 预测赔率>2.5 命中率16.7%(低于随机33.3%), ROI -35%
+    # 高赔区间是价值陷阱: 高赔方向多为冷门/Nordic强队, 模型高估其命中
+    # 修正: 预测赔率>2.5时直接降置信, >3.0封顶★★, 2.5-3.0封顶★★½
+    # 效果: 规避高赔陷阱, 置信度与真实命中率匹配
+    if odds and odds > 2.5:
+        _hc_odds_cap = 2.5 if odds <= 3.0 else 2.0
+        had_conf_score = min(had_conf_score, _hc_odds_cap)
+        v611_notes.append(f"[回归] 高赔{odds:.2f}>2.5价值陷阱(命中率16.7%), 置信度封顶{format_stars(_hc_odds_cap)}")
+
+    # ===== Ultra 11.7: 高置信热度惩罚 (HAD专项回归 2026-08-06) =====
+    # 回归发现(51场HAD): ≥3.5★ 命中率41.2%为全档最低, ROI仅+1.0%
+    # 高置信失误集中在低赔热门(1.3-1.9): 瓦勒伦加1.53/AIK1.32/莫尔德1.47 全翻车
+    # 根因: 大热门低赔高置信, 赔率本身已难有判别力, 高置信=虚假信心
+    # 修正: 高置信(≥3.5★) + 低赔热门(≤2.0) → 热度惩罚-0.5★, 封顶★★★
+    # 效果: 高置信档位不再虚高, 与41.2%真实命中率匹配
+    if had_conf_score >= 3.5 and odds and odds <= 2.0:
+        had_conf_score = min(had_conf_score - 0.5, 3.0)
+        v611_notes.append(f"[回归] 高置信{format_stars(had_conf_score+0.5 if had_conf_score<3.5 else 3.0)}低赔热门{odds:.2f}热度惩罚, 封顶★★★")
 
     had_conf = format_stars(had_conf_score)
     hhad_conf = format_stars(hhad_conf_score)
