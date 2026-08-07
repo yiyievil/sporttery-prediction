@@ -299,6 +299,12 @@ RECOMMEND_MODE = 'hybrid'   # ← prob=命中率优先 | ev=EV优先 | hybrid=�
 # hybrid 阈值-决胜法 (Ultra 6.5): 候选 = prob ≥ p_max − HYBRID_PROB_TOLERANCE, 候选内取EV最高
 # 3pp ≈ 模型校准误差带; 差距在误差带内让赔率说话, 差距真实存在时概率说了算
 HYBRID_PROB_TOLERANCE = 3.0  # 单位: 概率百分点
+# ===== Ultra 11.9: HHAD 优先级提升 (HAD专项回归 2026-08-07) =====
+# 回归发现(260806周四): HHAD让球 3/4(75%) 显著优于 HAD 1/4(25%)
+# 根因: 让球盘对方向更敏感, HHAD让球方向判别力强于HAD主盘
+# 修正: hybrid误差带内HHAD加等效0.5pp分, 使HAD/HHAD可比时HHAD优先
+# 效果: 不改变"带外概率说了算"的铁律, 仅在带内(HAD/HHAD判别力相当)时偏向HHAD
+HHAD_PRIORITY_BONUS = 0.5  # 单位: hybrid_score等效概率百分点
 
 # ===== SWOT 自动获取开关 (Ultra 6.5) =====
 # True: 预测完成后自动发现leisu情报卡片→获取SWOT→融合回预测文件
@@ -3128,6 +3134,11 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                     # 展示用score: 误差带内按EV排, 带外按prob降序排在带内之后
                     o['hybrid_score'] = round((1 if o['hybrid_in_band'] else 0) * 1000
                                               + (o['ev_pct'] if o['hybrid_in_band'] else o['prob'] - 100), 3)
+                # Ultra 11.9: HHAD优先级提升 — 误差带内HHAD加等效0.5pp分
+                # 回归: 260806周四HHAD 3/4(75%) vs HAD 1/4(25%), 让球方向判别力更强
+                # 仅在带内比较溢出处偏向HHAD, 不改变"带外概率说了算"铁律
+                if o['market'] == 'HHAD' and o['hybrid_in_band']:
+                    o['hybrid_score'] = round(o['hybrid_score'] + HHAD_PRIORITY_BONUS, 3)
             all_ranked = sorted(single_options, key=lambda x: x['hybrid_score'], reverse=True)
             primary_bet = all_ranked[0]
         else:
@@ -3183,6 +3194,10 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     # 修复: 先过滤出包含主推方向的双选, 再在其中按EV选最高
     double_options = [o for o in all_options if o['market'] == 'HAD双选']
     double_recommend = None
+    # Ultra 11.9: 双选并列输出 — 平局盲区补偿触发时, 双选作为"并列主推"输出
+    # 回归: 260806周四002 平局概率进前二, 双选"胜平"覆盖实际平局, 是三条校准中唯一挽回命中的
+    # 效果: 平局盲区补偿不只在保险位, 而是并列主推, 提高用户实际落地率
+    double_parallel_output = False
     if double_options:
         # 主推方向 → 双选必须包含该HAD结果 ('胜'/'平'/'负')
         # HAD胜/平/负 与 HHAD让胜/让平/让负 的 option 均以 胜/平/负 结尾
@@ -3213,8 +3228,14 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                                      if '平' in dbl_coverage.get(o.get('option', ''), set())]
                     if draw_covering:
                         aligned = draw_covering
+                        # Ultra 11.9: 平局盲区补偿触发 → 双选改为并列主推
+                        double_parallel_output = True
             if aligned:
                 double_recommend = sorted(aligned, key=lambda x: x['ev_pct'], reverse=True)[0]
+                # Ultra 11.9: 并列输出时, 双选为主推方向的并列保险(主推胜→胜平, 主推负→平负)
+                if double_parallel_output:
+                    double_recommend = dict(double_recommend)
+                    double_recommend['parallel'] = True
         if double_recommend is None:
             # 无主推 或 无法对齐时, 回退到整体EV最高
             double_recommend = sorted(double_options, key=lambda x: x['ev_pct'], reverse=True)[0]
@@ -3318,7 +3339,10 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     if pure_direction_bet and pure_direction_bet['option'] != (primary_bet['option'] if primary_bet else ''):
         insight_parts.append(f"纯方向{fmt_bet(pure_direction_bet)}")
     if double_recommend:
-        insight_parts.append(f"双选保险{double_recommend['option']}@{double_recommend['odds']}(P={double_recommend['prob']}%,EV={double_recommend['ev_pct']}%)")
+        if double_recommend.get('parallel'):
+            insight_parts.append(f"双选并列主推{double_recommend['option']}@{double_recommend['odds']}(P={double_recommend['prob']}%,EV={double_recommend['ev_pct']}%,平局盲区覆盖)")
+        else:
+            insight_parts.append(f"双选保险{double_recommend['option']}@{double_recommend['odds']}(P={double_recommend['prob']}%,EV={double_recommend['ev_pct']}%)")
     if risk_assessment:
         insight_parts.append(risk_assessment.lstrip('。'))
     if pass_risk_level in ('高', '中'):
@@ -3381,6 +3405,7 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         'primary_bet': primary_bet,
         'hhad_primary_bet': hhad_primary_bet,
         'double_recommend': double_recommend,
+        'double_parallel_output': double_parallel_output,
         'pure_direction_bet': pure_direction_bet,
         'primary_mode': mode,
         'pass_risk': pass_risk,
@@ -6911,6 +6936,15 @@ def predict_match(match_num, data):
         had_conf_score = min(had_conf_score - 0.5, 3.0)
         v611_notes.append(f"[回归] 高置信{format_stars(had_conf_score+0.5 if had_conf_score<3.5 else 3.0)}低赔热门{odds:.2f}热度惩罚, 封顶★★★")
 
+    # ===== Ultra 11.9: 强化热度惩罚 — 低赔热门 + 主队xG超额 反向风险 (HAD专项回归 2026-08-07) =====
+    # 首次实战(260806周四004): 塞萨洛 欧指1.65→1.46低赔大热门, 实际0-1负
+    #   且主队xG超额+0.39(进球远超xG)有回归风险, 是典型"热度陷阱"
+    # 修正: 低赔热门(≤1.5) + 主队xG超额(>+0.3) → 置信度硬封顶★★ + 提示反向风险
+    # 效果: "欧指走热+xG超额"组合明确降级, 避免虚假高信心误导投注
+    if odds and odds <= 1.5 and _xg_home and _xg_home.get('overperformance', 0) > 0.3:
+        had_conf_score = min(had_conf_score, 2.0)
+        v611_notes.append(f"[回归] 低赔热门{odds:.2f}≤1.5+主队xG超额{_xg_home['overperformance']:+.2f}>+0.3热度陷阱, 置信度封顶★★, 提示反向风险")
+
     had_conf = format_stars(had_conf_score)
     hhad_conf = format_stars(hhad_conf_score)
     
@@ -7554,7 +7588,8 @@ def main():
                     summary_lines.append(f"    纯方向: {pdb.get('option','')}@{pdb.get('odds','')} P={pdb.get('prob','')}%")
                 dr = cm.get('double_recommend', {})
                 if dr:
-                    summary_lines.append(f"    双选保险: {dr.get('option','')}@{dr.get('odds','')} P={dr.get('prob','')}%")
+                    _dr_label = '双选并列主推' if (dr.get('parallel') or cm.get('double_parallel_output')) else '双选保险'
+                    summary_lines.append(f"    {_dr_label}: {dr.get('option','')}@{dr.get('odds','')} P={dr.get('prob','')}%")
                 pr = cm.get('pass_risk', {})
                 if pr.get('level', '低') in ('高', '中'):
                     summary_lines.append(f"    穿盘风险: {pr.get('level','')} | {pr.get('desc','')}")
