@@ -66,6 +66,13 @@ from v215_e2e import (
 
 PREDICTIONS_DIR = os.path.join(_WORKSPACE, 'predictions')
 
+# Ultra 11.10: 更新完成后自动生成PDF报告, 无需用户每次提醒
+try:
+    import gen_pred_pdf
+    PDF_AUTO = True
+except Exception:
+    PDF_AUTO = False
+
 # ============================================================
 # Phase 0: 用户输入
 # ============================================================
@@ -160,6 +167,12 @@ def find_prediction_file(date_str, match_numbers):
     # 按修改时间倒序 (最新的优先)
     candidates.sort(key=lambda f: os.path.getmtime(f), reverse=True)
 
+    # Ultra 11.10: 同一日期可能生成多个周几文件(周X基于开盘日), 编号可能跨文件重复。
+    # 必须选择"匹配场次最多"的文件, 不能返回第一个命中的 — 否则会把目标场次写进错误文件。
+    best_hits = 0
+    best_data = None
+    best_file = None
+    best_found = []
     for pred_file in candidates:
         try:
             with open(pred_file, 'r', encoding='utf-8') as f:
@@ -167,11 +180,14 @@ def find_prediction_file(date_str, match_numbers):
             results = data.get('results', {})
             # 按编号后3位匹配 (不做周几过滤, 因为体彩周几=开盘日≠比赛日)
             found = [k for k in results if k[-3:] in match_numbers]
-            if found:
-                print(f"  [匹配] 在 {os.path.basename(pred_file)} 中找到 {len(found)} 场: {found}")
-                return data, pred_file, found
+            if len(found) > best_hits:
+                best_hits = len(found)
+                best_data, best_file, best_found = data, pred_file, found
         except:
             continue
+    if best_data is not None:
+        print(f"  [匹配] 在 {os.path.basename(best_file)} 中找到 {len(best_found)} 场: {best_found}")
+        return best_data, best_file, best_found
 
     # 回退: 扫描所有预测文件 (按时间倒序)
     if not os.path.exists(PREDICTIONS_DIR):
@@ -360,12 +376,17 @@ def compare_predictions(old_pred, new_pred, history=None):
             pass
 
     # 从history中提取更早的趋势
+    # Ultra 11.10: 历史记录 changes 字段新旧版本结构不同(旧版=int变更数, 新版=dict)。防御性跳过非dict。
     if history:
         for h in history[-2:]:  # 最近2次历史
             old_changes = h.get('changes', {})
+            if not isinstance(old_changes, dict):
+                continue
             for k, v in old_changes.items():
+                if not isinstance(v, list):
+                    continue
                 for c in v:
-                    if c.get('type') == '方向变化':
+                    if isinstance(c, dict) and c.get('type') == '方向变化':
                         trend_details.append(f"历史: {k} {c.get('field')} {c.get('old')}→{c.get('new')}")
 
     trend_info = {
@@ -836,6 +857,15 @@ def main():
     print(f"  首次预测: {pred_data.get('saved_at', '未知')}")
     print(f"  本次更新: {updated_pred['saved_at']}")
     print(f"  历史版本: {len(history)}")
+
+    # ===== Step 8.5: 自动生成PDF报告 (无需用户每次提醒) =====
+    if PDF_AUTO:
+        try:
+            pdf_path = pred_file.replace('.json', '.pdf')
+            gen_pred_pdf.generate_pdf(updated_pred, pdf_path)
+            print(f"  📄 自动生成PDF: {pdf_path}")
+        except Exception as e:
+            print(f"  ⚠️ PDF生成失败(不影响更新): {e}")
 
     # ===== Step 9: Token节约统计 =====
     total_time = time.time() - t0

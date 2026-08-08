@@ -312,6 +312,28 @@ def _build_initial_odds_block(initial):
     return '  |  '.join(parts) if parts else ''
 
 
+def _hhad_option_label(option, handicap):
+    """让球玩法选项术语规范化 (Ultra 11.10 铁律)
+
+    - 负盘(≤-1)=让球: 让胜/让负/让平 不变
+    - 正盘(≥+1)=受让: 让胜→受让胜, 让负→受让负, 让平→受让平
+    - 0=平盘: 保持让X不变
+    只处理 option 含 '让胜'/'让负'/'让平' 的 HHAD 选项, 其余原样返回。
+    """
+    if not option:
+        return option
+    try:
+        hcap = float(handicap)
+    except (TypeError, ValueError):
+        return option
+    if hcap <= 0:
+        return option  # 让球盘或平盘, 术语不变
+    # 受让盘: 将'让胜/让负/让平'全部替换为'受让胜/受让负/受让平' (不能只替换第一个命中就返回)
+    for src, dst in [('让胜', '受让胜'), ('让负', '受让负'), ('让平', '受让平')]:
+        option = option.replace(src, dst)
+    return option
+
+
 # ====================================================================
 # 核心: 构建单场比赛页面 (严格1页)
 # ====================================================================
@@ -388,9 +410,21 @@ def build_match_page(m, page_num, total):
         return [Paragraph(label, S['table_key']), Paragraph(value, S['table_val'])]
 
     had_p_clean = m['had_p'].replace('%', '') if m['had_p'] else ''
+    # 让球标识: 负盘(-1,-2,...)=让球, 正盘(+1,+2,...)=受让 (Ultra 11.10规范)
+    _hcap = m['hhad_h']
+    try:
+        _hcap_n = float(_hcap) if str(_hcap).replace('.','').replace('-','').isdigit() else None
+    except:
+        _hcap_n = None
+    if _hcap_n is not None and _hcap_n != 0:
+        _hcap_label = f'受让{abs(_hcap_n):g}球' if _hcap_n > 0 else f'让{abs(_hcap_n):g}球'
+    elif _hcap_n is not None:
+        _hcap_label = '平盘(0球)'
+    else:
+        _hcap_label = f'盘口{_hcap}'
     data_rows = [
         _make_row('胜平负', f'{m["had_dir"]}  @{m["had_odds"]}    {m["had_conf"]}  ({had_p_clean})'),
-        _make_row('让球', f'{m["hhad_dir"]}  @{m["hhad_odds"]}    {m["hhad_conf"]}  (让{m["hhad_h"]}球)'),
+        _make_row('让球', f'{m["hhad_dir"]}  @{m["hhad_odds"]}    {m["hhad_conf"]}  ({_hcap_label})'),
     ]
     if m['wdl']:
         wdl_clean = m['wdl'].replace('%', '')
@@ -470,7 +504,7 @@ def build_match_page(m, page_num, total):
             ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
         ]))
         inner.append([title_row])
-        inner.append([Paragraph(f'{mk}  {opt}', S['rec_main_odds'])])
+        inner.append([Paragraph(f'{mk}  {_hhad_option_label(opt, m["hhad_h"])}', S['rec_main_odds'])])
         detail_parts = [f'P = {prob:.1f}%', f'EV = {ev:+.1f}%']
         if val:
             detail_parts.append(val)
@@ -516,7 +550,7 @@ def build_match_page(m, page_num, total):
             dir_ = entry.get('direction', '')
 
             odds_row = Table(
-                [[Paragraph(f'{mk}  {opt}', S['rec_sub_odds']),
+                [[Paragraph(f'{mk}  {_hhad_option_label(opt, m["hhad_h"])}', S['rec_sub_odds']),
                   Paragraph(f'@{odds}', S['rec_sub_odds'])]],
                 colWidths=[full_w * 0.32, full_w * 0.14]
             )
@@ -595,7 +629,8 @@ def build_match_page(m, page_num, total):
     if data_line_parts:
         bottom_lines.append('  |  '.join(data_line_parts))
     if insight_line:
-        bottom_lines.append(f'关键洞察: {insight_line}')
+        # 受让盘(+1等)洞察文案中的 HHAD让胜/让平/让负 需统一为 受让胜/受让平/受让负
+        bottom_lines.append(f'关键洞察: {_hhad_option_label(insight_line, m["hhad_h"])}')
 
     if bottom_lines:
         insight_data = [[Paragraph(line, S['body_text'])] for line in bottom_lines]
@@ -612,21 +647,23 @@ def build_match_page(m, page_num, total):
         story.append(Spacer(1, 1.5 * mm))
 
     # ================================================================
-    # 区域6: 体彩玩法 EV 优选 (紧凑)
+    # 区域6: 体彩玩法 EV 优选 (完整显示所有选项, 按EV降序)
+    #   Ultra 11.10: 从"每玩法Top1"升级为"每玩法全部选项",
+    #   完整覆盖 总进球/半全场/比分 三大玩法, 满足"所有玩法"需求
     # ================================================================
     sp = m['sporttery_pools'] or {}
     pool_lines = []
     for pool_key, pool_label in [('ttg', '总进球'), ('hafu', '半全场'), ('crs', '比分')]:
         items = sp.get(pool_key, [])
         if items:
-            sorted_items = sorted(items, key=lambda x: x.get('ev_pct', -999), reverse=True)[:1]
+            sorted_items = sorted(items, key=lambda x: x.get('ev_pct', -999), reverse=True)
             parts = []
             for it in sorted_items:
                 opt = it.get('option', '?')
                 odd = it.get('odds', '?')
                 ev2 = it.get('ev_pct', 0)
                 flag = ' ✓' if ev2 > 0 else ''
-                parts.append(f'{opt} @{odd} (EV {ev2:+.0f}%){flag}')
+                parts.append(f'{opt}@{odd}({ev2:+.0f}%){flag}')
             if parts:
                 pool_lines.append(f'{pool_label}:  {" | ".join(parts)}')
 

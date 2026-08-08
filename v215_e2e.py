@@ -2955,6 +2955,27 @@ def kelly_criterion(prob, odds, margin=0.0):
             'value': f > 0 and ev >= value_threshold}
 
 
+def _hhad_display_label(option, handicap):
+    """HHAD选项/洞察文案术语规范化 (Ultra 11.10 铁律, 与 gen_pred_pdf._hhad_option_label 一致)
+
+    - 负盘(≤-1)=让球: 让胜/让负/让平 不变
+    - 正盘(≥+1)=受让: 让胜→受让胜, 让负→受让负, 让平→受让平
+    - 0=平盘: 保持让X不变
+    只处理含 '让胜'/'让负'/'让平' 的文本, 其余原样返回。
+    """
+    if not option:
+        return option
+    try:
+        hcap = float(handicap)
+    except (TypeError, ValueError):
+        return option
+    if hcap <= 0:
+        return option  # 让球盘或平盘, 术语不变
+    for src, dst in [('让胜', '受让胜'), ('让负', '受让负'), ('让平', '受让平')]:
+        option = option.replace(src, dst)
+    return option
+
+
 def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handicap, lam_h, lam_a, mode='prob'):
     """跨玩法价值分析 — 命中率优先, EV仅作参考
 
@@ -3381,6 +3402,8 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         insight_parts.append(' '.join(double_compare))
 
     insight = '。'.join(insight_parts) if insight_parts else '无明显信号'
+    # 受让盘(+1等)洞察文案统一术语: HHAD让胜/让平/让负 → 受让胜/受让平/受让负
+    insight = _hhad_display_label(insight, handicap)
 
     # Ultra 3.0: 精简返回结构, 降低token消耗 ~40%
     # 移除: value_bets (可从all_ranked派生), risk_assessment/double_compare (已折叠进insight)
