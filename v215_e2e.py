@@ -2976,13 +2976,16 @@ def _hhad_display_label(option, handicap):
     return option
 
 
-def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handicap, lam_h, lam_a, mode='prob'):
+def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handicap, lam_h, lam_a, mode='prob', difficulty=None):
     """跨玩法价值分析 — 命中率优先, EV仅作参考
 
     三模式推荐系统:
         mode='prob' (默认, 命中率优先): 纯概率排序, 概率最高即主推, EV不参与排序
         mode='ev'   (EV优先):          主推=EV最高, 概率为辅
         mode='hybrid'(混合):           score = 0.6×prob + 0.4×ev_norm
+
+    Ultra 11.11: 新增 difficulty 参数 — 用于让平/平局盲区补偿的"中等难度"触发判定
+    (深度因子分析 LRN-20260809-002: 受让盘让平率36% vs 让球盘23%; 中等难度45-65让平率44%)
 
     Returns:
         all_ranked: 全部选项按主模式排序
@@ -2995,6 +2998,7 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         margin_dist: 净胜球概率分布
         risk_assessment: 风险评估文字
         insight: 综合洞察文字
+        let_draw_hotspot: 让平高发窗口标记 (Ultra 11.11)
     """
     all_options = []
     had_labels = ['HAD胜', 'HAD平', 'HAD负']
@@ -3239,17 +3243,27 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
             # 修正: 当平局概率进入前二且接近胜/负(top2差<容差)时, 双选优先覆盖平局
             #       即 主推胜→胜平双选, 主推负→平负双选, 避免"硬砍平局"漏判
             # 效果: 不改变主推方向(平局仍非argmax), 但双选保险覆盖平局盲区
+            #
+            # Ultra 11.11: 平局盲区触发条件增强 (深度因子分析 LRN-20260809-002)
+            # 因子发现(83场): 预测胜/负但实际平局23%误判率, "平"方向F1=0.00
+            # 原逻辑要求 top2差<容差(3pp) 才触发, 但平局漏判代价=0命中
+            # 增强: 平局概率≥25%(普通)或 top2差<容差(势均) 即触发, 放宽覆盖平局的门槛
             if aligned and len(had_probs) >= 3:
-                _sp = sorted(had_probs, reverse=True)
-                _top2_gap = _sp[0] - _sp[1]
-                _draw_in_top2 = (had_probs[1] >= _sp[1] - 1e-9)  # 平局概率==第二大概率
-                if _draw_in_top2 and _top2_gap < HYBRID_PROB_TOLERANCE / 100.0:
-                    # 平局进入前二且接近主导 → 优先选覆盖平局的双选
+                _draw_idx = 1  # HAD 平局索引
+                _sp0, _sp1, _sp2 = sorted(had_probs, reverse=True)
+                _top2_gap = _sp0 - _sp1
+                _draw_prob = had_probs[_draw_idx]
+                _draw_in_top2 = (_sp1 == _draw_prob or _sp2 == _draw_prob)  # 平局进前二或前三
+                # 触发: 平局概率≥25% 或 (平局进前二 且 top2差<容差)
+                _draw_trigger = (_draw_prob >= 0.25) or (_draw_in_top2 and _top2_gap < HYBRID_PROB_TOLERANCE / 100.0)
+                if _draw_trigger:
+                    # 平局概率高(≥25%) → 优先选覆盖平局的双选
                     draw_covering = [o for o in aligned
                                      if '平' in dbl_coverage.get(o.get('option', ''), set())]
                     if draw_covering:
                         aligned = draw_covering
                         # Ultra 11.9: 平局盲区补偿触发 → 双选改为并列主推
+                        # Ultra 11.11: 平局概率≥25%时也触发并列主推(原仅top2差<容差触发)
                         double_parallel_output = True
             if aligned:
                 double_recommend = sorted(aligned, key=lambda x: x['ev_pct'], reverse=True)[0]
@@ -3291,6 +3305,14 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     pass_risk_level = '低'
     pass_risk_desc = ''
 
+    # Ultra 11.11: 让平高发窗口检测 (深度因子分析 LRN-20260809-002)
+    # 因子发现(83场): 受让盘让平率36% vs 让球盘23%; 中等难度(45-65)让平率高达44%
+    # 让平盲区根因: ①受让盘主队"恰好输1球"易被让平 ②中等难度双方无压倒性身位最易被让平咬住
+    # 触发条件(带区分度, 吸取 LRN-20260807-004 教训): 让球盘口 + 恰好1球差>20% + 中等难度
+    let_draw_hotspot = False
+    _shou_rang = (handicap > 0)  # 受让盘
+    _mid_difficulty = difficulty is not None and 45 <= difficulty <= 65
+
     if handicap < 0:  # 主队让球
         abs_h = abs(int(handicap))
         pass_risk_prob = margin_probs.get(abs_h, 0)
@@ -3303,6 +3325,9 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         else:
             pass_risk_level = '低'
             pass_risk_desc = f'主队赢恰好{abs_h}球概率{pass_risk_prob*100:.0f}%，穿盘风险低'
+        # 让球盘 + 恰好1球差>20% + 中等难度 → 让平高发
+        if pass_risk_prob > 0.20 and _mid_difficulty:
+            let_draw_hotspot = True
     elif handicap > 0:  # 主队受让
         abs_h = abs(int(handicap))
         pass_risk_prob = margin_probs.get(-abs_h, 0)
@@ -3315,6 +3340,10 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         else:
             pass_risk_level = '低'
             pass_risk_desc = f'主队输恰好{abs_h}球概率{pass_risk_prob*100:.0f}%，穿盘风险低'
+        # 受让盘 + 恰好1球差>20% + (中等难度 或 受让盘本身) → 让平高发
+        # 受让盘让平率36%(高于让球盘), 故受让盘+恰好1球差>20%即标记, 中等难度进一步强化
+        if pass_risk_prob > 0.20 and (_mid_difficulty or 45 <= (difficulty or 0) <= 65):
+            let_draw_hotspot = True
     else:
         pass_risk_desc = '无让球，无穿盘风险'
 
@@ -3322,7 +3351,13 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         'prob': round(pass_risk_prob * 100, 1),
         'level': pass_risk_level,
         'desc': pass_risk_desc,
+        'let_draw_hotspot': let_draw_hotspot,  # Ultra 11.11: 让平高发窗口标记
     }
+    # Ultra 11.11: 让平高发窗口 → 穿盘风险至少"中" (让平率高发=穿盘高发)
+    # 让平高发窗口让平率44%(中等难度)远高于让球盘23%, 是穿盘风险的强信号
+    if let_draw_hotspot and pass_risk_level == '低':
+        pass_risk['level'] = '中'
+        pass_risk['desc'] = (pass_risk_desc + ' | 让平高发窗口(受让/中难度), 注意让平覆盖').strip()
 
     # ===== 风险评估 (命中率优先模式专属) =====
     if mode == 'prob' and primary_bet:
@@ -3373,11 +3408,17 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     # Ultra 2.0: 修复 opt_map 在定义前使用的bug
     opt_map = {o['option']: o for o in all_options}  # 提前定义
     let_draw_opt = opt_map.get('HHAD让平')
+    # Ultra 11.11: 让平高发窗口消费 (深度因子分析 LRN-20260809-002)
+    # 因子发现(83场): 受让盘让平率36% vs 让球盘23%; 中等难度45-65让平率44%
+    # 让平高发窗口 = 受让/让球盘 + 恰好1球差>20% + 中等难度
+    # 此时即使让平EV不为正, 也主动提示让平作为高发方向的覆盖选项
     if let_draw_opt:
         if let_draw_opt['value']:
             insight_parts.append(f"让平正EV({let_draw_opt['ev_pct']}%)@{let_draw_opt['odds']},价值投注")
         elif pass_risk_level == '高':
             insight_parts.append(f"让平EV={let_draw_opt['ev_pct']}%@{let_draw_opt['odds']},穿盘高风险")
+        if let_draw_hotspot:
+            insight_parts.append(f"让平高发窗口(让平率高达44%,受让/中难度),建议覆盖让平@{let_draw_opt['odds']}")
 
     # 净胜球分布提示
     if p_win_1 > p_win_2plus:
@@ -6968,6 +7009,44 @@ def predict_match(match_num, data):
         had_conf_score = min(had_conf_score, 2.0)
         v611_notes.append(f"[回归] 低赔热门{odds:.2f}≤1.5+主队xG超额{_xg_home['overperformance']:+.2f}>+0.3热度陷阱, 置信度封顶★★, 提示反向风险")
 
+    # ===== Ultra 11.12: 深度因子分析ROI修正 (LRN-20260809-002, 83场) =====
+    # 三块落地: ①热量陷阱降权 ②概率校准修正(高概率高估) ③黄金窗口加码
+    # 数据依据:
+    #   ① 高置信≥4★+低赔<1.8 → 命中29%/ROI -4.7 (热量陷阱, 市场已定价)
+    #      中置信3-4★+低赔<1.8 → 命中55%/ROI +3.9 (唯一命中盈利双优甜区)
+    #   ② HAD主推 p60-70%档 平均预测64% 实际命中42% (偏差22pp, 过度自信)
+    #      p30-40%被低估(34%→55%), 仅p50-60%校准良好(52%→55%)
+    #   ③ 黄金窗口: HAD负+低赔<1.5 (5/5=100%,+1.7) 与 HHAD让负+低赔<1.5 (3/4=75%,+5.6) 双正
+    # 注意: 子样本4-30场, 置信区间宽, 属短期规律, 宜作"优先观察"而非"重仓规则"
+    _had_main_prob = had_probs[had_min_idx] if had_probs else 0
+
+    # ① 热量陷阱降权 — 高置信(≥4★, 即delta≥0.10) + 低赔热门(<1.8)
+    # 深度因子分析: 该组合命中率仅29%, 与中置信甜区(55%)倒挂
+    # 与 Ultra 11.7(≥3.5★+≤2.0封顶★★★)互补: 11.7已封顶3.0, 此处对最危险档再压一档
+    if had_conf_score >= 4.0 and odds and odds < 1.8:
+        had_conf_score = min(had_conf_score - 0.5, 2.5)
+        v611_notes.append(f"[因子] 高置信≥4★+低赔{odds:.2f}<1.8热量陷阱(命中29%), 置信度封顶★★½")
+
+    # ② 概率校准修正 — 模型高估高概率
+    # 因子发现: p60-70%档实际命中42%(偏差22pp), 模型在"自认为有把握"时过度自信
+    # 修正: 预测方向概率≥60% → 置信度降一档(映射到真实命中率水平)
+    # 仅HAD主推方向适用(分析基于HAD主推), ≥60%高概率档
+    if _had_main_prob >= 0.60 and had_conf_score >= 3.0:
+        had_conf_score = max(1.0, had_conf_score - 0.5)
+        v611_notes.append(f"[因子] 预测概率{_had_main_prob*100:.0f}%≥60%高估(实际命中42%), 置信度-0.5★")
+
+    # ③ 黄金窗口加码 — HAD负/HHAD让负 + 低赔<1.5
+    # 因子发现: 该两窗口命中+ROI双正(HAD负100%/HHAD让负75%), 是可控的盈利甜区
+    # 修正: 命中两个黄金窗口 → 置信度+0.5★(不突破5.0上限)
+    _golden_hit = False
+    if had_dir == '负' and odds and odds < 1.5:
+        had_conf_score = min(5.0, had_conf_score + 0.5)
+        _golden_hit = True
+        v611_notes.append(f"[因子] HAD负+低赔{odds:.2f}<1.5黄金窗口(100%命中), 置信度+0.5★")
+    if hhad_has_data and hhad_dir == '让负' and hhad_odds_val and hhad_odds_val < 1.5:
+        hhad_conf_score = min(5.0, hhad_conf_score + 0.5)
+        v611_notes.append(f"[因子] HHAD让负+低赔{hhad_odds_val:.2f}<1.5黄金窗口(75%命中), 置信度+0.5★")
+
     had_conf = format_stars(had_conf_score)
     hhad_conf = format_stars(hhad_conf_score)
     
@@ -7012,9 +7091,11 @@ def predict_match(match_num, data):
     p_for_hhad_dir = hhad_final_probs[hhad_final_idx]
 
     # ===== Pro 3.9: 跨玩法价值分析 (概率优先, EV仅参考) =====
+    # Ultra 11.11: 传入 difficulty — 让平高发窗口/平局盲区补偿依赖"中等难度"判定
+    # (深度因子分析 LRN-20260809-002: 中等难度45-65让平率44%, 受让盘让平率36%)
     cross_market = compute_cross_market_value(
         had_probs, had, hhad_final_probs, hhad, handicap, lam_h, lam_a,
-        mode=RECOMMEND_MODE
+        mode=RECOMMEND_MODE, difficulty=difficulty
     )
 
     # ===== Ultra 6.5: 竞彩固定奖金 EV 价值分析 =====
