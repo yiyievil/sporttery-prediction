@@ -14,8 +14,13 @@
 
 import json
 import os
+import re
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+# ── 北京时间 (UTC+8): 系统时区为UTC, 生成时间显示给用户必须换算北京时间 ──
+_BEIJING_TZ = timezone(timedelta(hours=8))
+from io import BytesIO
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -154,6 +159,12 @@ S = {
                                 color=C_TEXT, space_before=0, space_after=0),
     'rec_detail': make_style('RecDetail', size=11, leading=16, color=C_MUTED, space_after=0),
 
+    # 醒目提示行 (Ultra 11.18) — 让平直推 / 平局关注
+    'alert_line': make_style('AlertLine', bold=True, size=13, leading=19,
+                             color=C_RED, space_before=0, space_after=0),
+    'alert_line_sub': make_style('AlertLineSub', bold=True, size=12, leading=18,
+                                  color=C_GOLD_DARK, space_before=0, space_after=0),
+
     # 正文/辅助
     'body_text': make_style('BodyText', size=12, leading=17, color=C_TEXT_LIGHT, space_after=0),
     'pool_text': make_style('PoolText', size=11, leading=16, color=C_TEXT, space_after=0),
@@ -229,6 +240,8 @@ def extract_match(data, match_id):
     primary = cmb.get('primary_bet', {})
     double_rec = cmb.get('double_recommend', {})
     hhad_primary = cmb.get('hhad_primary_bet', {})
+    let_draw_rec = cmb.get('let_draw_rec', {})  # Ultra 11.17: 让平直推
+    draw_attention = cmb.get('draw_attention', {})  # Ultra 11.18: 平局关注
     insight = cmb.get('insight', '')
     margin_dist = cmb.get('margin_dist', {})
 
@@ -263,6 +276,8 @@ def extract_match(data, match_id):
         'total_exp': total_exp, 'key_insight': key_insight,
         'primary': primary, 'double_rec': double_rec,
         'hhad_primary': hhad_primary,
+        'let_draw_rec': let_draw_rec,
+        'draw_attention': draw_attention,
         'insight': insight, 'margin_dist': margin_dist,
         'sporttery_pools': sp,
         'quality': quality, 'quality_score': quality_score,
@@ -281,7 +296,7 @@ def _section_header(label):
     return [
         Paragraph(label, S['section_label']),
         GoldLine(CW, 0.8),
-        Spacer(1, 1 * mm),
+        Spacer(1, 0.5 * mm),
     ]
 
 
@@ -328,9 +343,9 @@ def _hhad_option_label(option, handicap):
         return option
     if hcap <= 0:
         return option  # 让球盘或平盘, 术语不变
-    # 受让盘: 将'让胜/让负/让平'全部替换为'受让胜/受让负/受让平' (不能只替换第一个命中就返回)
+    # 幂等替换 (ERR-20260809-001): 用负向后瞻 (?<!受) 避免已含"受让X"的文本二次替换成"受受让X"
     for src, dst in [('让胜', '受让胜'), ('让负', '受让负'), ('让平', '受让平')]:
-        option = option.replace(src, dst)
+        option = re.sub(r'(?<!受)' + src, dst, option)
     return option
 
 
@@ -386,8 +401,8 @@ def build_match_page(m, page_num, total):
     title_wrap = Table([[title_para]], colWidths=[full_w])
     title_wrap.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), C_GOLD),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
         ('LEFTPADDING', (0, 0), (-1, -1), 10),
         ('RIGHTPADDING', (0, 0), (-1, -1), 10),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -401,7 +416,7 @@ def build_match_page(m, page_num, total):
     if m['league']:
         info_parts.append(m['league'])
     story.append(Paragraph('  |  '.join(info_parts), S['match_info']))
-    story.append(Spacer(1, 2.5 * mm))
+    story.append(Spacer(1, 2 * mm))
 
     # ================================================================
     # 区域3: 核心数据表 (紧凑)
@@ -464,15 +479,15 @@ def build_match_page(m, page_num, total):
         ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
         ('LEFTPADDING', (0, 0), (-1, 0), 10),
         ('RIGHTPADDING', (0, 0), (-1, 0), 10),
-        ('TOPPADDING', (0, 1), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
+        ('TOPPADDING', (0, 1), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 2),
         ('LEFTPADDING', (0, 1), (-1, -1), 10),
         ('RIGHTPADDING', (0, 1), (-1, -1), 10),
         ('LINEBELOW', (0, 1), (-1, -1), 0.3, C_BORDER_LT),
         ('LINEBELOW', (0, -1), (-1, -1), 0.5, C_BORDER),
     ]))
     story.append(tbl)
-    story.append(Spacer(1, 2 * mm))
+    story.append(Spacer(1, 1.5 * mm))
 
     # ================================================================
     # 区域4: 推荐方案 — 双卡片
@@ -504,7 +519,8 @@ def build_match_page(m, page_num, total):
             ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
         ]))
         inner.append([title_row])
-        inner.append([Paragraph(f'{mk}  {_hhad_option_label(opt, m["hhad_h"])}', S['rec_main_odds'])])
+        # option 已含市场前缀(HHAD让负/HAD胜平双选), 不再重复拼 mk
+        inner.append([Paragraph(f'{_hhad_option_label(opt, m["hhad_h"])}', S['rec_main_odds'])])
         detail_parts = [f'P = {prob:.1f}%', f'EV = {ev:+.1f}%']
         if val:
             detail_parts.append(val)
@@ -519,8 +535,8 @@ def build_match_page(m, page_num, total):
         card.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), C_GREEN_BG),
             ('BOX', (0, 0), (-1, -1), 1.5, C_GREEN),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
             ('LEFTPADDING', (0, 0), (-1, -1), 12),
             ('RIGHTPADDING', (0, 0), (-1, -1), 12),
         ]))
@@ -550,7 +566,7 @@ def build_match_page(m, page_num, total):
             dir_ = entry.get('direction', '')
 
             odds_row = Table(
-                [[Paragraph(f'{mk}  {_hhad_option_label(opt, m["hhad_h"])}', S['rec_sub_odds']),
+                [[Paragraph(f'{_hhad_option_label(opt, m["hhad_h"])}', S['rec_sub_odds']),
                   Paragraph(f'@{odds}', S['rec_sub_odds'])]],
                 colWidths=[full_w * 0.32, full_w * 0.14]
             )
@@ -574,8 +590,8 @@ def build_match_page(m, page_num, total):
         card.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), C_AMBER_BG),
             ('BOX', (0, 0), (-1, -1), 1.5, C_AMBER),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
             ('LEFTPADDING', (0, 0), (-1, -1), 12),
             ('RIGHTPADDING', (0, 0), (-1, -1), 12),
         ]))
@@ -599,7 +615,45 @@ def build_match_page(m, page_num, total):
         story.extend(_section_header('推荐方案'))
         story.append(rec_blocks[0])
 
-    story.append(Spacer(1, 1.5 * mm))
+    # 醒目提示行 (Ultra 11.18) — 让平直推 / 平局关注 (一行文字, 非卡片)
+    alert_rows = []
+
+    # 让平直推行
+    ldr = m['let_draw_rec']
+    if ldr and ldr.get('option') and ldr.get('let_draw_direct'):
+        _ldr_prob = ldr.get('prob', 0)
+        _ldr_odds = ldr.get('odds', 0)
+        _ldr_ev = ldr.get('ev_pct', 0)
+        _ldr_label = _hhad_option_label(ldr.get('option', ''), m['hhad_h'])
+        alert_rows.append(Paragraph(
+            f'▲ 让平直推  {_ldr_label} @{_ldr_odds}  |  P = {_ldr_prob:.1f}%  |  EV = {_ldr_ev:+.1f}%',
+            S['alert_line']))
+
+    # 平局关注行 (Ultra 11.18)
+    dar = m['draw_attention']
+    if dar and dar.get('option') and dar.get('draw_attention'):
+        _dar_prob = dar.get('prob', 0)
+        _dar_odds = dar.get('odds', 0)
+        _dar_ev = dar.get('ev_pct', 0)
+        alert_rows.append(Paragraph(
+            f'▲ 平局关注  HAD平 @{_dar_odds}  |  P = {_dar_prob:.1f}%  |  EV = {_dar_ev:+.1f}%  |  历史平局率≈25%',
+            S['alert_line_sub']))
+
+    if alert_rows:
+        alert_data = [[row] for row in alert_rows]
+        alert_table = Table(alert_data, colWidths=[full_w])
+        alert_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), C_GOLD_PALE),
+            ('BOX', (0, 0), (-1, -1), 1.0, C_RED),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('LEFTPADDING', (0, 0), (-1, -1), 12),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+        ]))
+        story.append(Spacer(1, 0.5 * mm))
+        story.append(alert_table)
+
+    story.append(Spacer(1, 1 * mm))
 
     # ================================================================
     # 区域5: 净胜分布 + 关键洞察 (完整显示)
@@ -629,8 +683,9 @@ def build_match_page(m, page_num, total):
     if data_line_parts:
         bottom_lines.append('  |  '.join(data_line_parts))
     if insight_line:
-        # 受让盘(+1等)洞察文案中的 HHAD让胜/让平/让负 需统一为 受让胜/受让平/受让负
-        bottom_lines.append(f'关键洞察: {_hhad_option_label(insight_line, m["hhad_h"])}')
+        # 洞察文案已在引擎端(v215_e2e._hhad_display_label)完成受让术语替换,
+        # 此处直接使用原文, 不再重复调用 _hhad_option_label, 避免"受让胜"→"受受让胜"重复替换
+        bottom_lines.append(f'关键洞察: {insight_line}')
 
     if bottom_lines:
         insight_data = [[Paragraph(line, S['body_text'])] for line in bottom_lines]
@@ -638,13 +693,13 @@ def build_match_page(m, page_num, total):
         insight_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), C_GOLD_PALE),
             ('BOX', (0, 0), (-1, -1), 0.5, C_BORDER),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
             ('LEFTPADDING', (0, 0), (-1, -1), 12),
             ('RIGHTPADDING', (0, 0), (-1, -1), 12),
         ]))
         story.append(insight_table)
-        story.append(Spacer(1, 1.5 * mm))
+        story.append(Spacer(1, 1 * mm))
 
     # ================================================================
     # 区域6: 体彩玩法 EV 优选 (完整显示所有选项, 按EV降序)
@@ -671,7 +726,7 @@ def build_match_page(m, page_num, total):
         story.extend(_section_header('竞彩玩法 EV 优选'))
         for line in pool_lines:
             story.append(Paragraph(line, S['pool_text']))
-        story.append(Spacer(1, 1.5 * mm))
+        story.append(Spacer(1, 1 * mm))
 
     # ================================================================
     # 区域7: 页脚
@@ -679,7 +734,7 @@ def build_match_page(m, page_num, total):
     story.append(DoubleGoldLine(full_w))
     story.append(Spacer(1, 1.5 * mm))
 
-    now_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+    now_str = datetime.now(_BEIJING_TZ).strftime('%Y-%m-%d %H:%M')
     footer_text = f'生成 {now_str}  |  数据 500.com / Nowscore  |  仅供参考 理性购彩'
     story.append(Paragraph(footer_text, S['footer']))
     story.append(Spacer(1, 0.5 * mm))
@@ -691,12 +746,133 @@ def build_match_page(m, page_num, total):
 # ====================================================================
 # 封面页
 # ====================================================================
-def build_cover_story(matches, match_date, total):
-    """构建封面内容"""
+# ====================================================================
+# 汇总页: 总进球 / 比分概率最高选项 (Ultra 11.19)
+#   用户要求: 单独两页, 每页一个玩法, 汇总所有场次概率最高的选项
+# ====================================================================
+def build_summary_pages(matches):
+    """构建两页汇总: 页1=总进球概率最高, 页2=比分概率最高。返回 story"""
     story = []
-    story.append(Spacer(1, 50 * mm))
-    story.append(Paragraph('竞彩足球预测', S['cover_title']))
-    story.append(Spacer(1, 3 * mm))
+    full_w = CW
+
+    # 收集两玩法每场概率最高的选项
+    pools = {'ttg': [], 'crs': []}  # pool_key -> [(mid, home, away, best_opt, ...)]
+    for m in matches:
+        sp = m['sporttery_pools'] or {}
+        for pool_key in ('ttg', 'crs'):
+            items = sp.get(pool_key, [])
+            if items:
+                best = max(items, key=lambda x: x.get('prob', 0))
+                pools[pool_key].append({
+                    'mid': m['id'], 'home': m['home'], 'away': m['away'],
+                    'opt': best.get('option', '?'),
+                    'odds': best.get('odds', '?'),
+                    'prob': best.get('prob', 0),
+                    'ev': best.get('ev_pct', 0),
+                })
+            else:
+                pools[pool_key].append({
+                    'mid': m['id'], 'home': m['home'], 'away': m['away'],
+                    'opt': '-', 'odds': '-', 'prob': 0, 'ev': 0,
+                })
+
+    # 标红样式 (Ultra 11.19): 每页概率最高的场次用红色高亮
+    _red_val = make_style('TableValRed', bold=True, size=12, leading=17, color=C_RED)
+    _red_key = make_style('TableKeyRed', bold=True, size=12, leading=17, color=C_RED)
+
+    for idx, (pool_key, page_title, sub) in enumerate([
+        ('ttg', '总进球概率最高汇总', 'Total Goals — 每场概率最高的总进球选项'),
+        ('crs', '比分概率最高汇总', 'Correct Score — 每场概率最高的比分选项'),
+    ]):
+        # 页首 (两页之间用 PageBreak 分隔)
+        if idx > 0:
+            story.append(PageBreak())
+        story.append(Spacer(1, 8 * mm))
+        story.append(Paragraph(page_title, S['match_title']))
+        story.append(Spacer(1, 1.5 * mm))
+        story.append(Paragraph(sub, S['match_info']))
+        story.append(Spacer(1, 3 * mm))
+
+        # 找出本页所有场次里的概率最高值 (只统计有数据的场次)
+        valid = [e['prob'] for e in pools[pool_key] if e['prob'] > 0]
+        max_prob = max(valid) if valid else 0
+
+        # 表头
+        header = [
+            Paragraph('场次', S['table_header']),
+            Paragraph('对阵', S['table_header']),
+            Paragraph('概率最高', S['table_header']),
+            Paragraph('赔率', S['table_header']),
+            Paragraph('P', S['table_header']),
+            Paragraph('EV', S['table_header']),
+        ]
+        rows = [header]
+        for entry in pools[pool_key]:
+            is_hi = entry['prob'] > 0 and abs(entry['prob'] - max_prob) < 1e-9
+            pv = _red_val if is_hi else S['table_val']
+            pk = _red_key if is_hi else S['table_val']
+            rows.append([
+                Paragraph(str(entry['mid']), pk),
+                Paragraph(f'{entry["home"]} vs {entry["away"]}', pv),
+                Paragraph(str(entry['opt']), pv),
+                Paragraph(str(entry['odds']), pv),
+                Paragraph(f'{entry["prob"]:.1f}%', pv),
+                Paragraph(f'{entry["ev"]:+.1f}%', pv),
+            ])
+
+        col_w = [full_w * 0.11, full_w * 0.33, full_w * 0.17, full_w * 0.13, full_w * 0.13, full_w * 0.13]
+        tbl = Table(rows, colWidths=col_w, repeatRows=1)
+        tbl.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), C_NAVY),
+            ('TEXTCOLOR', (0, 0), (-1, 0), white),
+            ('LINEBELOW', (0, 0), (-1, 0), 1.2, C_GOLD),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [C_WHITE, C_GOLD_PALE]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+            ('ALIGN', (3, 0), (5, -1), 'CENTER'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('LINEBELOW', (0, 1), (-1, -1), 0.3, C_BORDER_LT),
+            ('LINEBELOW', (0, -1), (-1, -1), 0.5, C_BORDER),
+        ]))
+        story.append(tbl)
+
+    return story
+
+
+def _measure_cover_pages(elements):
+    """测量封面元素实际占用页数。
+
+    注意: reportlab 的 build() 会消费(清空)传入的 story, 故测量一律传 deepcopy 副本。
+    """
+    import copy as _copy
+    _buff = BytesIO()
+    _tdoc = SimpleDocTemplate(
+        _buff, pagesize=A4,
+        leftMargin=LM, rightMargin=RM,
+        topMargin=TM, bottomMargin=BM,
+    )
+    _p = [1]
+    def _cb(_c, _d):
+        if _d.page > _p[0]:
+            _p[0] = _d.page
+    _tdoc.build(_copy.deepcopy(elements), onFirstPage=_cb, onLaterPages=_cb)
+    return _p[0]
+
+
+def build_cover_story(matches, match_date, total):
+    """构建封面内容, 返回 (story, cover_pages)。
+
+    封面不设显式 PageBreak, 比赛多时会自动分页溢出到第2+/N页。
+    为保证**每个封面页顶部都有留白**(避免续页第一行压到顶部金线),
+    这里逐行测量、手动在每页开头插入 50mm 顶部 Spacer 后分页。
+    """
+    # 第一页头部块 (标题/日期/共N场)
+    head = []
+    head.append(Paragraph('竞彩足球预测', S['cover_title']))
+    head.append(Spacer(1, 3 * mm))
 
     gold_line_tbl = Table([['']], colWidths=[CW * 0.35])
     gold_line_tbl.setStyle(TableStyle([
@@ -706,23 +882,48 @@ def build_cover_story(matches, match_date, total):
     ]))
     gl_wrap = Table([[gold_line_tbl]], colWidths=[CW])
     gl_wrap.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
-    story.append(gl_wrap)
-    story.append(Spacer(1, 6 * mm))
+    head.append(gl_wrap)
+    head.append(Spacer(1, 6 * mm))
 
-    story.append(Paragraph(f'{match_date}', S['cover_sub']))
-    story.append(Spacer(1, 2 * mm))
-    story.append(Paragraph(f'共 {total} 场比赛', S['cover_date']))
-    story.append(Spacer(1, 10 * mm))
+    head.append(Paragraph(f'{match_date}', S['cover_sub']))
+    head.append(Spacer(1, 2 * mm))
+    head.append(Paragraph(f'共 {total} 场比赛', S['cover_date']))
+    head.append(Spacer(1, 10 * mm))
 
-    for i, m in enumerate(matches):
+    # 比赛行
+    rows = []
+    for m in matches:
         line = f'{m["id"]:>8s}    {m["home"]}  vs  {m["away"]}    —  {m["league"]}'
-        story.append(Paragraph(line, S['cover_match']))
-        story.append(Spacer(1, 1.5 * mm))
+        rows.append(Paragraph(line, S['cover_match']))
+        rows.append(Spacer(1, 1.5 * mm))
 
-    story.append(Spacer(1, 35 * mm))
-    story.append(Paragraph(f'生成时间: {datetime.now().strftime("%Y-%m-%d %H:%M")}', S['cover_footer']))
-    story.append(Paragraph('数据来源: 500.com / Nowscore  |  仅供参考 理性购彩', S['cover_footer']))
-    return story
+    # 页脚 (仅最后一页)
+    foot = []
+    foot.append(Spacer(1, 35 * mm))
+    foot.append(Paragraph(f'生成时间: {datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d %H:%M")}', S['cover_footer']))
+    foot.append(Paragraph('数据来源: 500.com / Nowscore  |  仅供参考 理性购彩', S['cover_footer']))
+
+    # 逐页组装: 每页顶部统一 50mm 留白, 避免续页第一行压到金线
+    story = []
+    current = [Spacer(1, 50 * mm)] + head
+    cur_page = 1
+    for row in rows:
+        trial = current + [row]
+        if _measure_cover_pages(trial) > cur_page:
+            # 当前页放不下此行 → 收尾当前页, 开新页(也带顶部留白)
+            story.extend(current)
+            story.append(PageBreak())
+            current = [Spacer(1, 50 * mm), row]
+            cur_page += 1
+        else:
+            current = trial
+
+    story.extend(current)
+    story.extend(foot)
+
+    # 修正 cover_pages (页脚可能使末页溢出)
+    cover_pages = _measure_cover_pages(story)
+    return story, cover_pages
 
 
 # ====================================================================
@@ -774,8 +975,8 @@ def generate_pdf(data, output_path):
         topMargin=TM, bottomMargin=BM,
     )
 
-    # 封面
-    cover_story = build_cover_story(matches, match_date, total)
+    # 封面 (返回 story + 封面占用页数; 内部已处理每页顶部留白与分页)
+    cover_story, cover_pages = build_cover_story(matches, match_date, total)
 
     # 正文
     full_story = []
@@ -786,11 +987,19 @@ def generate_pdf(data, output_path):
         card = build_match_page(m, i + 1, total)
         full_story.extend(card)
 
-    doc.build(
-        full_story,
-        onFirstPage=draw_cover_bg,
-        onLaterPages=draw_page_bg,
-    )
+    # 末尾追加两页汇总: 总进球 / 比分 概率最高 (Ultra 11.19)
+    full_story.append(PageBreak())
+    full_story.extend(build_summary_pages(matches))
+
+    # 按页号调度背景: 封面范围内(≤cover_pages)用深蓝封面配色, 其余用正文米白配色
+    # - 第1页固定封面背景; 其余页(含封面溢出页)在回调里按 doc.page 判断
+    def _on_later_page(c, d):
+        if d.page <= cover_pages:
+            draw_cover_bg(c, d)
+        else:
+            draw_page_bg(c, d)
+
+    doc.build(full_story, onFirstPage=draw_cover_bg, onLaterPages=_on_later_page)
     return output_path
 
 

@@ -41,8 +41,14 @@ Pro 3.0 新功能:
 """
 
 import sys, os, json, re, time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# ── 北京时间时间戳 (Ultra 11.19): 系统时区为UTC, 显示给用户/写入saved_at必须用北京时间(UTC+8) ──
+_BEIJING_TZ = timezone(timedelta(hours=8))
+def bjnow_str():
+    """返回北京时间字符串 '%Y-%m-%d %H:%M:%S'"""
+    return datetime.now(_BEIJING_TZ).strftime('%Y-%m-%d %H:%M:%S')
 
 # Import prediction functions from main script
 # Ultra-Opt: 通用路径 (旧版硬编码 '/workspace')
@@ -805,7 +811,7 @@ def main():
 
     # 构建更新后的缓存 (保留shuju+sporttery_bonus+场次级时间戳)
     updated_cache = dict(cache)
-    cache_ts = time.strftime('%Y-%m-%d %H:%M:%S')
+    cache_ts = bjnow_str()
     for key in found_keys:
         if key in all_data:
             updated_cache[key] = {
@@ -822,7 +828,7 @@ def main():
     # 历史记录: 保存上次的预测快照
     history_entry = {
         'timestamp': pred_data.get('saved_at', ''),
-        'update_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'update_time': bjnow_str(),
         'changes': {k: v for k, v in all_changes.items() if v},
     }
     history.append(history_entry)
@@ -838,7 +844,7 @@ def main():
     update_count = prev_update_count + 1
 
     updated_pred = {
-        'saved_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'saved_at': bjnow_str(),
         'updated_from': pred_data.get('saved_at', ''),
         'mode': 'update',
         'update_count': update_count,

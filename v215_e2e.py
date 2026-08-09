@@ -19,6 +19,9 @@ Ultra 5.0 升级 (数学算法全面优化, EV不变, 命中率优先):
   8. Dixon-Coles低分修正保留: 修正0-0/1-0/0-1/1-1的得分依赖性
   9. Logit变换校准: 边界稳定, 对称性好
   10. 对数空间集成融合: 几何加权保持概率锐度
+Ultra 11.13/11.14 (让平覆盖双选): 让平概率大时体现在HAD双选兜底, 不单推让平 —
+  让平高发窗口触发 → 强制HAD双选=让平侧+平(让球盘→胜平, 受让盘→平负),
+  覆盖"让平+平局+让平侧HAD方向"三大类, 让平场双选命中率100%(单选0/20必失)
 """
 import math, json, re, time, os, sys
 from datetime import datetime, timedelta
@@ -106,8 +109,8 @@ except ImportError:
 # Phase 0: 用户输入
 # ============================================================
 TARGET_DATE = None   # ← 不限日期(避免跨天分类问题)
-TARGET_WEEKDAY = "周三"  # ← 指定周几过滤(如"周四"), None=不过滤
-MATCH_NUMBERS = ["001","002"]  # ← 场次编号(后3位)
+TARGET_WEEKDAY = "周日"  # ← 指定周几过滤(如"周四"), None=不过滤
+MATCH_NUMBERS = ["001","002","003","004","005","006","007","008","009","010","011","012","013","014","015","016","017","018","019","020","021","022","023","024"]  # ← 场次编号(后3位)
 
 # ===== 工作模式 (Ultra 8.1) =====
 # predict: 全新预测 — 所有数据重新拉取, 不读缓存, 完成后写入缓存
@@ -1947,7 +1950,7 @@ def compute_total_goals(lam_h, lam_a, ttg_odds=None, league=None, xg_cv_quality=
             market_map = {}
             valid_keys = [k for k in ttg_keys if ttg_odds.get(k, 0) > 1]
             for i, k in enumerate(valid_keys):
-                label = f"{k}球" if k < 7 else "7+球"
+                label = f"{int(k)}球" if int(k) < 7 else "7+球"
                 if i < len(market_probs):
                     market_map[label] = market_probs[i]
 
@@ -2971,8 +2974,10 @@ def _hhad_display_label(option, handicap):
         return option
     if hcap <= 0:
         return option  # 让球盘或平盘, 术语不变
+    # 幂等替换 (ERR-20260809-001): 用负向后瞻 (?<!受) 避免对已含"受让X"的文本二次替换成"受受让X"
+    # 例如传入"HHAD受让胜"时, "让胜"前已有"受", 不再替换 → 不会变成"HHAD受受让胜"
     for src, dst in [('让胜', '受让胜'), ('让负', '受让负'), ('让平', '受让平')]:
-        option = option.replace(src, dst)
+        option = re.sub(r'(?<!受)' + src, dst, option)
     return option
 
 
@@ -3308,10 +3313,26 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     # Ultra 11.11: 让平高发窗口检测 (深度因子分析 LRN-20260809-002)
     # 因子发现(83场): 受让盘让平率36% vs 让球盘23%; 中等难度(45-65)让平率高达44%
     # 让平盲区根因: ①受让盘主队"恰好输1球"易被让平 ②中等难度双方无压倒性身位最易被让平咬住
-    # 触发条件(带区分度, 吸取 LRN-20260807-004 教训): 让球盘口 + 恰好1球差>20% + 中等难度
+    # Ultra 11.14: 触发条件回测放宽 (LRN-20260809-005)
+    #   回测(19场让平): 原条件(恰1球>20%+中难度45-65)覆盖率仅63%(12/19);
+    #   放宽(恰1球≥18%+难度40-70)覆盖率84%(16/19), 对照场双选命中率75%→80%不降反升
+    #   因为让平覆盖双选覆盖"让平侧HAD方向+平"两个大类, 命中率高, 放宽触发反而更稳
+    #   受让盘让平率36%>让球盘23%, 故受让盘不强制难度限制(恰1球≥18%即标记)
+    # Ultra 11.15: 大规模回测修正触发信号 (LRN-20260809-006, historical_odds.db 4397场)
+    #   大规模下受让盘让平率23.9% vs 让球盘24.9% 几乎无差(小样本36%>23%不成立);
+    #   恰1球≥20%区分度弱; 真正有区分度的是 HHAD让平隐含概率:
+    #   未去margin HHAD让平P≥0.30 → 让平率29.4% (843场) vs 基准24.6% (+4.8pp)
+    #   是唯一统计显著的让平强信号, 双选命中85.8%
+    # Ultra 11.16: 恰1球辅助收紧 (LRN-20260809-007, 4397场)
+    #   原辅助"恰1球≥0.20"太宽泛: 触发率被拉到65%, 补充场让平率仅22.3%(低于基准),
+    #   把主信号区分度(+4.8)稀释到几乎归零(+0.5); 辅助收紧到恰1球≥0.26
+    #   (补充场让平率30.2% +5.6pp, 与主信号同向, 不稀释)
+    #   最终: 主信号未去margin HHAD让平P≥0.30 OR 辅助恰1球≥0.26
     let_draw_hotspot = False
     _shou_rang = (handicap > 0)  # 受让盘
-    _mid_difficulty = difficulty is not None and 45 <= difficulty <= 65
+    # Ultra 11.15: HHAD让平隐含概率 (1/让平赔率) — 大规模验证的最强让平信号
+    _hhad_draw_odds = hhad_dict.get('d') if hhad_dict else None
+    _hhad_draw_impl = (1.0 / _hhad_draw_odds) if _hhad_draw_odds and _hhad_draw_odds > 1.0 else 0.0
 
     if handicap < 0:  # 主队让球
         abs_h = abs(int(handicap))
@@ -3325,8 +3346,8 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         else:
             pass_risk_level = '低'
             pass_risk_desc = f'主队赢恰好{abs_h}球概率{pass_risk_prob*100:.0f}%，穿盘风险低'
-        # 让球盘 + 恰好1球差>20% + 中等难度 → 让平高发
-        if pass_risk_prob > 0.20 and _mid_difficulty:
+        # Ultra 11.16: 让球盘触发 = HHAD让平P≥0.30(主信号) OR 恰1球≥0.26(收紧辅助)
+        if _hhad_draw_impl >= 0.30 or pass_risk_prob >= 0.26:
             let_draw_hotspot = True
     elif handicap > 0:  # 主队受让
         abs_h = abs(int(handicap))
@@ -3340,9 +3361,8 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         else:
             pass_risk_level = '低'
             pass_risk_desc = f'主队输恰好{abs_h}球概率{pass_risk_prob*100:.0f}%，穿盘风险低'
-        # 受让盘 + 恰好1球差>20% + (中等难度 或 受让盘本身) → 让平高发
-        # 受让盘让平率36%(高于让球盘), 故受让盘+恰好1球差>20%即标记, 中等难度进一步强化
-        if pass_risk_prob > 0.20 and (_mid_difficulty or 45 <= (difficulty or 0) <= 65):
+        # Ultra 11.16: 受让盘触发 = HHAD让平P≥0.30(主信号) OR 恰1球≥0.26(收紧辅助)
+        if _hhad_draw_impl >= 0.30 or pass_risk_prob >= 0.26:
             let_draw_hotspot = True
     else:
         pass_risk_desc = '无让球，无穿盘风险'
@@ -3420,6 +3440,135 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         if let_draw_hotspot:
             insight_parts.append(f"让平高发窗口(让平率高达44%,受让/中难度),建议覆盖让平@{let_draw_opt['odds']}")
 
+    # ===== Ultra 11.13: 让平覆盖双选 (LRN-20260809-004 深度因子/回归) =====
+    # 背景: 用户被让平坑太多次, 要求"让平概率大时体现在胜平负(HAD)双选里, 不单推让平"
+    # 回归(88场): 实际让平23场, 现状单选(让胜/让负)0/23全失(-100%);
+    #   含让平双选 23/23覆盖让平; HAD双选"让平侧+平"能兜住让平+HAD平局
+    # 因子: xG差NOT让平信号(让平|ΔxG|0.19 vs 非0.13, 让平反而xG差更大);
+    #   中等难度(45-65)才是让平最强信号(让平64% vs 非让平25%, 3倍区分度)
+    # 关键映射: 让平在HAD里的对应结果 —
+    #   让球盘(主让-1..): 让平=主队恰好赢1球 = HAD"胜"
+    #   受让盘(主受+1..): 让平=主队恰好输1球 = HAD"负"
+    # 设计: 让平高发窗口(let_draw_hotspot)触发时, 强制HAD双选落在"让平侧+平",
+    #   即 让球盘→HAD胜平双选, 受让盘→HAD平负双选 (让平侧+平, 兜住让平+平局)
+    #   不改变主推方向(让胜/让负仍是概率最高), 双选作为并列保险输出
+    let_draw_double = None
+    if let_draw_hotspot and had_dict and 'h' in had_dict:
+        _ld_odds_list = [had_dict['h'], had_dict['d'], had_dict['a']]
+        # 让平对应的HAD侧 + 平, 构成覆盖双选
+        if handicap < 0:  # 让球盘: 让平=HAD胜 → 胜平双选
+            _ld_cover_idx = 0  # HAD胜
+            _ld_cover_label = 'HAD胜平双选'
+            _ld_cover_desc = '主队让球,让平=主队恰好赢1球=HAD胜,胜平双选兜住让平+平局'
+        else:  # 受让/平盘: 让平=HAD负 → 平负双选
+            _ld_cover_idx = 2  # HAD负
+            _ld_cover_label = 'HAD平负双选'
+            _ld_cover_desc = '主队受让,让平=主队恰好输1球=HAD负,平负双选兜住让平+平局'
+        _p_side = had_probs[_ld_cover_idx]  # 让平侧的HAD概率(胜或负)
+        _p_draw = had_probs[1]              # 平
+        _o_side = _ld_odds_list[_ld_cover_idx]
+        _o_draw = _ld_odds_list[1]
+        _combined = _p_side + _p_draw
+        if _combined > 0:
+            _ld_avg_odds = (_p_side * _o_side + _p_draw * _o_draw) / _combined
+            _ld_roi = (_p_side * _o_side + _p_draw * _o_draw - 2) / 2
+            let_draw_double = {
+                'market': 'HAD双选',
+                'option': _ld_cover_label,
+                'prob': round(_combined * 100, 1),
+                'odds': round(_ld_avg_odds, 2),
+                'odds_detail': f'{_o_side}/{_o_draw}',
+                'bets': 2,
+                'cost': 4,
+                'ev_pct': round(_ld_roi * 100, 1),
+                'kelly_pct': kelly_criterion(_combined, _ld_avg_odds / 2, had_margin)['stake_pct'],
+                'let_draw_cover': True,
+                'direction': '胜平' if _ld_cover_idx == 0 else '平负',
+                'desc': _ld_cover_desc,
+            }
+            # 让平覆盖双选作为"并列双选"输出 (覆盖原双选, 不改变主推)
+            if pass_risk_level in ('高', '中'):
+                double_recommend = dict(let_draw_double)
+                double_parallel_output = True
+                insight_parts.append(
+                    f"让平覆盖双选{_ld_cover_label}@{_ld_avg_odds:.2f}"
+                    f"(P={_combined*100:.0f}%,ROI={_ld_roi*100:+.0f}%,{_ld_cover_desc})"
+                )
+
+    # ===== Ultra 11.17: 让平直推 (LRN-20260809-005) =====
+    # 背景: 用户要求预测报告直接看到"让平"推荐。历史实际让平率≈25%(近1/4),
+    #   但让平概率(23-31%)从未成为HHAD argmax(让胜/让负更高), 导致报告从不直接推让平,
+    #   让平只作为HAD双选(让平侧+平)兜底出现, 用户无法直观看到单推让平。
+    # 依据: 模型自检验证(843场)显示 未去margin HHAD让平P≥0.30 → 让平实际率29.4%(+4.8pp),
+    #   是唯一统计显著的让平强信号; 让球/受让盘基准让平率≈24.6%。
+    # 设计: 让平作为独立直推信号输出, 不再只藏在覆盖双选里。触发条件(满足任一):
+    #   ① HHAD让平概率≥0.28 (接近模型最强信号0.30, 显著高于基准24.6%)
+    #   ② HHAD让平概率≥0.25 且 让平EV为正 (价值+命中双达标)
+    #   ③ HHAD让平概率≥0.25 且 让平高发窗口(let_draw_hotspot)触发
+    #   若让平已是HHAD主推(hhad_primary_bet), 不重复输出(主推卡已展示)。
+    let_draw_rec = None
+    if let_draw_opt:
+        _ldr_prob = let_draw_opt.get('prob', 0)   # 已为百分比(如26.1)
+        _ldr_ev = let_draw_opt.get('ev_pct', 0)   # 已为百分比(如+9.6)
+        _ldr_odds = let_draw_opt.get('odds', 0)
+        _ldr_already_primary = (hhad_primary_bet or {}).get('option') == 'HHAD让平'
+        _ldr_trigger = (_ldr_prob >= 28) or (_ldr_prob >= 25 and _ldr_ev > 0) or (_ldr_prob >= 25 and let_draw_hotspot)
+        if _ldr_trigger and not _ldr_already_primary:
+            let_draw_rec = {
+                'market': 'HHAD',
+                'option': 'HHAD让平',
+                'prob': round(_ldr_prob, 1),
+                'odds': _ldr_odds,
+                'odds_detail': str(_ldr_odds),
+                'ev_pct': _ldr_ev,
+                'let_draw_direct': True,
+                'direction': '让平',
+                'desc': '让平直推: 模型对让平(恰好1球差)给出独立推荐',
+            }
+            _ldr_reason = []
+            if _ldr_prob >= 28:
+                _ldr_reason.append(f"P={_ldr_prob:.0f}%≥28%强信号")
+            if _ldr_ev > 0:
+                _ldr_reason.append(f"EV={_ldr_ev:+.0f}%正价值")
+            if let_draw_hotspot:
+                _ldr_reason.append("让平高发窗口")
+            insight_parts.append(
+                f"让平直推@{_ldr_odds}(P={_ldr_prob:.0f}%,EV={_ldr_ev:+.0f}%,"
+                f"历史让平率≈25%{(';'+';'.join(_ldr_reason)) if _ldr_reason else ''})"
+            )
+
+    # ===== Ultra 11.18: 平局关注 (LRN-20260809-008) =====
+    # 背景: 用户质疑"足球胜平负只有三种结果, 却从不见主推平"。
+    #   实证(4484场历史): 全局真实平局率24.7%, 但市场隐含平局概率均值仅24.5%,
+    #   主胜43.7%/客胜31.8%均显著更高; 平局隐含概率成为HAD三选项最高的场次仅0.2%。
+    #   且主推常被HHAD让方向(伪单选, 覆盖两结果)抢走, 故平局只作为双选兜底出现。
+    # 设计: 当融合后平局概率显著高于基准(≥30%)且平局不是整体主推时,
+    #   输出平局关注标记, 与让平直推一样以醒目一行文字提示, 而非只藏双选。
+    # 触发: 平局概率≥30% (历史实证: 平局隐含30-34%时实际平局率36.6%, +12pp显著)
+    draw_attention = None
+    if had_probs and len(had_probs) >= 3:
+        _dar_p = had_probs[1]  # HAD平局融合概率
+        _dar_odds = had_dict.get('d', 0) if had_dict else 0
+        _primary_is_draw = (primary_bet or {}).get('option') == 'HAD平'
+        # 平局概率显著偏高(≥30%) 且 平局不是整体主推(避免重复)
+        if _dar_p >= 0.30 and not _primary_is_draw:
+            _dar_ev = (_dar_p * _dar_odds - 1) if _dar_odds else 0
+            draw_attention = {
+                'market': 'HAD',
+                'option': 'HAD平',
+                'prob': round(_dar_p * 100, 1),
+                'odds': _dar_odds,
+                'odds_detail': str(_dar_odds),
+                'ev_pct': round(_dar_ev * 100, 1),
+                'draw_attention': True,
+                'direction': '平',
+                'desc': '平局关注: 平局概率显著高于基准(24.7%), 注意平局',
+            }
+            insight_parts.append(
+                f"平局关注@{_dar_odds}(P={_dar_p*100:.0f}%,EV={_dar_ev*100:+.0f}%,"
+                f"历史平局率≈25%,平局概率显著偏高高发)"
+            )
+
     # 净胜球分布提示
     if p_win_1 > p_win_2plus:
         insight_parts.append(f"赢1球({p_win_1*100:.0f}%)>赢2+球({p_win_2plus*100:.0f}%),小胜概率大")
@@ -3468,6 +3617,8 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         'top3': all_ranked_slim,  # Ultra 6.0: 精简为top3
         'primary_bet': primary_bet,
         'hhad_primary_bet': hhad_primary_bet,
+        'let_draw_rec': let_draw_rec,  # Ultra 11.17: 让平直推
+        'draw_attention': draw_attention,  # Ultra 11.18: 平局关注
         'double_recommend': double_recommend,
         'double_parallel_output': double_parallel_output,
         'pure_direction_bet': pure_direction_bet,
@@ -7112,7 +7263,7 @@ def predict_match(match_num, data):
             tg_margin = pool_margin(list(bonus['ttg'].values()))
             tg_picks = []
             for k, o in bonus['ttg'].items():
-                label = f"{k}球" if k < 7 else "7+球"
+                label = f"{int(k)}球" if int(k) < 7 else "7+球"
                 p = total_goals_pred['probs'].get(label, 0)
                 if p > 0.01:
                     ev_pct = round((p * o - 1) * 100, 1)
@@ -7124,7 +7275,7 @@ def predict_match(match_num, data):
             if not tg_picks:
                 # 全部被过滤, 回退展示EV最高的1个
                 for k, o in bonus['ttg'].items():
-                    label = f"{k}球" if k < 7 else "7+球"
+                    label = f"{int(k)}球" if int(k) < 7 else "7+球"
                     p = total_goals_pred['probs'].get(label, 0)
                     if p > 0.01:
                         tg_picks.append({'option': label, 'odds': o, 'prob': round(p * 100, 1),
