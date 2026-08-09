@@ -164,6 +164,8 @@ S = {
                              color=C_RED, space_before=0, space_after=0),
     'alert_line_sub': make_style('AlertLineSub', bold=True, size=12, leading=18,
                                   color=C_GOLD_DARK, space_before=0, space_after=0),
+    'alert_line_draw': make_style('AlertLineDraw', bold=True, size=12, leading=18,
+                                   color=C_TEAL, space_before=0, space_after=0),
 
     # 正文/辅助
     'body_text': make_style('BodyText', size=12, leading=17, color=C_TEXT_LIGHT, space_after=0),
@@ -242,6 +244,7 @@ def extract_match(data, match_id):
     hhad_primary = cmb.get('hhad_primary_bet', {})
     let_draw_rec = cmb.get('let_draw_rec', {})  # Ultra 11.17: 让平直推
     draw_attention = cmb.get('draw_attention', {})  # Ultra 11.18: 平局关注
+    draw_window_priority = bool(cmb.get('draw_window_hhad_priority', False))  # Ultra 11.19: 平局窗口HHAD优先
     insight = cmb.get('insight', '')
     margin_dist = cmb.get('margin_dist', {})
 
@@ -278,6 +281,7 @@ def extract_match(data, match_id):
         'hhad_primary': hhad_primary,
         'let_draw_rec': let_draw_rec,
         'draw_attention': draw_attention,
+        'draw_window_priority': draw_window_priority,
         'insight': insight, 'margin_dist': margin_dist,
         'sporttery_pools': sp,
         'quality': quality, 'quality_score': quality_score,
@@ -638,6 +642,21 @@ def build_match_page(m, page_num, total):
         alert_rows.append(Paragraph(
             f'▲ 平局关注  HAD平 @{_dar_odds}  |  P = {_dar_prob:.1f}%  |  EV = {_dar_ev:+.1f}%  |  历史平局率≈25%',
             S['alert_line_sub']))
+
+    # 平局窗口HHAD优先行 (Ultra 11.19) — 平局场次让球盘判别力更强
+    if m.get('draw_window_priority'):
+        _hhd = m.get('hhad_primary') or {}
+        _hhd_dir = _hhd.get('option', '')
+        _hhd_odds = _hhd.get('odds', 0)
+        if _hhd_dir and _hhd_odds and _hhd_odds > 0:
+            _hhd_dir_label = _hhad_option_label(_hhd_dir, m['hhad_h'])
+            _dw_line = f'HHAD参考{_hhd_dir_label}@{_hhd_odds}'
+        else:
+            # HHAD主推缺失(未开盘)时, 给出通用让球盘优先提示
+            _dw_line = '让球盘未开盘, 平局概率偏高, 注意提防平局'
+        alert_rows.append(Paragraph(
+            f'◆ 平局窗口HHAD优先  HAD平局P≥30%  |  让球盘更稳  |  {_dw_line}',
+            S['alert_line_draw']))
 
     if alert_rows:
         alert_data = [[row] for row in alert_rows]

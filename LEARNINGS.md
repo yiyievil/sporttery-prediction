@@ -4,6 +4,15 @@
 > **更新规则**: 每次修复 bug 或做出重要架构决策后, 立即追加一条记录
 > **格式**: `LRN-YYYYMMDD-XXX` (学习) / `ERR-YYYYMMDD-XXX` (错误)
 
+### LRN-20260809-012: 平局窗口HHAD优先 — 平局场次让球盘判别力碾压HAD (Ultra 11.19)
+- **触发**: 260809周日001-011因子分析发现 平局场次 HAD 0/3(0%) vs HHAD 2/3(67%), 用户"做"批准落地
+- **全库回测验证 (101场)**: 实际平局24场中 **HHAD命中71%(17/24)** vs **HAD命中8%(2/24)**; 对照非平局77场中 HAD命中65%(50/77) vs HHAD命中36%(28/36) — 平局场次让球盘判别力碾压胜平负, 非平局场次则HAD更优, 验证"平局窗口HHAD优先"假设完全成立
+- **根因**: HAD单选制下平局概率再高(26-32%)也排不进胜/负之前成为argmax, 平局概率标定良好却永远选不中 → HAD对平局结构性失效; 让球盘把强弱拉到接近, 让平(平局)窗口天然更高且不受该约束
+- **落地**: v215_e2e.py predict_match — 平局关注(draw_attention)触发(平局P≥30%)时新增 `draw_window_hhad_priority=True`, insight追加"平局窗口HHAD优先"提示(HHAD主推有效时给`HHAD参考方向@赔率`, HHAD未开盘时给通用让球盘提示); gen_pred_pdf.py 醒目提示行新增 `alert_line_draw`(青色)展示"◆ 平局窗口HHAD优先"
+- **关键教训**: ① 平局场次的判别力在让球盘不在胜平负, 平局概率高时应引导用户优先参考HHAD; ② 新增PDF读取字段时, `m.get('hhad_primary', {})` 若实际值为None仍会抛 AttributeError, 必须用 `m.get('hhad_primary') or {}` 防护(None是合法值, 默认参数只对键缺失生效不对None生效)
+- **验证**: py_compile OK; 重预测11场, 周日001(平局31.2%)/周日010(平局32.2%)正确触发 `draw_window_hhad_priority=True`; PDF含"◆ 平局窗口HHAD优先"提示行
+- **预防**: 平局概率≥30%是"让球盘优先"的触发线, 与"FP之所以漏平"根因(概率标定好但选不中)相对, 消费侧引导比改动方向选择更安全; None防护需贯穿所有新增字段读取
+
 ### LRN-20260809-010: 汇总页概率最高场次标红 (Ultra 11.19)
 - **触发**: 用户"汇总里把你计算出概率最高的场次标红"
 - **落地**: gen_pred_pdf.py `build_summary_pages` — 每页(总进球/比分)先取本页所有场次 prob 最高值 max_prob, 逐行判断 `abs(prob-max_prob)<1e-9` 标记为最高行; 最高行的所有单元格改用红色加粗样式 `_red_val/_red_key`(color=C_RED, bold=True), 其余行保持默认色

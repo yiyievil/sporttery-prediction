@@ -3569,6 +3569,34 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                 f"历史平局率≈25%,平局概率显著偏高高发)"
             )
 
+    # ===== Ultra 11.19: 平局窗口HHAD优先 (LRN-20260809-009) =====
+    # 背景: 260809周日001-011因子分析发现 平局场次 HAD 0/3(0%) vs HHAD 2/3(67%)
+    #   平局是当前最大漏点(全库101场实际平局27场, 仅预测6场, 漏判20场)。
+    #   根因: HAD单选制下平局概率再高(26-32%)也排不进胜/负之前成为argmax,
+    #   平局概率标定良好却永远选不中 → HAD对平局结构性失效。
+    # 关键洞察: 平局场次的判别力在让球盘(HHAD)而非胜平负(HAD)。
+    #   让球盘把强弱拉到接近, 让平(平局)窗口天然更高, 且HHAD方向不受
+    #   "平局概率排不进前二"的约束(让胜/让负概率更分散, 让平更接近主导)。
+    # 设计: 当HAD平局概率≥30%(平局关注触发)时, 标记此场为"平局窗口",
+    #   提示用户 HHAD 优先参考(让球方向判别力更强), 而非只看HAD主胜/主负。
+    #   不改变HAD主推方向(平局仍非argmax), 不改变HHAD概率(模型已标定),
+    #   仅新增一个"平局场次让球盘优先"的消费侧标记, 供PDF/JSON醒目展示。
+    draw_window_hhad_priority = False
+    if draw_attention is not None:
+        draw_window_hhad_priority = True
+        _hhad_dir_val = (hhad_primary_bet or {}).get('option', '')
+        _hhad_odds_val2 = (hhad_primary_bet or {}).get('odds', 0)
+        # Ultra 11.19: HHAD主推缺失(未开盘)时, 给出通用让球盘优先提示, 避免"参考@0"
+        if _hhad_dir_val and _hhad_odds_val2 and _hhad_odds_val2 > 0:
+            _dw_ref = f"HHAD参考{_hhad_dir_val}@{_hhad_odds_val2}"
+        else:
+            _dw_ref = ("让球盘方向优先参考HHAD" if (hhad or {}).get('h', 0) > 0
+                       else "让球盘未开盘, 平局概率偏高注意提防")
+        insight_parts.append(
+            f"平局窗口HHAD优先: HAD平局P={_dar_p*100:.0f}%≥30%,让球盘判别力更稳"
+            f",{_dw_ref}"
+        )
+
     # 净胜球分布提示
     if p_win_1 > p_win_2plus:
         insight_parts.append(f"赢1球({p_win_1*100:.0f}%)>赢2+球({p_win_2plus*100:.0f}%),小胜概率大")
@@ -3619,6 +3647,7 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         'hhad_primary_bet': hhad_primary_bet,
         'let_draw_rec': let_draw_rec,  # Ultra 11.17: 让平直推
         'draw_attention': draw_attention,  # Ultra 11.18: 平局关注
+        'draw_window_hhad_priority': draw_window_hhad_priority,  # Ultra 11.19: 平局窗口HHAD优先
         'double_recommend': double_recommend,
         'double_parallel_output': double_parallel_output,
         'pure_direction_bet': pure_direction_bet,
