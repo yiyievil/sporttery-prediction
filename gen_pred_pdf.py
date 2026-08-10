@@ -242,6 +242,7 @@ def extract_match(data, match_id):
     primary = cmb.get('primary_bet', {})
     double_rec = cmb.get('double_recommend', {})
     hhad_primary = cmb.get('hhad_primary_bet', {})
+    wdl_picks = cmb.get('wdl_picks', [])  # Ultra 11.30: 胜平负共斥双推
     let_draw_rec = cmb.get('let_draw_rec', {})  # Ultra 11.17: 让平直推
     draw_attention = cmb.get('draw_attention', {})  # Ultra 11.18: 平局关注
     draw_window_priority = bool(cmb.get('draw_window_hhad_priority', False))  # Ultra 11.19: 平局窗口HHAD优先
@@ -279,6 +280,7 @@ def extract_match(data, match_id):
         'total_exp': total_exp, 'key_insight': key_insight,
         'primary': primary, 'double_rec': double_rec,
         'hhad_primary': hhad_primary,
+        'wdl_picks': wdl_picks,
         'let_draw_rec': let_draw_rec,
         'draw_attention': draw_attention,
         'draw_window_priority': draw_window_priority,
@@ -675,7 +677,9 @@ def build_match_page(m, page_num, total):
     story.append(Spacer(1, 1 * mm))
 
     # ================================================================
-    # 区域5: 净胜分布 + 关键洞察 (完整显示)
+    # 区域5: 净胜分布 + 关键结论 (Ultra 11.21 表格化)
+    #   用户要求: 用"项目+结论"简洁表格, 替代超长洞察段落。
+    #   关键结论从结构化字段(主推/次选/让平直推/双选)构建, 与对话一致。
     # ================================================================
     md = m['margin_dist']
     md_parts = []
@@ -685,10 +689,7 @@ def build_match_page(m, page_num, total):
             if val:
                 md_parts.append(f'{k} {val:.1f}%')
 
-    insight_line = _detect_primary_insight(m)
-    bottom_lines = []
-
-    # 合并净胜分布 + 数据质量 + 难度为一行
+    # 数据质量/难度一行
     data_line_parts = []
     if md_parts:
         data_line_parts.append('净胜分布:  ' + '  |  '.join(md_parts))
@@ -699,15 +700,93 @@ def build_match_page(m, page_num, total):
         data_line_parts.append(q_label)
     if m['difficulty']:
         data_line_parts.append(f'难度: {m["difficulty"]}')
-    if data_line_parts:
-        bottom_lines.append('  |  '.join(data_line_parts))
-    if insight_line:
-        # 洞察文案已在引擎端(v215_e2e._hhad_display_label)完成受让术语替换,
-        # 此处直接使用原文, 不再重复调用 _hhad_option_label, 避免"受让胜"→"受受让胜"重复替换
-        bottom_lines.append(f'关键洞察: {insight_line}')
 
-    if bottom_lines:
-        insight_data = [[Paragraph(line, S['body_text'])] for line in bottom_lines]
+    # 从结构化字段构建"项目+结论"表格行 (与对话中的"项目/结论"一致)
+    verdict_rows = []
+
+    # 主推
+    _pri = m['primary']
+    if _pri and _pri.get('option'):
+        _opt = _hhad_option_label(_pri.get('option', ''), m['hhad_h'])
+        _mk = _pri.get('market', '')
+        _tag = '主推' + (f'[{_mk}]' if _mk else '')
+        _desc = f'{_opt}@{_pri.get("odds",0)}  P={_pri.get("prob",0):.1f}%  EV={_pri.get("ev_pct",0):+.1f}%'
+        if _pri.get('value'):
+            _desc += ' ★价值'
+        verdict_rows.append((_tag, _desc))
+
+    # 次选(双选/次推)
+    _dr = m['double_rec']
+    if _dr and _dr.get('option'):
+        _opt = _hhad_option_label(_dr.get('option', ''), m['hhad_h'])
+        _tag = '双选'
+        _desc = f'{_opt}@{_dr.get("odds",0)}  P={_dr.get("prob",0):.1f}%  EV={_dr.get("ev_pct",0):+.1f}%'
+        if _dr.get('value'):
+            _desc += ' ★价值'
+        if _dr.get('direction'):
+            _desc += f'  ({_dr["direction"]})'
+        verdict_rows.append((_tag, _desc))
+
+    # HHAD主推 (与主推不同时才单独列)
+    _hp = m['hhad_primary']
+    if _hp and _hp.get('option') and (not _pri or _hp.get('option') != _pri.get('option')):
+        _opt = _hhad_option_label(_hp.get('option', ''), m['hhad_h'])
+        _desc = f'{_opt}@{_hp.get("odds",0)}  P={_hp.get("prob",0):.1f}%  EV={_hp.get("ev_pct",0):+.1f}%'
+        if _hp.get('value'):
+            _desc += ' ★价值'
+        verdict_rows.append(('HHAD主推', _desc))
+
+    # 让平直推
+    _ldr = m['let_draw_rec']
+    if _ldr and _ldr.get('option') and _ldr.get('let_draw_direct'):
+        _opt = _hhad_option_label(_ldr.get('option', ''), m['hhad_h'])
+        verdict_rows.append((
+            '让平直推',
+            f'{_opt}@{_ldr.get("odds",0)}  P={_ldr.get("prob",0):.1f}%  EV={_ldr.get("ev_pct",0):+.1f}%'
+        ))
+
+    # 平局关注
+    _dar = m['draw_attention']
+    if _dar and _dar.get('option') and _dar.get('draw_attention'):
+        verdict_rows.append((
+            '平局关注',
+            f'{_hhad_option_label(_dar.get("option",""), m["hhad_h"])}@{_dar.get("odds",0)}  '
+            f'P={_dar.get("prob",0):.1f}%  EV={_dar.get("ev_pct",0):+.1f}%'
+        ))
+
+    # 平局窗口HHAD优先
+    if m.get('draw_window_priority'):
+        _hhd = m.get('hhad_primary') or {}
+        _hhd_dir = _hhd.get('option', '')
+        _hhd_odds = _hhd.get('odds', 0)
+        if _hhd_dir and _hhd_odds and _hhd_odds > 0:
+            _dw_desc = f'HHAD参考{_hhad_option_label(_hhd_dir, m["hhad_h"])}@{_hhd_odds}'
+        else:
+            _dw_desc = '让球盘未开盘, 平局概率偏高, 注意提防平局'
+        verdict_rows.append(('平局窗口', f'HHAD优先  {_dw_desc}'))
+
+    # 渲染: 数据质量一行 (若有) + "项目/结论"表格
+    bottom_blocks = []
+    if data_line_parts:
+        bottom_blocks.append(Paragraph('  |  '.join(data_line_parts), S['body_text']))
+
+    if verdict_rows:
+        v_data = [[Paragraph(k, S['table_key']), Paragraph(v, S['table_val'])] for k, v in verdict_rows]
+        v_tbl = Table(v_data, colWidths=[full_w * 0.24, full_w * 0.76])
+        v_tbl.setStyle(TableStyle([
+            ('ROWBACKGROUNDS', (0, 0), (-1, -1), [C_WHITE, C_GOLD_PALE]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+            ('LINEBELOW', (0, 0), (-1, -1), 0.3, C_BORDER_LT),
+            ('LINEBELOW', (0, -1), (-1, -1), 0.5, C_BORDER),
+        ]))
+        bottom_blocks.append(v_tbl)
+
+    if bottom_blocks:
+        insight_data = [[b] for b in bottom_blocks]
         insight_table = Table(insight_data, colWidths=[full_w])
         insight_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), C_GOLD_PALE),
@@ -721,30 +800,56 @@ def build_match_page(m, page_num, total):
         story.append(Spacer(1, 1 * mm))
 
     # ================================================================
-    # 区域6: 体彩玩法 EV 优选 (完整显示所有选项, 按EV降序)
-    #   Ultra 11.10: 从"每玩法Top1"升级为"每玩法全部选项",
-    #   完整覆盖 总进球/半全场/比分 三大玩法, 满足"所有玩法"需求
+    # 区域6: 体彩玩法 命中率优选 (Ultra 11.24 简洁表格化)
+    #   用户要求: 5大玩法均命中率第一优先, EV仅展示参考。
+    #   每个玩法取命中率最高(prob)的选项(最多2个), 展示prob+EV作参考。
+    #   → 版面像对话中的"项目/结论"表格一样直观, 不再堆大段文字。
     # ================================================================
     sp = m['sporttery_pools'] or {}
-    pool_lines = []
-    for pool_key, pool_label in [('ttg', '总进球'), ('hafu', '半全场'), ('crs', '比分')]:
+    pool_rows = []
+    for pool_key, pool_label in [('ttg', '竞彩总进球'), ('hafu', '竞彩半全场'), ('crs', '竞彩比分')]:
         items = sp.get(pool_key, [])
-        if items:
-            sorted_items = sorted(items, key=lambda x: x.get('ev_pct', -999), reverse=True)
-            parts = []
-            for it in sorted_items:
-                opt = it.get('option', '?')
-                odd = it.get('odds', '?')
-                ev2 = it.get('ev_pct', 0)
-                flag = ' ✓' if ev2 > 0 else ''
-                parts.append(f'{opt}@{odd}({ev2:+.0f}%){flag}')
-            if parts:
-                pool_lines.append(f'{pool_label}:  {" | ".join(parts)}')
+        if not items:
+            continue
+        # Ultra 11.24: 按命中率(prob)优先排序, 不再按EV
+        sorted_items = sorted(items, key=lambda x: x.get('prob', -999), reverse=True)
+        # 命中率最高的选项
+        pos = sorted_items[:2]
+        parts = []
+        for it in pos:
+            opt = it.get('option', '?')
+            odd = it.get('odds', '?')
+            p2 = it.get('prob', 0)
+            ev2 = it.get('ev_pct', 0)
+            parts.append(f'{opt}@{odd}  P{p2:.0f}%  EV{ev2:+.0f}%')
+        if parts:
+            pool_rows.append([
+                Paragraph(pool_label, S['table_key']),
+                Paragraph(' | '.join(parts), S['table_val']),
+            ])
 
-    if pool_lines:
-        story.extend(_section_header('竞彩玩法 EV 优选'))
-        for line in pool_lines:
-            story.append(Paragraph(line, S['pool_text']))
+    if pool_rows:
+        story.extend(_section_header('竞彩玩法 命中率优选'))
+        pool_header = [Paragraph('玩法', S['table_header']), Paragraph('命中率优选选项', S['table_header'])]
+        pool_tbl = Table([pool_header] + pool_rows, colWidths=[full_w * 0.28, full_w * 0.72])
+        pool_tbl.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), C_NAVY),
+            ('TEXTCOLOR', (0, 0), (-1, 0), white),
+            ('LINEBELOW', (0, 0), (-1, 0), 1.2, C_GOLD),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [C_WHITE, C_GOLD_PALE]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, 0), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+            ('LEFTPADDING', (0, 0), (-1, 0), 10),
+            ('RIGHTPADDING', (0, 0), (-1, 0), 10),
+            ('TOPPADDING', (0, 1), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
+            ('LEFTPADDING', (0, 1), (-1, -1), 10),
+            ('RIGHTPADDING', (0, 1), (-1, -1), 10),
+            ('LINEBELOW', (0, 1), (-1, -1), 0.3, C_BORDER_LT),
+            ('LINEBELOW', (0, -1), (-1, -1), 0.5, C_BORDER),
+        ]))
+        story.append(pool_tbl)
         story.append(Spacer(1, 1 * mm))
 
     # ================================================================
@@ -858,6 +963,135 @@ def build_summary_pages(matches):
         ]))
         story.append(tbl)
 
+    return story
+
+
+# ====================================================================
+# Ultra 11.25: 8列总览表 (用户要求: 紧凑直观, 一场一行)
+#   列: 1编号 2时间 3赛事 4主队VS客队 5胜平负 6总进球 7半全场 8比分
+#   胜平负: HAD + HHAD 各取命中率最高1项
+#   总进球/半全场/比分: 取命中率最高1-2项 (sporttery_pools 已按prob降序)
+#   全部命中率优先, EV仅作参考 (用户铁律: 足球非抛硬币, 每场独立)
+# ====================================================================
+def _strip_market(opt):
+    """去掉 HAD/HHAD 市场前缀: 'HAD胜'→'胜', 'HHAD让胜'→'让胜'"""
+    for p in ('HAD', 'HHAD'):
+        if str(opt).startswith(p):
+            return str(opt)[len(p):]
+    return str(opt)
+
+
+def _wdl_cell(m):
+    """胜平负列: 优先取共斥双推 wdl_picks (Ultra 11.30: 净胜球互斥Top2, 不重叠不冗余)
+    字段缺失/为空时回退旧口径 HAD主推 + HHAD主推.
+    单行空格分隔, 不强制分行 (Ultra 11.28: 消除大片留空)"""
+    wdl = m.get('wdl_picks') or []
+    if wdl:
+        parts = [_strip_market(it.get('option', '?')) for it in wdl]
+        return ' '.join(parts) if parts else '-'
+    parts = []
+    pb = m.get('primary') or {}
+    if pb.get('option'):
+        parts.append(_strip_market(pb.get('option')))
+    hpb = m.get('hhad_primary') or {}
+    if hpb.get('option'):
+        parts.append(_strip_market(hpb.get('option')))
+    return ' '.join(parts) if parts else '-'
+
+
+def _pool_cell(items, max_n=2):
+    """玩法池列: 取命中率最高前max_n个, 仅输出选项, 单行空格分隔
+    内部按prob降序排序, 不依赖JSON存储顺序 (数据可能为改版前旧排序)"""
+    if not items:
+        return '-'
+    items = sorted(items, key=lambda x: x.get('prob', 0), reverse=True)
+    parts = []
+    for it in items[:max_n]:
+        parts.append(_strip_market(it.get('option', '?')))
+    return ' '.join(parts)
+
+
+def build_overview_pages(matches, match_date=''):
+    """构建 8 列总览表 (Ultra 11.25): 一场一行, 紧凑直观, 替代每场一整页+旧汇总页
+    Ultra 11.27: 标题加日期, 去掉副标题行, 配色更醒目高大上"""
+    story = []
+    full_w = CW
+
+    # 标题 + 金色装饰线 (高大上风格)
+    story.append(Spacer(1, 6 * mm))
+    title = f'竞彩预测  {match_date}' if match_date else '竞彩预测'
+    _title_style = make_style('OverviewTitle', bold=True, size=28, leading=36,
+                              color=C_NAVY, align=TA_CENTER, space_after=0)
+    story.append(Paragraph(title, _title_style))
+    story.append(Spacer(1, 2 * mm))
+    gold_line_tbl = Table([['']], colWidths=[full_w])
+    gold_line_tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), C_GOLD),
+        ('TOPPADDING', (0, 0), (-1, -1), 1.2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.2),
+    ]))
+    gold_wrap = Table([[gold_line_tbl]], colWidths=[full_w])
+    gold_wrap.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
+    story.append(gold_wrap)
+    story.append(Spacer(1, 3 * mm))
+
+    _ov_header = make_style('OverviewHeader', bold=True, size=14, leading=19,
+                               color=white, align=TA_CENTER)
+    header = [
+        Paragraph('编号', _ov_header),
+        Paragraph('时间', _ov_header),
+        Paragraph('赛事', _ov_header),
+        Paragraph('主队VS客队', _ov_header),
+        Paragraph('胜平负', _ov_header),
+        Paragraph('总进球', _ov_header),
+        Paragraph('半全场', _ov_header),
+        Paragraph('比分', _ov_header),
+    ]
+    rows = [header]
+
+    _cell = make_style('OverviewCell', size=13.5, leading=18, color=C_TEXT)
+    _cell_bold = make_style('OverviewCellBold', bold=True, size=13.5, leading=18, color=C_NAVY)
+    _cell_id = make_style('OverviewCellId', bold=True, size=13.5, leading=18, color=C_GOLD_DARK)
+
+    for m in matches:
+        sp = m['sporttery_pools'] or {}
+        rows.append([
+            Paragraph(m.get('id', ''), _cell_id),
+            Paragraph(m.get('time', ''), _cell),
+            Paragraph(m.get('league', ''), _cell),
+            Paragraph(f"{m['home']} vs<br/>{m['away']}", _cell_bold),
+            Paragraph(_wdl_cell(m), _cell),
+            Paragraph(_pool_cell(sp.get('ttg')), _cell),
+            Paragraph(_pool_cell(sp.get('hafu')), _cell),
+            Paragraph(_pool_cell(sp.get('crs')), _cell),
+        ])
+
+    col_w = [
+        full_w * 0.13,   # 编号 周一001(5全角)
+        full_w * 0.085,  # 时间 01:00
+        full_w * 0.07,   # 赛事 瑞超(2全角, 单行)
+        full_w * 0.165,  # 主队VS客队 (两行, 收窄消除右侧留白)
+        full_w * 0.135,  # 胜平负 胜 让胜
+        full_w * 0.135,  # 总进球 2球 1球
+        full_w * 0.135,  # 半全场 负负 平负
+        full_w * 0.125,  # 比分 1-1 1-0
+    ]
+    tbl = Table(rows, colWidths=col_w, repeatRows=1)
+    tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), C_NAVY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), white),
+        ('LINEBELOW', (0, 0), (-1, 0), 2.0, C_GOLD),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [C_WHITE, C_GOLD_PALE]),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('LINEBELOW', (0, -1), (-1, -1), 1.2, C_GOLD),
+        ('LINEABOVE', (0, 1), (-1, 1), 0.5, C_GOLD),
+    ]))
+    story.append(tbl)
     return story
 
 
@@ -994,31 +1228,11 @@ def generate_pdf(data, output_path):
         topMargin=TM, bottomMargin=BM,
     )
 
-    # 封面 (返回 story + 封面占用页数; 内部已处理每页顶部留白与分页)
-    cover_story, cover_pages = build_cover_story(matches, match_date, total)
-
-    # 正文
+    # Ultra 11.26: 去掉封面, 只输出8列总览表 (用户要求: 简洁直观)
     full_story = []
-    full_story.extend(cover_story)
+    full_story.extend(build_overview_pages(matches, match_date))
 
-    for i, m in enumerate(matches):
-        full_story.append(PageBreak())
-        card = build_match_page(m, i + 1, total)
-        full_story.extend(card)
-
-    # 末尾追加两页汇总: 总进球 / 比分 概率最高 (Ultra 11.19)
-    full_story.append(PageBreak())
-    full_story.extend(build_summary_pages(matches))
-
-    # 按页号调度背景: 封面范围内(≤cover_pages)用深蓝封面配色, 其余用正文米白配色
-    # - 第1页固定封面背景; 其余页(含封面溢出页)在回调里按 doc.page 判断
-    def _on_later_page(c, d):
-        if d.page <= cover_pages:
-            draw_cover_bg(c, d)
-        else:
-            draw_page_bg(c, d)
-
-    doc.build(full_story, onFirstPage=draw_cover_bg, onLaterPages=_on_later_page)
+    doc.build(full_story, onFirstPage=draw_page_bg, onLaterPages=draw_page_bg)
     return output_path
 
 

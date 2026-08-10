@@ -661,6 +661,10 @@ def parse_result(match_data):
 def load_predictions(match_keys, results_data):
     """加载预测文件, 匹配场次
     返回 {match_key: prediction_data}
+
+    Ultra 11.20: 版本完整性锚定 — 若主文件(最新写入)覆盖的场次不足目标场次集
+    (说明是部分场次重跑覆盖), 则回退到 version_archive 的"最后一个完整版",
+    避免用被部分覆盖的文件做回归, 保证"验证只对最后完整版进行"。
     """
     if not os.path.exists(PREDICTIONS_DIR):
         return {}
@@ -672,6 +676,74 @@ def load_predictions(match_keys, results_data):
     predictions = {}
     # 记录每个match_key对应的 (update_count, file) 用于选取最后一次更新
     key_updates = {}
+
+    # ===== Ultra 11.20: 先尝试"最后一个完整版"锚定 =====
+    # 目标场次集合 (match_keys 可能是 周日001; 用后3位+前缀宽松匹配)
+    _target_last3 = set(k[-3:] for k in match_keys)
+    _query_base = None
+    _complete_loaded = False
+
+    # 从主文件集合中, 找出最匹配本次验证目标日期的基名
+    for pf in pred_files:
+        if not pf.startswith('pred_'):
+            continue
+        # base = pred_20260809_周日 (去掉.json)
+        _base = pf.replace('.json', '')
+        # 用 results 场次前缀(周X)与目标match_key前缀对齐
+        try:
+            with open(os.path.join(PREDICTIONS_DIR, pf), 'r', encoding='utf-8') as f:
+                _probe = json.load(f)
+            _probe_keys = [k for k in (_probe.get('results', {}) or {}).keys() if k.startswith('周')]
+        except Exception:
+            continue
+        if not _probe_keys:
+            continue
+        # 目标前缀: 取 match_keys 第一个的星期前缀(如前2字符)
+        _target_prefix = match_keys[0][:2] if match_keys and len(match_keys[0]) >= 3 else ''
+        if _target_prefix:
+            _probe_keys = [k for k in _probe_keys if k.startswith(_target_prefix)]
+        if not _probe_keys:
+            continue
+        # 检查该文件是否覆盖目标场次(编号后3位)
+        _covered = [k for k in _probe_keys if k[-3:] in _target_last3]
+        if not _covered:
+            continue
+        _query_base = _base
+        break
+
+    # 若找到匹配基名, 到归档中取"最后一个完整版"
+    if _query_base:
+        try:
+            from version_archive import find_last_complete
+            _v, _vfile = find_last_complete(PREDICTIONS_DIR, _query_base, expected_keys=sorted(_target_last3))
+            if _v and _v.get('snapshot'):
+                _snap = _v['snapshot']
+                _snap_results = _snap.get('results', {}) or {}
+                _snap_meta = _snap.get('meta', {}) or {}
+                _covered_all = [k for k in match_keys if k in _snap_results or k[-3:] in [kk[-3:] for kk in _snap_results]]
+                if len(_covered_all) >= len(match_keys):
+                    for key in match_keys:
+                        _sk = next((k for k in _snap_results if k == key or k[-3:] == key[-3:]), None)
+                        if _sk:
+                            predictions[key] = {
+                                'prediction': _snap_results[_sk],
+                                'meta': _snap_meta.get(_sk, {}),
+                                'file': os.path.basename(_vfile),
+                                'update_count': _v.get('update_count', 0),
+                                'version_seq': _v.get('seq'),
+                                'is_version_snapshot': True,
+                            }
+                            key_updates[key] = (_v.get('update_count', 0), os.path.basename(_vfile))
+                    _complete_loaded = True
+                    print(f"  [版本锚定] 用最后完整版 v{_v.get('seq')}({len(_snap_results)}场) 作为验证基准: {os.path.basename(_vfile)}")
+        except Exception as _ve:
+            print(f"  [版本锚定] ⚠️ 归档读取失败, 回退主文件: {_ve}")
+
+    # 若完整版已锚定全部目标场次, 直接返回 (不再被部分覆盖的最新文件污染)
+    if _complete_loaded and len(predictions) >= len(match_keys):
+        return predictions
+
+    # ===== 原有逻辑: 主文件按 update_count 取最大 =====
     for pf in pred_files:
         filepath = os.path.join(PREDICTIONS_DIR, pf)
         try:
@@ -804,6 +876,17 @@ def verify_prediction(pred_data, result_data):
                 pb_hit = actual_had in ('平', '负')
             elif '胜负' in pb_option:
                 pb_hit = actual_had in ('胜', '负')
+            else:
+                pb_hit = False
+        elif pb_market == 'HHAD双选':
+            # 让球双选命中: 实际让球方向末字(胜/平/负)命中任一选中方向 (Ultra 11.32, 修复漏判)
+            _hhad_dir = (actual_hhad or '')[-1]  # 受让胜/让胜→胜, 受让平/让平→平, ...
+            if '让胜让平' in pb_option:
+                pb_hit = _hhad_dir in ('胜', '平')
+            elif '让胜让负' in pb_option:
+                pb_hit = _hhad_dir in ('胜', '负')
+            elif '让平让负' in pb_option:
+                pb_hit = _hhad_dir in ('平', '负')
             else:
                 pb_hit = False
         else:

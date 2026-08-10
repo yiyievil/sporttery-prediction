@@ -855,6 +855,15 @@ def main():
     }
 
     # 保存到文件 (M17: 临时文件+os.replace原子替换, 避免写入中途失败损坏预测文件)
+    # Ultra 11.20: 覆盖前把当前文件完整快照归档, 防止历史版本丢失
+    try:
+        from version_archive import archive_before_save
+        # 更新场景的期望覆盖 = 当前文件已有的完整场次 + 本次更新场次
+        _expected = sorted(set(old_results.keys()) | set(found_keys))
+        archive_before_save(pred_file, updated_pred, expected_keys=_expected)
+    except Exception as _ve:
+        print(f"  [版本归档] ⚠️ 归档失败(不影响保存): {_ve}")
+
     tmp_file = pred_file + '.tmp'
     with open(tmp_file, 'w', encoding='utf-8') as f:
         json.dump(updated_pred, f, ensure_ascii=False, indent=1)

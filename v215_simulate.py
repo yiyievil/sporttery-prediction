@@ -154,8 +154,8 @@ def load_predictions(pred_file):
         # 2. primary_bet 概率需>=30% 且置信度不低于HHAD方向才采用
         # 3. 否则回退到 HHAD 方向 (通常置信度最高)
         pb = cm.get('primary_bet') if cm else None
-        pb_prob = pb.get('prob', 0) if pb else 0
-        pb_odds = pb.get('odds', 0) if pb else 0
+        pb_prob = float(pb.get('prob') or 0) if pb else 0
+        pb_odds = float(pb.get('odds') or 0) if pb else 0
 
         # HHAD 方向 (通常最高置信度)
         hhad_dir = hhad.get('dir', '')

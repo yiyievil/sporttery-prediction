@@ -297,17 +297,11 @@ def inject_memory_context():
 # ===== 推荐模式配置 (Pro 3.9/Ultra 1.0) =====
 # mode='prob':  命中率优先(默认), 纯概率排序, EV仅作参考
 # mode='ev':    EV优先, 主推期望值最高
-# mode='hybrid': 阈值-决胜法, 概率误差带(3pp)内取EV最高 (替代旧0.6/0.4线性混合)
-RECOMMEND_MODE = 'hybrid'   # ← prob=命中率优先 | ev=EV优先 | hybrid=阈值-决胜法 (当前)
-# hybrid 阈值-决胜法 (Ultra 6.5): 候选 = prob ≥ p_max − HYBRID_PROB_TOLERANCE, 候选内取EV最高
-# 3pp ≈ 模型校准误差带; 差距在误差带内让赔率说话, 差距真实存在时概率说了算
-HYBRID_PROB_TOLERANCE = 3.0  # 单位: 概率百分点
-# ===== Ultra 11.9: HHAD 优先级提升 (HAD专项回归 2026-08-07) =====
-# 回归发现(260806周四): HHAD让球 3/4(75%) 显著优于 HAD 1/4(25%)
-# 根因: 让球盘对方向更敏感, HHAD让球方向判别力强于HAD主盘
-# 修正: hybrid误差带内HHAD加等效0.5pp分, 使HAD/HHAD可比时HHAD优先
-# 效果: 不改变"带外概率说了算"的铁律, 仅在带内(HAD/HHAD判别力相当)时偏向HHAD
-HHAD_PRIORITY_BONUS = 0.5  # 单位: hybrid_score等效概率百分点
+# mode='prob': 命中率第一优先, EV仅作展示参考 (用户铁律)
+# 用户明确: "推荐的命中率为第一优先而不是看EV! 足球不是抛硬币, 每场几乎都是独立!"
+# 足球每场独立, EV是重复投注概念, 对单场预测意义有限; 命中率(prob)才是方向判断依据
+RECOMMEND_MODE = 'prob'   # 命中率优先 (唯一支持模式; ev/hybrid 已移除 Ultra 11.33)
+HYBRID_PROB_TOLERANCE = 3.0  # 单位: 概率百分点 (胜率误差带, 用于平局盲区触发判定)
 
 # ===== SWOT 自动获取开关 (Ultra 6.5) =====
 # True: 预测完成后自动发现leisu情报卡片→获取SWOT→融合回预测文件
@@ -3134,114 +3128,119 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                 'direction': direction,
             })
 
+    # HHAD双选选项EV (Ultra 11.22: 让球双选纳入候选 — 用户要求)
+    # 体彩规则同HAD双选: 2注=4元, ROI% = (P1×odds1 + P2×odds2 - 2)/2 × 100
+    # 让球三结果: 让胜/让平/让负 (受让+1时依次=主不败/恰输1/输2+; 让球-1时=赢2+/恰赢1/平+负)
+    # 作用: 让HHAD双选与HAD双选同台竞争, 主推在让球盘有价值时(double_recommend选型)可选让球双选
+    if hhad_dict and 'h' in hhad_dict:
+        hhad_odds_list_dbl = [hhad_dict['h'], hhad_dict['d'], hhad_dict['a']]
+        hhad_double_configs = [
+            ('HHAD让胜让平双选', 0, 1),
+            ('HHAD让胜让负双选', 0, 2),
+            ('HHAD让平让负双选', 1, 2),
+        ]
+        for label, idx1, idx2 in hhad_double_configs:
+            p1 = hhad_probs[idx1]
+            p2 = hhad_probs[idx2]
+            odds1 = hhad_odds_list_dbl[idx1]
+            odds2 = hhad_odds_list_dbl[idx2]
+            combined_prob = p1 + p2
+            if combined_prob > 0:
+                avg_odds = round((p1 * odds1 + p2 * odds2) / combined_prob, 2)
+            else:
+                avg_odds = 0
+            roi = (p1 * odds1 + p2 * odds2 - 2) / 2
+            ev_pct = roi * 100
+            effective_odds = avg_odds / 2 if avg_odds > 0 else 0
+            kelly = kelly_criterion(combined_prob, effective_odds, hhad_margin) if effective_odds > 1 else {'stake_pct': 0}
+            double_value = roi > 0 and (roi * 100) >= hhad_margin / 2
+            all_options.append({
+                'market': 'HHAD双选',
+                'option': label,
+                'prob': round(combined_prob * 100, 1),
+                'odds': avg_odds,
+                'odds_detail': f'{odds1}/{odds2}',
+                'bets': 2,
+                'cost': 4,
+                'ev_pct': round(ev_pct, 1),
+                'kelly_pct': kelly['stake_pct'],
+                'value': double_value,
+            })
+
     # Ultra 3.0: 移除all_ev和value_bets计算 (prob模式下不需要, 节省计算+token)
     # EV信息已包含在all_options每项的ev_pct字段中, 可按需提取
 
-    # ===== 主推选择 (按mode) =====
+    # ===== 主推选择 (只支持命中率优先 mode='prob'; ev/hybrid 已移除, 见 Ultra 11.33) =====
+    # 理由: 用户铁律 "命中率第一优先, EV仅作展示参考"。足球每场独立, EV是重复投注概念,
+    #       对单场预测意义有限。旧 ev/hybrid 分支含 EV 硬过滤(EV>=-10%才推平局、
+    #       EV作决胜排序), 违背该原则, 已整体移除。EV仍计算并随 all_options 展示, 不参与选推。
+    # Pro 3.8: 主推只从单选中选, 双选是3选2概率天然高, 不代表方向判断。
     primary_bet = None
     risk_assessment = ''
-
-    if mode == 'ev':
-        # EV优先: 取EV最高
-        all_ev = sorted(all_options, key=lambda x: x['ev_pct'], reverse=True)
-        all_ranked = list(all_ev)
-        primary_bet = all_ranked[0] if all_ranked else None
-
-    elif mode == 'hybrid':
-        # 阈值-决胜法 (Ultra 6.5, 替代旧0.6/0.4线性混合 — 旧比例无科学依据且概率被重复计算)
-        # 第一步(概率门槛): 候选 = prob >= p_max - 3pp (3pp ≈ 模型校准误差带, 可随验证库ECE校准)
-        # 第二步(EV决胜): 候选内取EV最高 — 概率差距在误差带内时让赔率说话,
-        #                 差距真实存在时(>3pp)概率说了算, 不被高赔冷门票带偏
-        single_options = [o for o in all_options if o['market'] in ('HAD', 'HHAD')]
-        if single_options:
-            p_max = max(o['prob'] for o in single_options)
-            for o in single_options:
-                o['hybrid_in_band'] = o['prob'] >= p_max - HYBRID_PROB_TOLERANCE
-                # 平局偏好: 当平局在误差带内且EV>=-10%时, 优先平局
-                if o['option'] == '平' and o['hybrid_in_band'] and o['ev_pct'] >= -10:
-                    o['hybrid_score'] = round(1000 + 100 + o['ev_pct'], 3)
-                else:
-                    # 展示用score: 误差带内按EV排, 带外按prob降序排在带内之后
-                    o['hybrid_score'] = round((1 if o['hybrid_in_band'] else 0) * 1000
-                                              + (o['ev_pct'] if o['hybrid_in_band'] else o['prob'] - 100), 3)
-                # Ultra 11.9: HHAD优先级提升 — 误差带内HHAD加等效0.5pp分
-                # 回归: 260806周四HHAD 3/4(75%) vs HAD 1/4(25%), 让球方向判别力更强
-                # 仅在带内比较溢出处偏向HHAD, 不改变"带外概率说了算"铁律
-                if o['market'] == 'HHAD' and o['hybrid_in_band']:
-                    o['hybrid_score'] = round(o['hybrid_score'] + HHAD_PRIORITY_BONUS, 3)
-            all_ranked = sorted(single_options, key=lambda x: x['hybrid_score'], reverse=True)
-            primary_bet = all_ranked[0]
-        else:
-            all_ranked = sorted(all_options, key=lambda x: x['prob'], reverse=True)
-            primary_bet = all_ranked[0] if all_ranked else None
-
-    else:  # mode == 'prob' (命中率优先, EV仅作参考)
-        # 纯概率排序: 命中率最高即为主推, EV不参与排序
-        # 理由: 足球每场独立, EV是重复投注概念, 对单场预测意义有限
-        # EV仍然计算和显示, 但仅作参考, 不影响选推
-        # Pro 3.8: 主推只从单选中选, 双选是3选2概率天然高, 不代表方向判断
-        all_ranked = sorted(all_options, key=lambda x: x['prob'], reverse=True)
-        # 单选 = HAD胜/平/负 + HHAD让胜/让平/让负
-        single_options = [o for o in all_options if o['market'] in ('HAD', 'HHAD')]
-        single_ranked = sorted(single_options, key=lambda x: x['prob'], reverse=True)
-        primary_bet = single_ranked[0] if single_ranked else None
+    all_ranked = sorted(all_options, key=lambda x: x['prob'], reverse=True)
+    single_options = [o for o in all_options if o['market'] in ('HAD', 'HHAD')]
+    single_ranked = sorted(single_options, key=lambda x: x['prob'], reverse=True)
+    primary_bet = single_ranked[0] if single_ranked else None
 
     # ===== HHAD独立主推 (Pro 3.5) =====
     # 问题: HAD双选概率天然高于HHAD单选, 概率优先模式下HHAD永远无法成为主推
-    # 解决: 额外输出HHAD主推, 从3个HHAD单选中选最优(按mode逻辑)
+    # 解决: 额外输出HHAD主推, 从3个HHAD单选按概率选最优
     hhad_options = [o for o in all_options if o['market'] == 'HHAD']
     hhad_primary_bet = None
-
     if hhad_options:
-        if mode == 'ev':
-            hhad_ranked = sorted(hhad_options, key=lambda x: x['ev_pct'], reverse=True)
-            hhad_primary_bet = hhad_ranked[0]
-        elif mode == 'hybrid':
-            # 阈值-决胜法在HHAD子集内独立应用 (与HAD/HHAD全集同一规则)
-            hh_p_max = max(o['prob'] for o in hhad_options)
-            hhad_ranked = sorted(
-                hhad_options,
-                key=lambda x: ((1 if x['prob'] >= hh_p_max - HYBRID_PROB_TOLERANCE else 0), x['ev_pct'], x['prob']),
-                reverse=True)
-            hhad_primary_bet = hhad_ranked[0]
-        else:  # prob — 纯概率排序
-            hhad_ranked = sorted(hhad_options, key=lambda x: x['prob'], reverse=True)
-            hhad_primary_bet = hhad_ranked[0]
+        hhad_ranked = sorted(hhad_options, key=lambda x: x['prob'], reverse=True)
+        hhad_primary_bet = hhad_ranked[0]
 
     # ===== 双选保险方案 (Pro 3.8) =====
     # 双选是3选2, 概率天然高, 不作为主推(主推代表方向判断)
     # 但作为保险方案独立输出, 供用户在方向不够明确时参考
     #
-    # Ultra 9.1: 双选按EV排序而非概率
-    # 之前: sorted(..., key=lambda x: x['prob'], reverse=True)
-    # 问题: 概率高的双选(如胜负73%)可能赔率极低, 毫无价值
-    #       而且覆盖区间不一定合理(如胜+负排除了平局)
-    # 修复: 按EV排序, 正EV或EV最高的双选才是真正有价值的保险方案
-    #
+    # Ultra 11.23 (用户纠正): 双选择优改为命中率(prob)第一优先, EV仅作展示参考
     # Ultra 9.4: 双选必须与主推方向一致 (ERR-20260804-003)
-    # 之前: 仅按EV排序, 导致 主推胜 + 双选平负(客队不败) 方向完全相反,
-    #       且"胜"+"平负"覆盖全部3种结果, 推荐失去意义
-    # 修复: 先过滤出包含主推方向的双选, 再在其中按EV选最高
-    double_options = [o for o in all_options if o['market'] == 'HAD双选']
+    # 之前: 双选可能与主推方向完全相反(主推胜+双选平负覆盖全部结果), 推荐失去意义
+    # 修复: 先过滤出包含主推方向的双选, 再在其中按命中率取最高
+    # Ultra 11.22: 双选不再只限HAD, HHAD双选纳入候选 (用户要求)
+    # HAD双选: 胜平/胜负/平负 (主玩法保险); HHAD双选: 让胜让平/让胜让负/让平让负 (让球盘保险)
+    # 主推为HHAD方向时, HHAD双选(含主推让方向)与HAD双选同台择优;
+    # 平局盲区补偿仅对HAD双选生效(平是HAD概念, 让球无直接平), 但HHAD双选命中率更高可覆盖
+    # Ultra 11.23: 双选择优改为命中率(prob)第一优先, EV仅作展示参考 (用户纠正)
+    #   用户铁律: "推荐的命中率为第一优先而不是看EV! 足球不是抛硬币, 每场几乎都是独立!"
+    #   与 mode='prob' 主推定位一致(命中率优先, EV不参与排序), 双选同为推荐, 必须同口径
+    had_double_options = [o for o in all_options if o['market'] == 'HAD双选']
+    hhad_double_options = [o for o in all_options if o['market'] == 'HHAD双选']
+    all_doubles = had_double_options + hhad_double_options
     double_recommend = None
     # Ultra 11.9: 双选并列输出 — 平局盲区补偿触发时, 双选作为"并列主推"输出
     # 回归: 260806周四002 平局概率进前二, 双选"胜平"覆盖实际平局, 是三条校准中唯一挽回命中的
     # 效果: 平局盲区补偿不只在保险位, 而是并列主推, 提高用户实际落地率
     double_parallel_output = False
-    if double_options:
-        # 主推方向 → 双选必须包含该HAD结果 ('胜'/'平'/'负')
-        # HAD胜/平/负 与 HHAD让胜/让平/让负 的 option 均以 胜/平/负 结尾
+    if all_doubles:
+        # 主推方向 → 双选必须包含主推结果
+        # HAD胜/平/负 以 胜/平/负 结尾; HHAD让胜/让平/让负 以 让X 表达
         primary_dir = (primary_bet or {}).get('option', '')
+        primary_mkt = (primary_bet or {}).get('market', '')
         if primary_dir:
             pref_result = primary_dir[-1]  # 胜/平/负
+            pref_hhad = primary_dir[4:] if primary_mkt == 'HHAD' else ''  # 让胜/让平/让负
             dbl_coverage = {
                 'HAD胜平双选': {'胜', '平'},
                 'HAD胜负双选': {'胜', '负'},
                 'HAD平负双选': {'平', '负'},
             }
+            hhad_dbl_cov = {
+                'HHAD让胜让平双选': {'让胜', '让平'},
+                'HHAD让胜让负双选': {'让胜', '让负'},
+                'HHAD让平让负双选': {'让平', '让负'},
+            }
             # 与主推方向一致的双选 (必须包含主推结果)
-            aligned = [o for o in double_options
-                       if pref_result in dbl_coverage.get(o.get('option', ''), set())]
+            aligned = []
+            # HHAD双选: 主推为HHAD方向时按让方向对齐(贴合让球逻辑)
+            if pref_hhad:
+                aligned += [o for o in hhad_double_options
+                            if pref_hhad in hhad_dbl_cov.get(o.get('option', ''), set())]
+            # HAD双选: 始终按末字(胜/平/负)对齐, 作为跨市场保险基准
+            aligned += [o for o in had_double_options
+                        if pref_result in dbl_coverage.get(o.get('option', ''), set())]
             # Ultra 11.8: 平局盲区低估补偿 (HAD专项回归 2026-08-06)
             # 回归发现(51场): 预测平局仅4场(7.8%), 实际平局13场(25.5%), 11场平局被完全漏掉
             # 根因: 模型平均平局概率27.8%标定良好, 但平局概率从未成为argmax(方向选择)
@@ -3262,23 +3261,33 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                 # 触发: 平局概率≥25% 或 (平局进前二 且 top2差<容差)
                 _draw_trigger = (_draw_prob >= 0.25) or (_draw_in_top2 and _top2_gap < HYBRID_PROB_TOLERANCE / 100.0)
                 if _draw_trigger:
-                    # 平局概率高(≥25%) → 优先选覆盖平局的双选
+                    # 平局概率高(≥25%) → HAD双选优先覆盖平局 (让球无直接平, 仅HAD双选参与)
                     draw_covering = [o for o in aligned
-                                     if '平' in dbl_coverage.get(o.get('option', ''), set())]
+                                     if o['market'] == 'HAD双选'
+                                     and '平' in dbl_coverage.get(o.get('option', ''), set())]
                     if draw_covering:
-                        aligned = draw_covering
+                        # 平局盲区base = 覆盖平的HAD双选中命中率最高 (Ultra 11.23: 命中率优先)
+                        draw_base = sorted(draw_covering, key=lambda x: x['prob'], reverse=True)[0]
+                        # Ultra 11.22: HHAD双选命中率更高时允许覆盖(主推让球盘时)
+                        hhad_aligned_ev = [o for o in aligned if o['market'] == 'HHAD双选']
+                        if hhad_aligned_ev:
+                            best_hhad = sorted(hhad_aligned_ev, key=lambda x: x['prob'], reverse=True)[0]
+                            aligned = [best_hhad if best_hhad['prob'] > draw_base['prob'] else draw_base]
+                        else:
+                            aligned = [draw_base]
                         # Ultra 11.9: 平局盲区补偿触发 → 双选改为并列主推
                         # Ultra 11.11: 平局概率≥25%时也触发并列主推(原仅top2差<容差触发)
                         double_parallel_output = True
             if aligned:
-                double_recommend = sorted(aligned, key=lambda x: x['ev_pct'], reverse=True)[0]
+                # Ultra 11.23: 命中率(prob)第一优先, EV仅展示参考
+                double_recommend = sorted(aligned, key=lambda x: x['prob'], reverse=True)[0]
                 # Ultra 11.9: 并列输出时, 双选为主推方向的并列保险(主推胜→胜平, 主推负→平负)
                 if double_parallel_output:
                     double_recommend = dict(double_recommend)
                     double_recommend['parallel'] = True
         if double_recommend is None:
-            # 无主推 或 无法对齐时, 回退到整体EV最高
-            double_recommend = sorted(double_options, key=lambda x: x['ev_pct'], reverse=True)[0]
+            # 无主推 或 无法对齐时, 回退到命中率最高 (含HHAD双选, Ultra 11.22/11.23)
+            double_recommend = sorted(all_doubles, key=lambda x: x['prob'], reverse=True)[0]
 
     # ===== 纯方向判断 (Pro 3.9) =====
     # 从真单选中选概率最高的, 排除伪单选(打包两结果的)
@@ -3304,6 +3313,30 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         'draw': round(p_draw * 100, 1),
         'lose': round(p_lose * 100, 1),
     }
+
+    # ===== Ultra 11.33: 胜平负双推荐 = 6单选概率Top2 (命中率第一优先) =====
+    # 背景: 用户明确要求 "推荐只取6个选项中概率最高的两项" (胜平负列含had+hhad).
+    #       旧实现(Ultra 11.30/11.32)把净胜球拆原子区间再映射选项, 但 win 被拆成
+    #       win_2plus + win_1 两片, HAD胜(覆盖两片,P≈48%)被碎片化, 反被单个的
+    #       lose/draw 区间比下去 → 出现 "主推HAD胜, 双推却推HAD负/平" 的主推矛盾,
+    #       且可能把概率最低的HAD选项推进推荐 (违背"命中率第一优先"). (ERR-20260810-011)
+    # 方案: 直接对6个单选(HAD胜/平/负 + HHAD让胜/让平/让负)按模型融合概率降序取Top2.
+    #       - 主推必然在推荐首位 (主推=概率最高单选), 不再矛盾
+    #       - 命中率第一, EV仅标注
+    # 冗余规避: 若Top2为同一选项(受让盘/半球盘区间映射重合的旧病), 顺延取下一个不同选项.
+    _singles_sorted = sorted(single_options, key=lambda x: x['prob'], reverse=True)
+    wdl_picks = []
+    for _o in _singles_sorted:
+        if len(wdl_picks) >= 2:
+            break
+        _key = (_o['market'], _o['option'])
+        if _key not in {(p['market'], p['option']) for p in wdl_picks}:
+            wdl_picks.append({'market': _o['market'], 'option': _o['option'], 'prob': _o['prob']})
+    # 兜底: 万一单选不足2个, 用主推+HHAD主推补齐
+    if len(wdl_picks) < 2:
+        for _o in (primary_bet, hhad_primary_bet):
+            if _o and (_o.get('market'), _o.get('option')) not in {(p['market'], p['option']) for p in wdl_picks}:
+                wdl_picks.append({'market': _o.get('market'), 'option': _o.get('option'), 'prob': _o.get('prob', 0)})
 
     # 穿盘风险: P(赢恰好|handicap|球) = 让平命中概率
     pass_risk_prob = 0.0
@@ -3379,9 +3412,9 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         pass_risk['level'] = '中'
         pass_risk['desc'] = (pass_risk_desc + ' | 让平高发窗口(受让/中难度), 注意让平覆盖').strip()
 
-    # ===== 风险评估 (命中率优先模式专属) =====
-    if mode == 'prob' and primary_bet:
-        # Ultra 3.0: 按需计算EV最高选项 (替代预计算的all_ev)
+    # ===== 风险评估 (命中率优先, EV仅作参考) =====
+    if primary_bet:
+        # Ultra 3.0: 按需计算EV最高选项 (EV不参与选推, 仅作对比提示)
         ev_best = max(all_options, key=lambda x: x['ev_pct']) if all_options else None
         if ev_best and ev_best != primary_bet:
             ev_gap = ev_best['ev_pct'] - primary_bet['ev_pct']
@@ -3401,7 +3434,7 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
 
     # ===== 综合洞察生成 (Ultra 1.0: 精简, 降低token) =====
     insight_parts = []
-    mode_label = {'prob': '命中优先', 'ev': 'EV优先', 'hybrid': '混合'}[mode]
+    mode_label = '命中优先'
 
     def fmt_bet(bet, prefix=''):
         if not bet:
@@ -3502,9 +3535,9 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     # 依据: 模型自检验证(843场)显示 未去margin HHAD让平P≥0.30 → 让平实际率29.4%(+4.8pp),
     #   是唯一统计显著的让平强信号; 让球/受让盘基准让平率≈24.6%。
     # 设计: 让平作为独立直推信号输出, 不再只藏在覆盖双选里。触发条件(满足任一):
+    #   Ultra 11.32: 去掉条件②的"EV>0"硬门槛 — EV仅参考, 不参与推荐触发 (ERR-20260810-008)
     #   ① HHAD让平概率≥0.28 (接近模型最强信号0.30, 显著高于基准24.6%)
-    #   ② HHAD让平概率≥0.25 且 让平EV为正 (价值+命中双达标)
-    #   ③ HHAD让平概率≥0.25 且 让平高发窗口(let_draw_hotspot)触发
+    #   ② HHAD让平概率≥0.25 且 让平高发窗口(let_draw_hotspot)触发
     #   若让平已是HHAD主推(hhad_primary_bet), 不重复输出(主推卡已展示)。
     let_draw_rec = None
     if let_draw_opt:
@@ -3512,7 +3545,7 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         _ldr_ev = let_draw_opt.get('ev_pct', 0)   # 已为百分比(如+9.6)
         _ldr_odds = let_draw_opt.get('odds', 0)
         _ldr_already_primary = (hhad_primary_bet or {}).get('option') == 'HHAD让平'
-        _ldr_trigger = (_ldr_prob >= 28) or (_ldr_prob >= 25 and _ldr_ev > 0) or (_ldr_prob >= 25 and let_draw_hotspot)
+        _ldr_trigger = (_ldr_prob >= 28) or (_ldr_prob >= 25 and let_draw_hotspot)
         if _ldr_trigger and not _ldr_already_primary:
             let_draw_rec = {
                 'market': 'HHAD',
@@ -3528,8 +3561,6 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
             _ldr_reason = []
             if _ldr_prob >= 28:
                 _ldr_reason.append(f"P={_ldr_prob:.0f}%≥28%强信号")
-            if _ldr_ev > 0:
-                _ldr_reason.append(f"EV={_ldr_ev:+.0f}%正价值")
             if let_draw_hotspot:
                 _ldr_reason.append("让平高发窗口")
             insight_parts.append(
@@ -3645,6 +3676,7 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         'top3': all_ranked_slim,  # Ultra 6.0: 精简为top3
         'primary_bet': primary_bet,
         'hhad_primary_bet': hhad_primary_bet,
+        'wdl_picks': wdl_picks,  # Ultra 11.30: 胜平负共斥双推(净胜球互斥Top2)
         'let_draw_rec': let_draw_rec,  # Ultra 11.17: 让平直推
         'draw_attention': draw_attention,  # Ultra 11.18: 平局关注
         'draw_window_hhad_priority': draw_window_hhad_priority,  # Ultra 11.19: 平局窗口HHAD优先
@@ -6239,9 +6271,9 @@ def predict_match(match_num, data):
         ow = od = ol = 0  # 标记已直接计算概率
     else:
         # 无ouzhi数据，用体彩或默认值
-        ow = had.get('h', 2.0) if had else 2.0
-        od = had.get('d', 3.2) if had else 3.2
-        ol = had.get('a', 3.0) if had else 3.0
+        ow = float(had.get('h')) if had and had.get('h') else 2.0
+        od = float(had.get('d')) if had and had.get('d') else 3.2
+        ol = float(had.get('a')) if had and had.get('a') else 3.0
     
     if ow > 0:  # 正常赔率路径
         # Ultra 2.0: Shin's method 替代简单1/odds归一化
@@ -6250,7 +6282,7 @@ def predict_match(match_num, data):
         shin_probs5 = calibrate_shin_probs(shin_probs5, league, ow)
         pw5, pd5, pl5 = shin_probs5[0], shin_probs5[1], shin_probs5[2]
     
-    if had and 'h' in had:
+    if had and had.get('h', 0) > 0:
         p0_w = pw_s * 0.5 + pw5 * 0.5
         p0_d = pd_s * 0.5 + pd5 * 0.5
         p0_l = pl_s * 0.5 + pl5 * 0.5
@@ -7288,6 +7320,8 @@ def predict_match(match_num, data):
     if bonus:
         sporttery_pools = {}
         # TTG 总进球: 模型probs {'0球'..'7+球'} vs 官方 ttg {0..7}
+        # Ultra 11.31: 命中率第一优先 — 去掉按EV硬过滤, 否则赔率低的最高概率进球(2球/3球)
+        #   会被EV<0剔除, 只剩高赔冷门(4球/5球), 与比分/胜平负推荐矛盾 (LRN-20260810-010)
         if bonus.get('ttg') and total_goals_pred.get('probs'):
             tg_margin = pool_margin(list(bonus['ttg'].values()))
             tg_picks = []
@@ -7296,23 +7330,13 @@ def predict_match(match_num, data):
                 p = total_goals_pred['probs'].get(label, 0)
                 if p > 0.01:
                     ev_pct = round((p * o - 1) * 100, 1)
-                    # 过滤极端负EV (EV < -margin*0.7 说明模型概率严重偏离市场)
-                    if ev_pct >= -tg_margin * 0.7 * 100:
-                        tg_picks.append({'option': label, 'odds': o, 'prob': round(p * 100, 1),
-                                         'ev_pct': ev_pct, 'margin': round(tg_margin * 100, 1)})
-            tg_picks.sort(key=lambda x: x['ev_pct'], reverse=True)
-            if not tg_picks:
-                # 全部被过滤, 回退展示EV最高的1个
-                for k, o in bonus['ttg'].items():
-                    label = f"{int(k)}球" if int(k) < 7 else "7+球"
-                    p = total_goals_pred['probs'].get(label, 0)
-                    if p > 0.01:
-                        tg_picks.append({'option': label, 'odds': o, 'prob': round(p * 100, 1),
-                                         'ev_pct': round((p * o - 1) * 100, 1), 'margin': round(tg_margin * 100, 1)})
-                        break
+                    tg_picks.append({'option': label, 'odds': o, 'prob': round(p * 100, 1),
+                                     'ev_pct': ev_pct, 'margin': round(tg_margin * 100, 1)})
+            tg_picks.sort(key=lambda x: x['prob'], reverse=True)
             if tg_picks:
                 sporttery_pools['ttg'] = tg_picks[:3]
         # HAFU 半全场: 模型probs {'胜胜'..} vs 官方 hafu
+        # Ultra 11.31: 同TTG, 命中率优先, EV仅作标注
         if bonus.get('hafu') and half_full.get('probs'):
             hf_margin = pool_margin(list(bonus['hafu'].values()))
             hf_picks = []
@@ -7320,20 +7344,13 @@ def predict_match(match_num, data):
                 p = half_full['probs'].get(name, 0)
                 if p > 0.01:
                     ev_pct = round((p * o - 1) * 100, 1)
-                    if ev_pct >= -hf_margin * 0.7 * 100:
-                        hf_picks.append({'option': name, 'odds': o, 'prob': round(p * 100, 1),
-                                         'ev_pct': ev_pct, 'margin': round(hf_margin * 100, 1)})
-            hf_picks.sort(key=lambda x: x['ev_pct'], reverse=True)
-            if not hf_picks:
-                for name, o in bonus['hafu'].items():
-                    p = half_full['probs'].get(name, 0)
-                    if p > 0.01:
-                        hf_picks.append({'option': name, 'odds': o, 'prob': round(p * 100, 1),
-                                         'ev_pct': round((p * o - 1) * 100, 1), 'margin': round(hf_margin * 100, 1)})
-                        break
+                    hf_picks.append({'option': name, 'odds': o, 'prob': round(p * 100, 1),
+                                     'ev_pct': ev_pct, 'margin': round(hf_margin * 100, 1)})
+            hf_picks.sort(key=lambda x: x['prob'], reverse=True)
             if hf_picks:
                 sporttery_pools['hafu'] = hf_picks[:3]
         # CRS 比分: 模型top5比分 vs 官方 crs
+        # Ultra 11.31: 同TTG, 命中率优先, EV仅作标注
         if bonus.get('crs') and scores.get('top5_raw'):
             crs_margin = pool_margin(list(bonus['crs'].values()))
             crs_picks = []
@@ -7342,18 +7359,9 @@ def predict_match(match_num, data):
                 if o:
                     p = pct / 100.0
                     ev_pct = round((p * o - 1) * 100, 1)
-                    if ev_pct >= -crs_margin * 0.7 * 100:
-                        crs_picks.append({'option': s, 'odds': o, 'prob': pct,
-                                          'ev_pct': ev_pct, 'margin': round(crs_margin * 100, 1)})
-            crs_picks.sort(key=lambda x: x['ev_pct'], reverse=True)
-            if not crs_picks:
-                for s, pct in scores['top5_raw']:
-                    o = bonus['crs'].get(s)
-                    if o:
-                        crs_picks.append({'option': s, 'odds': o, 'prob': pct,
-                                          'ev_pct': round((pct / 100.0 * o - 1) * 100, 1),
-                                          'margin': round(crs_margin * 100, 1)})
-                        break
+                    crs_picks.append({'option': s, 'odds': o, 'prob': pct,
+                                      'ev_pct': ev_pct, 'margin': round(crs_margin * 100, 1)})
+            crs_picks.sort(key=lambda x: x['prob'], reverse=True)
             if crs_picks:
                 sporttery_pools['crs'] = crs_picks[:3]
         if not sporttery_pools:
@@ -7886,8 +7894,9 @@ def main():
                 for pool_name, label in (('ttg', '总进球'), ('hafu', '半全场'), ('crs', '比分')):
                     picks = sp_pools.get(pool_name)
                     if picks:
-                        best_ev = picks[0]['ev_pct']
-                        flag = '✅' if best_ev > 0 else '⚠️'
+                        # Ultra 11.24: picks 已按命中率(prob)排序, 展示命中率+EV仅作参考
+                        best_p = picks[0]['prob']
+                        flag = '✅' if best_p >= 20 else '⚠️'
                         txt = ' | '.join(f"{p['option']}@{p['odds']} P={p['prob']}% EV={p['ev_pct']}%" for p in picks[:2])
                         summary_lines.append(f"    竞彩{label}{flag}: {txt}")
             if sc.get('high_top3'):
@@ -8019,6 +8028,13 @@ def main():
             'history': existing_history,
             'update_changes': update_changes,
         }
+
+    # Ultra 11.20: 版本全量归档 — 覆盖前把当前文件完整快照归档, 防止历史版本丢失
+    try:
+        from version_archive import archive_before_save
+        archive_before_save(pred_file, pred_data, expected_keys=MATCH_NUMBERS)
+    except Exception as _ve:
+        print(f"  [版本归档] ⚠️ 归档失败(不影响保存): {_ve}")
 
     with open(pred_file, 'w', encoding='utf-8') as f:
         json.dump(pred_data, f, ensure_ascii=False, indent=1)

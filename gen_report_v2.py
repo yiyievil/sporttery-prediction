@@ -68,10 +68,10 @@ def parse_prob_from_p(p_str, direction):
 def score_option(name, market, direction, odds, conf_str, prob, swot_consistency, ev_pct, coverage_type='单选'):
     """综合评分一个投注选项
     
-    Ultra 9.0: EV(期望值) 为核心评分标准
-    评分 = EV分 + 置信度分 + SWOT加成 + 覆盖加成
-    - EV分 = max(ev_pct, 0) × 3.0  (正EV才有价值分)
-    - EV罚分 = min(ev_pct, 0) × 1.0  (负EV重罚)
+    Ultra 11.33: 命中率(概率)为核心评分标准 (ERR-20260810-009)
+    EV 仅作展示参考, 不参与评分排序 (用户铁律: 命中率第一优先, EV仅参考)
+    评分 = 概率分 + 置信度分 + SWOT加成 + 覆盖加成
+    - 概率分 = prob × 5.0  (命中率第一优先)
     - 置信度分 = conf × 5
     - SWOT一致 +10, 不一致 -8
     - 双选覆盖 +5
@@ -79,10 +79,10 @@ def score_option(name, market, direction, odds, conf_str, prob, swot_consistency
     conf = parse_conf_stars(conf_str)
     ev = ev_pct if ev_pct is not None else 0
     
-    # EV核心分: 正EV高倍奖励, 负EV重罚
-    ev_score = max(ev, 0) * 3.0 + min(ev, 0) * 1.0
+    # 概率核心分: 命中率第一优先, EV不参与评分
+    prob_score = prob * 5.0
     
-    # 置信度分 (权重降低, EV才是核心)
+    # 置信度分
     conf_score = conf * 5
     
     # SWOT一致性加成
@@ -97,7 +97,7 @@ def score_option(name, market, direction, odds, conf_str, prob, swot_consistency
     # 覆盖加成
     coverage_bonus = 5 if '双选' in coverage_type else 0
     
-    total = ev_score + conf_score + swot_bonus + coverage_bonus
+    total = prob_score + conf_score + swot_bonus + coverage_bonus
     
     # 隐含概率 = 1/赔率 (庄家概率)
     implied_prob = round(1 / odds * 100, 1) if odds > 0 else 0
@@ -118,7 +118,7 @@ def score_option(name, market, direction, odds, conf_str, prob, swot_consistency
         'ev_pct': round(ev, 1),
         'coverage_type': coverage_type,
         'score': round(total, 1),
-        'ev_score': round(ev_score, 1),
+        'ev_score': round(ev, 1),     # 保留字段, 仅作展示
         'conf_score': round(conf_score, 1),
         'swot_bonus': swot_bonus,
         'coverage_bonus': coverage_bonus,
@@ -269,24 +269,24 @@ def rank_match(key, meta, result):
     # 按分数排序
     options.sort(key=lambda x: x['score'], reverse=True)
     
-    # Ultra 9.0: 按EV(期望值)排序，不再按概率
+    # Ultra 11.33: 命中率(prob)第一优先, EV仅作展示参考 (ERR-20260810-009)
     # 同一场比赛只选一个市场 (HAD 或 HHAD)
     # 避免出现 HAD胜 + HHAD让负 这种矛盾推荐 — 投注只能选一个市场
-    # 规则: 比较 HAD 和 HHAD 各自EV最高的纯单选, 选EV更高的那个市场
-    # 第一推 = 该市场EV最高的纯单选; 第二推 = 同市场第二单选 or 双选
+    # 规则: 比较 HAD 和 HHAD 各自概率最高的纯单选, 选概率更高的那个市场
+    # 第一推 = 该市场概率最高的纯单选; 第二推 = 同市场第二单选 or 双选
     single_opts = [o for o in options if '双选' not in o.get('coverage_type', '')]
     had_singles = [o for o in single_opts if o.get('market') in ('胜平负', 'HAD方向')]
     hhad_singles = [o for o in single_opts if o.get('market') == '让球胜平负']
-    had_best = max(had_singles, key=lambda x: x.get('ev_pct', 0)) if had_singles else None
-    hhad_best = max(hhad_singles, key=lambda x: x.get('ev_pct', 0)) if hhad_singles else None
-    # 选择最佳市场: HHAD 的EV更高则选 HHAD, 否则选 HAD (含HAD未开盘时)
-    if hhad_best and (not had_best or hhad_best['ev_pct'] > had_best['ev_pct']):
+    had_best = max(had_singles, key=lambda x: x.get('prob', 0)) if had_singles else None
+    hhad_best = max(hhad_singles, key=lambda x: x.get('prob', 0)) if hhad_singles else None
+    # 选择最佳市场: HHAD 的概率更高则选 HHAD, 否则选 HAD (含HAD未开盘时)
+    if hhad_best and (not had_best or hhad_best['prob'] > had_best['prob']):
         selected_markets = ('让球胜平负',)
     else:
         selected_markets = ('胜平负', 'HAD方向')
-    # 第一推: 选中市场的纯单选, 按EV排序取最高
+    # 第一推: 选中市场的纯单选, 按概率排序取最高 (EV不参与排序)
     market_singles = [o for o in single_opts if o.get('market') in selected_markets]
-    market_singles.sort(key=lambda x: x.get('ev_pct', 0), reverse=True)
+    market_singles.sort(key=lambda x: x.get('prob', 0), reverse=True)
     first = market_singles[0] if market_singles else (options[0] if options else None)
     # 第二推: 同市场第二单选 > 同市场双选 > None
     second = None
@@ -298,7 +298,7 @@ def rank_match(key, meta, result):
                           (o.get('market') in selected_markets or
                            (o.get('market') == 'HAD双选' and '胜平负' in selected_markets))]
         if market_doubles:
-            market_doubles.sort(key=lambda x: x.get('ev_pct', 0), reverse=True)
+            market_doubles.sort(key=lambda x: x.get('prob', 0), reverse=True)
             second = market_doubles[0]
     
     # 额外信息

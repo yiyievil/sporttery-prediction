@@ -107,11 +107,11 @@ def _extract_market_bet(r, key, meta, market):
 
 
 def extract_had_bets(pred_file):
-    """从预测文件提取每场最优主推 (HAD/HHAD 取EV更高者, Ultra 9.0)
+    """从预测文件提取每场最优主推 (HAD/HHAD 取命中率更高者, Ultra 11.33)
 
     竞彩规则: 胜平负/让球胜平负均可串关最多8关, 不可同场混玩法。
-    本函数对每场比赛比较 HAD 和 HHAD 主推EV, 取EV更高者参与串关。
-    EV(期望值) = 模型概率×赔率 - 1, 正EV代表价值投注机会。
+    本函数对每场比赛比较 HAD 和 HHAD 主推概率, 取命中率更高者参与串关。
+    命中率(模型概率)第一优先, EV仅作展示参考 (用户铁律, Ultra 11.23/11.24)。
     """
     with open(pred_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -120,8 +120,9 @@ def extract_had_bets(pred_file):
         meta = data.get('meta', {}).get(key, {})
         had_bet = _extract_market_bet(r, key, meta, 'HAD')
         hhad_bet = _extract_market_bet(r, key, meta, 'HHAD')
-        # Ultra 9.0: 按EV选市场, 不再按概率
-        if hhad_bet and (not had_bet or hhad_bet['ev_pct'] > had_bet['ev_pct']):
+        # Ultra 11.33: 按命中率(prob)选市场, EV仅作标注 (ERR-20260810-009)
+        # 铁律: "命中率第一优先, EV仅参考" — 选场方向必须看概率, 不看EV
+        if hhad_bet and (not had_bet or hhad_bet['prob'] > had_bet['prob']):
             bets.append(hhad_bet)
         elif had_bet:
             bets.append(had_bet)
