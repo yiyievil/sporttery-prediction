@@ -58,7 +58,7 @@ def parse_prob_from_p(p_str, direction):
     if len(parts) != 3:
         return 0
     dir_map = {'胜': 0, '平': 1, '负': 2}
-    idx = dir_map.get(direction, 0)
+    idx = dir_map.get(direction.replace('让', ''), 0)
     try:
         return float(parts[idx].replace('%', ''))
     except:
@@ -238,8 +238,11 @@ def rank_match(key, meta, result):
         dr_key = f'DOUBLE_{dr_dir}'
         if dr_key not in seen_keys:
             seen_keys.add(dr_key)
+            # 双选可能来自 HAD 或 HHAD: 按选项名区分市场标签, 否则 HHAD双选
+            # 在 HHAD 市场被选中时永远无法成为第二推荐 (修复)
+            _dr_market = '让球胜平负' if dr_option.startswith('HHAD') else 'HAD双选'
             options.append(score_option(
-                dr_option, 'HAD双选', dr_dir, dr_odds,
+                dr_option, _dr_market, dr_dir, dr_odds,
                 '★★★', dr_prob, swot_consistency, dr_ev, '双选'
             ))
     

@@ -57,3 +57,4 @@ downloaded_files/
 waf_script_*.js
 analysis_report_*.html
 renderData.json
+.wbtest_venv/

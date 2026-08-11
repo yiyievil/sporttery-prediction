@@ -6973,13 +6973,16 @@ def predict_match(match_num, data):
         hhad_power = power_method(hhad_odds_list)
         hhad_poisson_cal = calibrate_probabilities(hhad_probs_poisson, source='poisson', lam_total=lam_total, lam_h=lam_h, lam_a=lam_a,
                                                    league=_league_for_cal, draw_odds=_draw_odds_for_cal)
-        # Elo概率复用HAD的(球队实力不变, 只是让球不同)
-        # Ultra 7.6 (P5): HHAD与HAD共用动态权重函数, 具备相同的数据质量自适应能力
+        # Elo概率不得复用: elo_probs 是 HAD 事件空间(胜/平/负), 无让球信息,
+        # 直接当作[让胜/让平/让负]融合属量纲错误 (P0修复: 让-1时 P(让胜)=P(净胜2+)≠P(胜),
+        # 实证压低让负约6pp)。HHAD 用 市场Shin + Power + 校准Poisson 三源融合。
+        # Ultra 7.6 (P5): 保留数据质量自适应权重
         _hhad_weights = compute_fuse_weights(
             dq['score'], market_probs=hhad_shin, power_probs=hhad_power,
             hist_elo=(_hist_elo_h is not None and _hist_elo_a is not None),
             xg_proxy=_xg_is_proxy, ppda_stab=_ppda_stab_factor)
-        hhad_final_probs, hhad_agreement = ensemble_fuse([hhad_shin, hhad_power, hhad_poisson_cal, elo_probs], weights=_hhad_weights)
+        hhad_final_probs, hhad_agreement = ensemble_fuse(
+            [hhad_shin, hhad_power, hhad_poisson_cal], weights=_hhad_weights[:3])
         hhad_final_idx = hhad_final_probs.index(max(hhad_final_probs))
         hhad_dir = hhad_dirs[hhad_final_idx]
         hhad_odds_val = round(hhad_odds_list[hhad_final_idx], 2)
@@ -8056,22 +8059,12 @@ def main():
             print(f"  [SWOT] 自动获取/融合失败 (不影响预测结果): {ex}")
 
     # ===== Phase 6: 自动生成PDF报告 (Ultra 11.2 — 保证PDF与预测场次一致) =====
-    # PDF 输出到 /workspace/ 根目录, 便于手机端直接访问
+    # PDF 输出到工作区根目录 (SPORTTERY_WORKSPACE 优先, 无则脚本目录), 便于手机端直接访问
+    _pdf_out_dir = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__))
     _pdf_basename = os.path.basename(pred_file).replace('.json', '.pdf')
-    pdf_path = os.path.join('/workspace', _pdf_basename)
+    pdf_path = os.path.join(_pdf_out_dir, _pdf_basename)
     try:
-        # 先检查字体, 缺失则自动安装
-        _font_check = os.path.join('/usr/share/fonts/truetype', 'LXGWWenKai-Regular.ttf')
-        if not os.path.exists(_font_check):
-            print("  [PDF] 字体缺失, 尝试自动安装...")
-            _ret = os.system('git clone --depth=1 https://github.com/lxgw/LxgwWenKai.git /tmp/lxgw 2>/dev/null && '
-                             'cp /tmp/lxgw/fonts/TTF/*.ttf /usr/share/fonts/truetype/ 2>/dev/null && '
-                             'fc-cache -f 2>/dev/null')
-            if _ret == 0 and os.path.exists(_font_check):
-                print("  [PDF] 字体安装成功")
-            else:
-                raise RuntimeError("字体安装失败, 请手动安装 LxgwWenKai")
-        # 动态导入PDF生成器 (模块级会注册字体, 字体存在才能成功)
+        # 字体由 pdf_fonts 统一回退 (霞鹜文楷→本地fonts/→系统CJK), 无需硬编码/usr/share路径
         import importlib
         gen_pdf = importlib.import_module('gen_pred_pdf')
         gen_pdf.generate_pdf(pred_data, pdf_path)
