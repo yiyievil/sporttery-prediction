@@ -983,31 +983,45 @@ def _strip_market(opt):
 
 def _wdl_cell(m):
     """胜平负列: 优先取共斥双推 wdl_picks (Ultra 11.30: 净胜球互斥Top2, 不重叠不冗余)
-    字段缺失/为空时回退旧口径 HAD主推 + HHAD主推.
+    命中率最高的选项高亮显示。字段缺失/为空时回退旧口径 HAD主推 + HHAD主推.
     单行空格分隔, 不强制分行 (Ultra 11.28: 消除大片留空)"""
     wdl = m.get('wdl_picks') or []
     if wdl:
-        parts = [_strip_market(it.get('option', '?')) for it in wdl]
+        wdl = sorted(wdl, key=lambda x: x.get('prob', 0), reverse=True)
+        parts = []
+        for i, it in enumerate(wdl):
+            label = _strip_market(it.get('option', '?'))
+            parts.append(_hl(label) if i == 0 else label)
         return ' '.join(parts) if parts else '-'
-    parts = []
+    candidates = []
     pb = m.get('primary') or {}
     if pb.get('option'):
-        parts.append(_strip_market(pb.get('option')))
+        candidates.append((pb.get('prob', 0), _strip_market(pb.get('option'))))
     hpb = m.get('hhad_primary') or {}
     if hpb.get('option'):
-        parts.append(_strip_market(hpb.get('option')))
+        candidates.append((hpb.get('prob', 0), _strip_market(hpb.get('option'))))
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    parts = []
+    for i, (_, label) in enumerate(candidates):
+        parts.append(_hl(label) if i == 0 else label)
     return ' '.join(parts) if parts else '-'
 
 
+def _hl(label):
+    """命中率最高选项高亮: 粗体(CJKBold) + 金棕色, 与其余选项区分"""
+    return f'<font name="CJKBold" color="#8b6914">{label}</font>'
+
+
 def _pool_cell(items, max_n=2):
-    """玩法池列: 取命中率最高前max_n个, 仅输出选项, 单行空格分隔
+    """玩法池列: 取命中率最高前max_n个, 命中率最高的选项高亮显示
     内部按prob降序排序, 不依赖JSON存储顺序 (数据可能为改版前旧排序)"""
     if not items:
         return '-'
     items = sorted(items, key=lambda x: x.get('prob', 0), reverse=True)
     parts = []
-    for it in items[:max_n]:
-        parts.append(_strip_market(it.get('option', '?')))
+    for i, it in enumerate(items[:max_n]):
+        label = _strip_market(it.get('option', '?'))
+        parts.append(_hl(label) if i == 0 else label)
     return ' '.join(parts)
 
 
