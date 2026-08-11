@@ -309,6 +309,31 @@ HYBRID_PROB_TOLERANCE = 3.0  # 单位: 概率百分点 (胜率误差带, 用于�
 # False: 跳过 (保留手动 swot_fast_v3.py + swot_fusion_v3.py 流程)
 AUTO_SWOT = True
 
+# ===== Ultra 12.0: 十项模型升级开关 (model_upgrades.py) =====
+# 全部为增量安全升级: 数据/参数缺失时自动回退原逻辑, 控制台标注 [升级] 状态
+UPGRADES = {
+    'robust_goal_line':   True,   # 1 盘口加权中位数 + 初终盘Kalman混合
+    'odds_calibration':   True,   # 2 赔率→概率 isotonic 校准 (历史库训练)
+    'glicko2_form':       True,   # 3 Glicko-2 近况评分 (含不确定性降权)
+    'h2h_shrink':         True,   # 4 对赛小样本贝塔收缩
+    'dc_lambda':          True,   # 5 DC攻防强度λ (与市场λ混合)
+    'bivariate_poisson':  True,   # 6 二元泊松比分矩阵 (共同冲击λ3)
+    'learned_fusion':     True,   # 7 融合权重历史Brier学习
+    'hhad_same_source':   True,   # 8 HHAD与比分矩阵同源 (随升级6自动生效)
+    'draw_window_model':  True,   # 9 平局窗口 logistic 概率化
+    'conf_ece':           True,   # 10 置信度 ECE 校准
+}
+BP_RHO = 0.12          # 二元泊松共同冲击系数 (0.1~0.15 经验区间)
+DC_LAMBDA_BLEND = 0.35 # DCλ 与市场λ 的混合权重 (DC占35%)
+try:
+    import model_upgrades as _MU
+    _UPG_PARAMS = _MU.load_upgrades()
+    _UPG_OK = [k for k, v in UPGRADES.items() if v]
+    print(f"  [升级] Ultra 12.0 已加载: {len(_UPG_OK)}项开关, 已训参数: {list(_UPG_PARAMS.keys())}")
+except Exception as _e:
+    _MU, _UPG_PARAMS = None, {}
+    print(f"  [升级] model_upgrades 未加载, 全部回退原逻辑: {_e}")
+
 # ===== Ultra 7.4: 杯赛首回合大比分惩罚 (仅限欧冠/欧罗巴/欧协联等两回合制杯赛) =====
 from cup_leg_penalty import get_cup_leg_penalty, clear_cache as clear_leg_cache, is_cup_competition as _is_cup_league
 
@@ -1054,7 +1079,24 @@ def fetch_daxiao_goal_line(fid):
         avg_over = sum(all_over_odds) / len(all_over_odds)
         avg_under = sum(all_under_odds) / len(all_under_odds)
         init_mode = Counter(all_initial_lines).most_common(1)[0][0] if all_initial_lines else mode_goal_line
-        
+
+        # 升级1: 加权中位数盘口 + 初终盘Kalman混合 (对离群盘口稳健)
+        # 众数易被单家异常盘口带偏; 中位数稳健, Kalman按临场信息量加权初/终盘
+        if _MU and UPGRADES.get('robust_goal_line'):
+            try:
+                _robust_gl = _MU.robust_goal_line(all_goal_lines)
+                if _robust_gl:
+                    mode_goal_line = _robust_gl
+                if all_initial_lines:
+                    _robust_init = _MU.robust_goal_line(all_initial_lines)
+                    if _robust_init:
+                        init_mode = _robust_init
+                # Kalman混合后吸附到0.25标准盘口 (下游over_prob仅识别.0/.25/.5/.75)
+                _blended = _MU.kalman_blend_goal_line(init_mode, mode_goal_line)
+                mode_goal_line = round(_blended * 4) / 4
+            except Exception:
+                pass
+
         return {
             'goal_line': mode_goal_line,
             'initial_goal_line': init_mode,
@@ -1479,6 +1521,28 @@ def compute_dc_matrix(lam_h, lam_a, use_negbin=True, use_dc=True, league=None):
             for k in probs:
                 probs[k] /= total_p
 
+    # 升级6: 二元泊松共同冲击混合 (Karlis & Ntzoufras)
+    # 独立泊松假设主客进球无关, 但真实比赛存在"比赛节奏"共同因子:
+    # 开放比赛双方进球同涨, 闷战同跌。λ3=rho·min(λh,λa)建模该共同冲击,
+    # 0-0/1-1等同分概率上调, 更贴合真实比分联合分布。
+    # 与NB+DC结果50/50混合: 保留负二项过离散+DC低分修正, 叠加相关性结构。
+    if _MU and UPGRADES.get('bivariate_poisson'):
+        try:
+            _bp = _MU.bp_matrix(lam_h, lam_a, rho=BP_RHO, max_goals=_MAX_GOALS - 1)
+            if _bp:
+                for _bi in range(_MAX_GOALS):
+                    for _bj in range(_MAX_GOALS):
+                        _bk = f"{_bi}-{_bj}"
+                        _bpv = _bp.get((_bi, _bj), 0.0)
+                        if _bk in probs:
+                            probs[_bk] = 0.5 * probs[_bk] + 0.5 * _bpv
+                _tp = sum(probs.values())
+                if _tp > 0:
+                    for _bk in probs:
+                        probs[_bk] /= _tp
+        except Exception:
+            pass
+
     # Skellam分布计算净胜球概率 (覆盖所有进球数, 不截断)
     # Ultra 9.3: 扩展到-10到10
     margin_probs = {}
@@ -1588,6 +1652,21 @@ def compute_scores(lam_h, lam_a, goal_line=0, market_goal_line=2.5, top_n=5, use
     hw = sum(v for k, v in margin_probs.items() if k + goal_line > 0)
     hd = sum(v for k, v in margin_probs.items() if k + goal_line == 0)
     hl = sum(v for k, v in margin_probs.items() if k + goal_line < 0)
+
+    # 升级8: HHAD与比分矩阵同源 — BP开启时改从统一比分矩阵求和。
+    # Skellam假设主客进球独立(与比分矩阵的BP共同冲击+DC修正不一致),
+    # 同矩阵求和保证HHAD概率与比分/WDL严格自洽, 消除"比分说1-1最热,
+    # 让球盘却显示让平概率低"的口径分裂。矩阵已归一化, 三类完备。
+    if _MU and UPGRADES.get('hhad_same_source') and UPGRADES.get('bivariate_poisson'):
+        try:
+            hw = sum(p for s, p in probs.items()
+                     if (int(s.split('-')[0]) - int(s.split('-')[1])) + goal_line > 0)
+            hd = sum(p for s, p in probs.items()
+                     if (int(s.split('-')[0]) - int(s.split('-')[1])) + goal_line == 0)
+            hl = sum(p for s, p in probs.items()
+                     if (int(s.split('-')[0]) - int(s.split('-')[1])) + goal_line < 0)
+        except Exception:
+            pass
 
     # ===== 盘口标签格式化 =====
     def fmt_gl(gl):
@@ -2217,7 +2296,18 @@ def parse_h2h_record(h2h_str):
     total = w + d + l
     if total == 0:
         return None
-    return {'wins': w, 'draws': d, 'losses': l, 'total': total, 'home_win_rate': w / total}
+    raw_rate = w / total
+    # 升级4: 小样本贝塔收缩 — 5场4胜(80%)不代表真实压制力,
+    # 向联赛基准(42/27/31)收缩, 样本越小收缩越强, 避免小样本极端率误导交锋压制判定
+    home_wr = raw_rate
+    if _MU and UPGRADES.get('h2h_shrink'):
+        try:
+            _shrunk = _MU.h2h_beta_shrink(w, d, l)
+            home_wr = _shrunk[0]
+        except Exception:
+            pass
+    return {'wins': w, 'draws': d, 'losses': l, 'total': total,
+            'home_win_rate': home_wr, 'home_win_rate_raw': raw_rate}
 
 
 def detect_cross_market_trap(initial_summary):
@@ -2338,7 +2428,26 @@ def exponential_decay_form(form_str, decay_rate=0.15):
             loss_weight += weight * 0.5
 
     if total_weight > 0:
-        return win_weight / total_weight, loss_weight / total_weight, total_weight
+        wr = win_weight / total_weight
+        lr = loss_weight / total_weight
+        # 升级3: Glicko-2 近况评分混合 (含不确定性降权)
+        # 指数衰减只按时间加权, 不区分"连胜弱旅"与"连胜强队"的含金量差异;
+        # Glicko-2 通过评分差期望+RD不确定性给出更稳的近况估计。
+        # 对手强度数据不可得时用均值0.5, RD越大(样本少/波动大)混合权重越低。
+        if _MU and UPGRADES.get('glicko2_form'):
+            try:
+                _results = []
+                for ch in form_str:
+                    _s = 1.0 if ch == 'W' else (0.5 if ch == 'D' else 0.0)
+                    _results.append((_s, 0.5))  # 对手强度未知取均值
+                _g_mu, _g_rd, _g_exp = _MU.glicko2_form(_results)
+                # RD∈[0.3,1.2]: rd小(可靠)→权重0.40, rd大(不可靠)→权重0.15
+                _gw = min(0.40, max(0.15, 0.40 - (_g_rd - 0.3) * 0.28))
+                wr = (1 - _gw) * wr + _gw * _g_exp
+                lr = (1 - _gw) * lr + _gw * (1 - _g_exp)
+            except Exception:
+                pass
+        return wr, lr, total_weight
     return 0.5, 0.5, 0.0
 
 def dynamic_dc_rho(lam_h, lam_a):
@@ -3613,6 +3722,20 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     #   不改变HAD主推方向(平局仍非argmax), 不改变HHAD概率(模型已标定),
     #   仅新增一个"平局场次让球盘优先"的消费侧标记, 供PDF/JSON醒目展示。
     draw_window_hhad_priority = False
+    # 升级9: 平局窗口 logistic 概率化 — 硬阈值(平P≥30%)一刀切,
+    # 模型用 [P平, top2差, |让球|, 联赛平局率] 输出HHAD判别力优于HAD的概率,
+    # 回归库样本充足时按概率触发(P≥0.6), 缺参时自动回退下方硬规则。
+    _dw_model_p = None
+    if _MU and UPGRADES.get('draw_window_model') and _UPG_PARAMS.get('draw_window'):
+        try:
+            _dwm = _MU.DrawWindowModel()
+            _dwm.w = _UPG_PARAMS['draw_window']['w']
+            _sp_sorted = sorted(had_probs, reverse=True)
+            _dw_x = [had_probs[1], _sp_sorted[0] - _sp_sorted[1],
+                     abs(handicap or 0), 0.25]
+            _dw_model_p = _dwm.predict(_dw_x)
+        except Exception:
+            _dw_model_p = None
     if draw_attention is not None:
         draw_window_hhad_priority = True
         _hhad_dir_val = (hhad_primary_bet or {}).get('option', '')
@@ -3626,6 +3749,12 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         insight_parts.append(
             f"平局窗口HHAD优先: HAD平局P={_dar_p*100:.0f}%≥30%,让球盘判别力更稳"
             f",{_dw_ref}"
+        )
+    elif _dw_model_p is not None and _dw_model_p >= 0.6:
+        # 模型触发(硬规则未触发时): 平局概率未达30%但特征组合指向HHAD更稳
+        draw_window_hhad_priority = True
+        insight_parts.append(
+            f"平局窗口HHAD优先(模型P={_dw_model_p:.0%}≥60%): 让球盘判别力更稳"
         )
 
     # 净胜球分布提示
@@ -6668,6 +6797,24 @@ def predict_match(match_num, data):
         v611_notes.append(f"跨盘口信号(O/U升盘+平赔降, 实证无诱大效应, 仅记录)")
         v611_flags['ou_trap'] = True
 
+    # --- 升级5: DC攻防强度λ 与市场λ混合 ---
+    # 市场λ来自赔率反演(含市场情绪), DCλ来自939场历史赛果的攻防强度IPF拟合;
+    # 两者独立信息源按 65/35 混合, DCλ对"市场未定价的攻防失配"有增量信息。
+    # 球队不在DC库(新军/数据不足)时 dc_lambda 返回 None → 自动回退纯市场λ。
+    if _MU and UPGRADES.get('dc_lambda') and _UPG_PARAMS.get('dc_model'):
+        try:
+            _dc_lams = _MU.dc_lambda(_UPG_PARAMS['dc_model'], home_name, away_name)
+            if _dc_lams:
+                _lam_h_mkt, _lam_a_mkt = lam_h, lam_a
+                lam_h = (1 - DC_LAMBDA_BLEND) * lam_h + DC_LAMBDA_BLEND * _dc_lams[0]
+                lam_a = (1 - DC_LAMBDA_BLEND) * lam_a + DC_LAMBDA_BLEND * _dc_lams[1]
+                v611_notes.append(
+                    f"DCλ混合(市场{_lam_h_mkt:.2f}/{_lam_a_mkt:.2f} + "
+                    f"DC{_dc_lams[0]:.2f}/{_dc_lams[1]:.2f} → {lam_h:.2f}/{lam_a:.2f})")
+                v611_flags['dc_lambda_blend'] = True
+        except Exception:
+            pass
+
     lam_h = max(0.3, min(lam_h, 4.0))
     lam_a = max(0.3, min(lam_a, 4.0))
 
@@ -6790,6 +6937,11 @@ def predict_match(match_num, data):
         dq['score'], market_probs=market_probs, power_probs=power_probs,
         hist_elo=(_hist_elo_h is not None and _hist_elo_a is not None),
         xg_proxy=_xg_is_proxy, ppda_stab=_ppda_stab_factor)
+    # 升级7: 历史Brier学习权重 (已训参数存在时覆盖启发式权重; 缺参=回退)
+    if _MU and UPGRADES.get('learned_fusion') and _UPG_PARAMS.get('fusion_weights'):
+        _lw = _UPG_PARAMS['fusion_weights'].get('weights')
+        if _lw and len(_lw) == 4 and abs(sum(_lw) - 1.0) < 0.05:
+            fuse_weights = _lw
     if _xg_is_proxy:
         print(f"  [融合] ⚠️ xG为proxy占位符(非真实Understat), Poisson权重降权, 置信度封顶★★★★")
     fused_probs, model_agreement = ensemble_fuse([market_probs, power_probs, poisson_calibrated, elo_probs], weights=fuse_weights)
@@ -6797,6 +6949,16 @@ def predict_match(match_num, data):
     # (回测结论: 不改变融合权重触发逻辑, 仅提供更细粒度的一致性度量)
     js_agreement = compute_js_agreement([market_probs, power_probs, poisson_calibrated, elo_probs])
     p1_w, p1_d, p1_l = fused_probs  # 用融合概率替代原始概率
+
+    # 升级2: 赔率→概率 isotonic 校准后处理 (n=788历史库训练)
+    # 隐含概率与真实频率存在系统性偏差(热门低估/冷门高估),
+    # PAV保序回归逐类校准后重新归一化, 修正融合输出的系统性偏移。
+    if _MU and UPGRADES.get('odds_calibration') and _UPG_PARAMS.get('odds_calibrator'):
+        try:
+            p1_w, p1_d, p1_l = _MU.apply_odds_calibrator(
+                [p1_w, p1_d, p1_l], _UPG_PARAMS['odds_calibrator'])
+        except Exception:
+            pass
     
     # Ultra 6.7: 高级标定 (6大模块) — 在四源融合后施加有界修正
     _adv_probs, _adv_notes = apply_advanced_calibration([p1_w, p1_d, p1_l], sp, had, hhad)
@@ -7262,9 +7424,29 @@ def predict_match(match_num, data):
         hhad_conf_score = min(5.0, hhad_conf_score + 0.5)
         v611_notes.append(f"[因子] HHAD让负+低赔{hhad_odds_val:.2f}<1.5黄金窗口(75%命中), 置信度+0.5★")
 
+    # 升级10: 置信度 ECE 校准封顶 — Δ(top1-top2概率差)→历史实际命中率
+    # isotonic映射。Δ大但历史命中率不支撑高星时封顶, 使星级与真实
+    # 期望命中率单调一致, 消除"高Δ虚高置信"。缺参(回归库不足)自动跳过。
+    if _MU and UPGRADES.get('conf_ece') and _UPG_PARAMS.get('conf_calibrator'):
+        try:
+            _sp_had = sorted(had_probs, reverse=True)
+            _delta = _sp_had[0] - _sp_had[1]
+            _exp_hit = _MU.calibrated_confidence(_delta, _UPG_PARAMS['conf_calibrator'])
+            if _exp_hit is not None:
+                _ece_cap = (5.0 if _exp_hit >= 0.65 else
+                            4.5 if _exp_hit >= 0.58 else
+                            4.0 if _exp_hit >= 0.50 else
+                            3.5 if _exp_hit >= 0.42 else 3.0)
+                if had_conf_score > _ece_cap:
+                    had_conf_score = _ece_cap
+                    v611_notes.append(
+                        f"[ECE] Δ={_delta:.2f}→期望命中{_exp_hit:.0%}, 置信度封顶{format_stars(_ece_cap)}")
+        except Exception:
+            pass
+
     had_conf = format_stars(had_conf_score)
     hhad_conf = format_stars(hhad_conf_score)
-    
+
     # ===== 证据收集 =====
     had_str = f"{had['h']}/{had['d']}/{had['a']}" if had_open else "未开"
     hhad_str = f"{handicap} {hhad['h']}/{hhad['d']}/{hhad['a']}" if hhad and 'h' in hhad else f"{handicap} 未开"
