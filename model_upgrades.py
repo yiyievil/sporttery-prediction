@@ -173,57 +173,89 @@ def apply_odds_calibrator(probs, calib):
 
 
 # ======================================================================
-# 升级3: Glicko-2 近况评分
+# 升级3: Glicko-2 近况评分 (Glickman 标准算法, 修正 v/Δ/μ 尺度 + Illinois 波动率迭代)
 # ======================================================================
+# 修复说明 (2026-08-11): 旧实现存在三处致命错误
+#   1. v 含 q² (应无) → v 放大 1/q²≈3万倍 → 1/v≈0 → rd 永不收缩
+#   2. Δ 与 μ 更新含 q (缩放尺度下应无) → 每场 μ 仅移动 ~0.003 → 连胜/连败输出恒 ≈0.5
+#   3. Illinois 波动率迭代: B 初始化错用 a±3.0 (应为 ln(Δ²-φ²-v)), 缺 f(A)/2 防停滞修正,
+#      存在永真死代码 → 不保证收敛
+# 正确公式 (缩放尺度 μ=r/173.7178, φ=RD/173.7178, 173.7178=1/q):
+#   v = 1/Σg(φj)²E(1-E);  Δ = v·Σg(φj)(s-E);  φ'=1/√(1/φ*²+1/v);  μ'=μ+φ'²·Σg(φj)(s-E)
 _GLICKO_Q = math.log(10) / 400
 
 
 def _glicko_g(rd):
+    """g(φ): 对手不确定性对期望得分的衰减因子 (φ 为缩放尺度)"""
     return 1 / math.sqrt(1 + 3 * _GLICKO_Q ** 2 * rd ** 2 / math.pi ** 2)
 
 
 def _glicko_e(mu, mu_j, rd_j):
+    """E(μ,μj,φj): 对对手 j 的期望得分 (logistic 评分差模型)"""
     return 1 / (1 + math.exp(-_glicko_g(rd_j) * (mu - mu_j)))
 
 
-def glicko2_form(results, base_mu=0.0, base_rd=1.2, base_phi=0.06, tau=0.5):
-    """近况赛果序列 → Glicko-2 评分差期望得分 (对"平均对手"的期望胜率)
+def _glicko2_volatility(phi, sigma, delta, v, tau):
+    """Glicko-2 step 5: 波动率 σ 迭代 — 标准 Illinois 算法 (含 f(A)/2 防停滞修正)。
 
-    results: [(score, opp_strength)] 按时间从近到远, score∈{1,0.5,0}, opp_strength∈[0,1]
-    返回 (mu, rd, expected_vs_avg): expected_vs_avg ∈[0,1] 供近况修正使用
-    rd 越大 → 评分越不可靠 → 上游应降权
+    f(x) = e^x·(Δ²-φ²-v-e^x) / (2·(φ²+v+e^x)²) - (x-ln(σ²))/τ²
+    括号初始化: Δ²>φ²+v 时 B=ln(Δ²-φ²-v), 否则沿 a-k·τ 向下找 f<0 的界
     """
-    mu, rd, phi = base_mu, base_rd, base_phi
+    a = math.log(sigma ** 2)
+
+    def f(x):
+        ex = math.exp(x)
+        num = ex * (delta ** 2 - phi ** 2 - v - ex)
+        den = 2 * (phi ** 2 + v + ex) ** 2
+        return num / den - (x - a) / tau ** 2
+
+    A = a
+    if delta ** 2 > phi ** 2 + v:
+        B = math.log(delta ** 2 - phi ** 2 - v)
+    else:
+        k = 1
+        while f(a - k * tau) < 0 and k < 100:   # k 上限防死循环
+            k += 1
+        B = a - k * tau
+    fA, fB = f(A), f(B)
+    for _ in range(100):
+        if abs(B - A) < 1e-6:
+            break
+        C = A + (A - B) * fA / (fB - fA + 1e-300)  # regula falsi 内插 (防除零)
+        fC = f(C)
+        if fC * fB < 0:
+            A, fA = B, fB          # 根在 (B,C): 区间右移
+        else:
+            fA = fA / 2.0          # Illinois 修正: 同端滞留时函数值减半, 防停滞
+        B, fB = C, fC
+    return math.exp(A / 2)
+
+
+def glicko2_form(results, base_mu=0.0, base_rd=1.2, base_phi=0.06, tau=0.5,
+                 opp_scale=3.0, opp_rd=0.6):
+    """近况赛果序列 → Glicko-2 评分 (标准算法, 逐场在线更新, 每场一个 mini-period)
+
+    results: [(score, opp_strength)] 按时间从近到远
+        score∈{1,0.5,0} (胜/平/负); opp_strength∈[0,1], 0.5=平均对手(未知时缺省),
+        越接近 1 对手越强 → 赢强队比赢弱队获得更多提升 (含金量差异)
+    返回 (mu, rd, expected_vs_avg):
+        mu  缩放评分 (≈评分差/173.72), 正值=近况强于平均
+        rd  评分不确定性 ∈(0,1.2], 场数越多越小 → 上游据此调混合权重
+        expected_vs_avg  对平均对手(rd=opp_rd)的期望胜率 ∈[0,1], 供近况修正
+    """
+    mu, phi, sigma = base_mu, base_rd, base_phi
     for score, opp in results:
-        mu_j = (opp - 0.5) * 2.0  # 对手强度映射到评分差尺度
-        rd_j = 0.6
-        g = _glicko_g(rd_j)
-        e = _glicko_e(mu, mu_j, rd_j)
-        v = 1 / (_GLICKO_Q ** 2 * g ** 2 * e * (1 - e))
-        delta = v * _GLICKO_Q * g * (score - e)
-        # 波动率迭代 (简化的 Illinois 算法, 5次足够收敛)
-        a = math.log(phi ** 2)
-        A = a
-        B = a + 3.0 if delta ** 2 > phi ** 2 + v else a - 3.0
-
-        def f(x):
-            ex = math.exp(x)
-            return ex * (delta ** 2 - phi ** 2 - v - ex) / (2 * (phi ** 2 + v + ex) ** 2) - (x - a) / tau ** 2
-
-        for _ in range(5):
-            fA, fB = f(A), f(B)
-            C = B - fB * (B - A) / (fB - fA + 1e-12)
-            fC = f(C)
-            A, B = (B, C) if fB * fC < 0 else (A if fA * fC < 0 else C, C) if fB * fC < 0 else (A, C)
-            if fA * fC < 0:
-                B = C
-            else:
-                A = A if fB * fC >= 0 else A
-                B = C
-        phi = math.sqrt(math.exp((A + B) / 2))
-        rd = 1 / math.sqrt(1 / rd ** 2 + 1 / v)
-        mu = mu + _GLICKO_Q * rd ** 2 * g * (score - e)
-    return mu, rd, _glicko_e(mu, 0.0, 0.6)
+        mu_j = max(0.0, min(1.0, opp)) - 0.5      # 对手强度 → [-0.5, 0.5]
+        mu_j *= opp_scale                          # 缩放尺度评分差 (±1.5 ≈ ±260 分)
+        g = _glicko_g(opp_rd)
+        e = _glicko_e(mu, mu_j, opp_rd)
+        v = 1.0 / (g * g * e * (1 - e))            # step 3 (缩放尺度, 无 q²)
+        delta = v * g * (score - e)                # step 4 (无 q)
+        sigma = _glicko2_volatility(phi, sigma, delta, v, tau)   # step 5
+        phi_star = math.sqrt(phi * phi + sigma * sigma)          # step 6 预周期
+        phi = 1.0 / math.sqrt(1.0 / (phi_star * phi_star) + 1.0 / v)  # step 7
+        mu = mu + phi * phi * g * (score - e)      # step 8 (无 q)
+    return mu, phi, _glicko_e(mu, 0.0, opp_rd)
 
 
 # ======================================================================
@@ -354,10 +386,9 @@ def bp_matrix(lam_h, lam_a, rho=0.12, max_goals=8):
         for y in range(max_goals + 1):
             p = 0.0
             for k in range(min(x, y) + 1):
-                p += (pois(x - k, l1) * pois(y - k, l2) * pois(k, lam3)
-                      * math.factorial(x) * math.factorial(y)
-                      / (math.factorial(k) * math.factorial(x - k) * math.factorial(y - k)))
-                # 上式含组合数修正 (Karlis & Ntzoufras 形式)
+                # Karlis & Ntzoufras 二元泊松卷积: X=X1+X3, Y=X2+X3 (三者独立)
+                # P(X=x,Y=y) = Σ_k P1(x-k)·P2(y-k)·P3(k) — 不含组合数因子
+                p += pois(x - k, l1) * pois(y - k, l2) * pois(k, lam3)
             mat[(x, y)] = p * math.exp(-0)  # 保持浮点
     s = sum(mat.values())
     return {k: v / s for k, v in mat.items()} if s > 0 else mat
