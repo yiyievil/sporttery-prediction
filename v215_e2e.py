@@ -3799,19 +3799,34 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
             slim['type'] = o['selection_type']
         return slim
 
-    all_ranked_slim = [slim_option(o) for o in all_ranked[:3]]  # 仅top3
+    # Ultra 11.10 铁律: 预测报告须正确标注让/受让 — 受让盘输出副本统一术语
+    # (ERR-20260811-002: cross_market 各 HHAD 输出项此前未过 _hhad_display_label,
+    #  JSON摘要"HHAD主推: HHAD让胜@..." 与 insight(已整体转换)矛盾;
+    #  仅转换输出副本, 原对象保留"让X"供内部逻辑比较(如 _ldr_already_primary=='HHAD让平'))
+    def _hhad_out(o):
+        if not o or not isinstance(o, dict):
+            return o  # 布尔标记(double_parallel_output)等非 dict 原样返回
+        cp = dict(o)
+        # slim dict 用 'mkt', 完整 dict 用 'market' — 两者都检查
+        if str(cp.get('market') or cp.get('mkt') or '').startswith('HHAD'):
+            for _f in ('option', 'opt'):
+                if _f in cp:
+                    cp[_f] = _hhad_display_label(cp[_f], handicap)
+        return cp
+
+    all_ranked_slim = [_hhad_out(slim_option(o)) for o in all_ranked[:3]]  # 仅top3
 
     return {
         'top3': all_ranked_slim,  # Ultra 6.0: 精简为top3
-        'primary_bet': primary_bet,
-        'hhad_primary_bet': hhad_primary_bet,
-        'wdl_picks': wdl_picks,  # Ultra 11.30: 胜平负共斥双推(净胜球互斥Top2)
-        'let_draw_rec': let_draw_rec,  # Ultra 11.17: 让平直推
+        'primary_bet': _hhad_out(primary_bet),
+        'hhad_primary_bet': _hhad_out(hhad_primary_bet),
+        'wdl_picks': [_hhad_out(p) for p in wdl_picks],  # Ultra 11.30: 胜平负共斥双推(净胜球互斥Top2)
+        'let_draw_rec': _hhad_out(let_draw_rec),  # Ultra 11.17: 让平直推
         'draw_attention': draw_attention,  # Ultra 11.18: 平局关注
         'draw_window_hhad_priority': draw_window_hhad_priority,  # Ultra 11.19: 平局窗口HHAD优先
-        'double_recommend': double_recommend,
-        'double_parallel_output': double_parallel_output,
-        'pure_direction_bet': pure_direction_bet,
+        'double_recommend': _hhad_out(double_recommend),
+        'double_parallel_output': _hhad_out(double_parallel_output),
+        'pure_direction_bet': _hhad_out(pure_direction_bet),
         'primary_mode': mode,
         'pass_risk': pass_risk,
         'margin_dist': margin_dist,
@@ -7198,6 +7213,11 @@ def predict_match(match_num, data):
     else:
         hhad_dir = hhad_dirs[hhad_final_idx]
 
+    # Ultra 11.10 铁律: 预测报告须正确标注让/受让 — 受让盘(handicap>0)必须标"受让X"而非"让X"
+    # (ERR-20260811-002: hhad_dir 此前未过 _hhad_display_label, 受让盘(+1等)的 JSON dir/
+    #  控制台摘要/一致性文案全标成"让胜/让负", 与跨玩法(已转换)矛盾; 此处在方向确定后统一转换)
+    hhad_dir = _hhad_display_label(hhad_dir, handicap)
+
     # ===== 置信度计算 (Ultra 8.0: 阈值重新标定 + 平局风险惩罚) =====
     # 辅助函数: 概率差值→星级分数
     # Ultra 8.0: 4.5★阈值0.12→0.14, 5★阈值0.15→0.18
@@ -7415,12 +7435,14 @@ def predict_match(match_num, data):
     # ③ 黄金窗口加码 — HAD负/HHAD让负 + 低赔<1.5
     # 因子发现: 该两窗口命中+ROI双正(HAD负100%/HHAD让负75%), 是可控的盈利甜区
     # 修正: 命中两个黄金窗口 → 置信度+0.5★(不突破5.0上限)
+    # (ERR-20260811-002: hhad_dir 已做受让术语转换, 逻辑判断改用索引 hhad_final_idx==2,
+    #  让负/受让负同源(idx=2), 保证受让盘黄金窗口行为与修复前一致)
     _golden_hit = False
     if had_dir == '负' and odds and odds < 1.5:
         had_conf_score = min(5.0, had_conf_score + 0.5)
         _golden_hit = True
         v611_notes.append(f"[因子] HAD负+低赔{odds:.2f}<1.5黄金窗口(100%命中), 置信度+0.5★")
-    if hhad_has_data and hhad_dir == '让负' and hhad_odds_val and hhad_odds_val < 1.5:
+    if hhad_has_data and hhad_final_idx == 2 and hhad_odds_val and hhad_odds_val < 1.5:
         hhad_conf_score = min(5.0, hhad_conf_score + 0.5)
         v611_notes.append(f"[因子] HHAD让负+低赔{hhad_odds_val:.2f}<1.5黄金窗口(75%命中), 置信度+0.5★")
 
