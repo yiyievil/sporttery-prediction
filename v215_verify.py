@@ -3373,6 +3373,16 @@ def main():
     except Exception as e:
         print(f"  ⚠️ PDF生成异常: {e}")
 
+    # 直观版验证分析报告 (HTML: 命中率圆环+每场对照+命中矩阵+关键洞察)
+    # 数据源: verify_history (本场已入库), 与原纯表格PDF并存, 用户指定默认输出
+    try:
+        from gen_verify_analysis_html import generate as _gen_html_report
+        _html_report = _gen_html_report(date_str)
+        if _html_report:
+            print(f"  直观版报告: {_html_report}")
+    except Exception as e:
+        print(f"  ⚠️ 直观版报告生成异常: {e}")
+
     # Phase 6: 回归分析输出
     print("\n[Phase6] 回归分析...")
     print(f"  当次回归分析: HAD {had_hits}/{len(has_pred)}, HHAD {hhad_hits}/{len(has_pred)}, 比分 {score_hits}/{len(has_pred)}。")

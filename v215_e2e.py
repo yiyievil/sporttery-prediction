@@ -8264,7 +8264,7 @@ def main():
 
     # ===== Phase 6: 自动生成PDF报告 (Ultra 11.2 — 保证PDF与预测场次一致) =====
     # PDF 输出到工作区根目录 (SPORTTERY_WORKSPACE 优先, 无则脚本目录), 便于手机端直接访问
-    _pdf_out_dir = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__))
+    _pdf_out_dir = os.path.dirname(os.path.abspath(__file__))  # 交付物落地脚本目录(/workspace/sporttery, 用户可见可打开)
     _pdf_basename = os.path.basename(pred_file).replace('.json', '.pdf')
     pdf_path = os.path.join(_pdf_out_dir, _pdf_basename)
     try:
@@ -8275,6 +8275,16 @@ def main():
         print(f"  [PDF] 已自动生成: {pdf_path} ({len(results)}场)")
     except Exception as ex:
         print(f"  [PDF] 自动生成失败 (不影响预测结果, 可手动运行 `python3 gen_pred_pdf.py {pred_file} {pdf_path}`): {ex}")
+
+    # ===== Phase 7: 投注选择显性化指南 (三档: ✅单选/⚠️双选兜底/🚫避开) =====
+    # 源自 260811 用户实测复盘(彩票6中2根因): 平局窗口场须改买HHAD覆盖项, 强主场误判场须避开
+    try:
+        from gen_bet_guide_html import generate as _gen_bet_guide
+        _guide = _gen_bet_guide(pred_file)
+        if _guide:
+            print(f"  [指南] 投注选择指南: {_guide}")
+    except Exception as _ge:
+        print(f"  [指南] 生成失败(不影响预测): {_ge}")
 
 if __name__ == '__main__':
     main()
