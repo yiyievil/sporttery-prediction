@@ -325,6 +325,11 @@ UPGRADES = {
 }
 BP_RHO = 0.12          # 二元泊松共同冲击系数 (0.1~0.15 经验区间)
 DC_LAMBDA_BLEND = 0.35 # DCλ 与市场λ 的混合权重 (DC占35%)
+
+# ===== Ultra 12.1: 双选达标池阈值 (用户铁律: 命中率达标后兼顾盈利) =====
+# 双选概率≥此值即满足"命中率第一"底线, 达标池内按赔率最高选。
+# 用户确认: 让胜让平76%已足够稳, 此时应选赔率更优组合而非盲目追求最高概率。
+DOUBLE_QUALIFY_PROB = 75.0
 try:
     import model_upgrades as _MU
     _UPG_PARAMS = _MU.load_upgrades()
@@ -3343,13 +3348,30 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
             }
             # 与主推方向一致的双选 (必须包含主推结果)
             aligned = []
-            # HHAD双选: 主推为HHAD方向时按让方向对齐(贴合让球逻辑)
+            # Ultra 12.1: HHAD双选始终纳入候选 — 原逻辑仅主推为HHAD方向时才纳入,
+            #   导致主推为HAD时让球双选被排除在池外(003让胜让平76%@2.41被漏)。
+            #   纳入后由达标池按概率+赔率竞争, 与主推不兼容的HHAD双选概率天然低,
+            #   进不了DOUBLE_QUALIFY_PROB达标池, 不会污染推荐。
             if pref_hhad:
                 aligned += [o for o in hhad_double_options
                             if pref_hhad in hhad_dbl_cov.get(o.get('option', ''), set())]
+            else:
+                aligned += hhad_double_options
             # HAD双选: 始终按末字(胜/平/负)对齐, 作为跨市场保险基准
             aligned += [o for o in had_double_options
                         if pref_result in dbl_coverage.get(o.get('option', ''), set())]
+            # Ultra 12.1: 剔除押注主推对立面的双选 — 达标池按赔率选时,
+            #   方向矛盾的组合(如主推胜却含"负"的HAD胜负=分胜负)可能因赔率高被误选。
+            #   003: HAD胜负75%@2.53(含客赢10%)赔率>让胜让平76%@2.41, 但方向矛盾,
+            #   剔除对立面后让胜让平才正确胜出。对立面映射: 胜↔负/让负, 负↔胜/让胜。
+            _opp_map = {'胜': {'负', '让负'}, '负': {'胜', '让胜'},
+                        '平': {'胜', '负', '让胜', '让负'}}
+            _opp = _opp_map.get(pref_result, set())
+            if _opp:
+                def _dbl_covers(o):
+                    return (dbl_coverage.get(o.get('option', '')) or
+                            hhad_dbl_cov.get(o.get('option', ''), set()))
+                aligned = [o for o in aligned if not (_dbl_covers(o) & _opp)]
             # Ultra 11.8: 平局盲区低估补偿 (HAD专项回归 2026-08-06)
             # 回归发现(51场): 预测平局仅4场(7.8%), 实际平局13场(25.5%), 11场平局被完全漏掉
             # 根因: 模型平均平局概率27.8%标定良好, 但平局概率从未成为argmax(方向选择)
@@ -3370,33 +3392,34 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                 # 触发: 平局概率≥25% 或 (平局进前二 且 top2差<容差)
                 _draw_trigger = (_draw_prob >= 0.25) or (_draw_in_top2 and _top2_gap < HYBRID_PROB_TOLERANCE / 100.0)
                 if _draw_trigger:
-                    # 平局概率高(≥25%) → HAD双选优先覆盖平局 (让球无直接平, 仅HAD双选参与)
-                    draw_covering = [o for o in aligned
-                                     if o['market'] == 'HAD双选'
-                                     and '平' in dbl_coverage.get(o.get('option', ''), set())]
-                    if draw_covering:
-                        # 平局盲区base = 覆盖平的HAD双选中命中率最高 (Ultra 11.23: 命中率优先)
-                        draw_base = sorted(draw_covering, key=lambda x: x['prob'], reverse=True)[0]
-                        # Ultra 11.22: HHAD双选命中率更高时允许覆盖(主推让球盘时)
-                        hhad_aligned_ev = [o for o in aligned if o['market'] == 'HHAD双选']
-                        if hhad_aligned_ev:
-                            best_hhad = sorted(hhad_aligned_ev, key=lambda x: x['prob'], reverse=True)[0]
-                            aligned = [best_hhad if best_hhad['prob'] > draw_base['prob'] else draw_base]
-                        else:
-                            aligned = [draw_base]
-                        # Ultra 11.9: 平局盲区补偿触发 → 双选改为并列主推
-                        # Ultra 11.11: 平局概率≥25%时也触发并列主推(原仅top2差<容差触发)
-                        double_parallel_output = True
+                    # Ultra 12.1: 平局盲区不再强制裁剪 aligned=[draw_base],
+                    #   改为仅标记并列主推(parallel), 让达标池在完整候选中按赔率竞争。
+                    #   原裁剪会让让胜让平等高赔率HHAD双选被draw_base(仅HAD胜平)顶替,
+                    #   违背"命中率达标后赔率优先"。平局风险经parallel标记+insight保留提示。
+                    #   注: 让胜让平等不覆盖平局的组合若达标且赔率更高会胜出(003场景),
+                    #   此时平局靠"平局关注"提示而非双选兜底, 属用户确认的赔率优先取舍。
+                    double_parallel_output = True
             if aligned:
-                # Ultra 11.23: 命中率(prob)第一优先, EV仅展示参考
-                double_recommend = sorted(aligned, key=lambda x: x['prob'], reverse=True)[0]
+                # Ultra 12.1: 双选达标池+赔率优先 (用户铁律: 命中率达标后兼顾盈利)
+                # 概率≥DOUBLE_QUALIFY_PROB的双选均已满足"命中率第一"底线,
+                # 池内改按赔率(avg_odds)最高选 — 同稳度下取更优赔率
+                # 例003: HAD胜平90%@2.26 vs 让胜让平76%@2.41 → 均达标, 选赔率更高的让胜让平
+                _qualified = [o for o in aligned if o['prob'] >= DOUBLE_QUALIFY_PROB]
+                if _qualified:
+                    double_recommend = sorted(_qualified, key=lambda x: x['odds'], reverse=True)[0]
+                else:
+                    double_recommend = sorted(aligned, key=lambda x: x['prob'], reverse=True)[0]
                 # Ultra 11.9: 并列输出时, 双选为主推方向的并列保险(主推胜→胜平, 主推负→平负)
                 if double_parallel_output:
                     double_recommend = dict(double_recommend)
                     double_recommend['parallel'] = True
         if double_recommend is None:
-            # 无主推 或 无法对齐时, 回退到命中率最高 (含HHAD双选, Ultra 11.22/11.23)
-            double_recommend = sorted(all_doubles, key=lambda x: x['prob'], reverse=True)[0]
+            # 无主推 或 无法对齐时, 回退: 达标池内赔率最高, 否则命中率最高
+            _qualified = [o for o in all_doubles if o['prob'] >= DOUBLE_QUALIFY_PROB]
+            if _qualified:
+                double_recommend = sorted(_qualified, key=lambda x: x['odds'], reverse=True)[0]
+            else:
+                double_recommend = sorted(all_doubles, key=lambda x: x['prob'], reverse=True)[0]
 
     # ===== 纯方向判断 (Pro 3.9) =====
     # 从真单选中选概率最高的, 排除伪单选(打包两结果的)
@@ -7218,24 +7241,41 @@ def predict_match(match_num, data):
     #  控制台摘要/一致性文案全标成"让胜/让负", 与跨玩法(已转换)矛盾; 此处在方向确定后统一转换)
     hhad_dir = _hhad_display_label(hhad_dir, handicap)
 
-    # ===== 置信度计算 (Ultra 8.0: 阈值重新标定 + 平局风险惩罚) =====
-    # 辅助函数: 概率差值→星级分数
-    # Ultra 8.0: 4.5★阈值0.12→0.14, 5★阈值0.15→0.18
-    # (29场回归: ★★★★½命中25%, 虚假高信心重灾区)
-    def delta_to_score(delta):
-        if delta >= 0.18: return 5.0
-        if delta >= 0.14: return 4.5
-        if delta >= 0.10: return 4.0
-        if delta >= 0.07: return 3.5
-        if delta >= 0.05: return 3.0
-        if delta >= 0.04: return 2.5
-        if delta >= 0.03: return 2.0
-        if delta >= 0.02: return 1.5
+    # ===== 置信度计算 (Ultra 12.1: 星级 = 校准命中率分档) =====
+    # 新定义(用户要求): 星级体现模型对预测结果的信心程度, 越高说明越稳。
+    #   信心 = 校准命中率(模型概率经历史校准后的真实命中期望), 星越高=真实命中越高。
+    # 两步: ① calibrate_hit_rate 把模型概率校准为真实命中率(修正高概率高估)
+    #       ② hit_rate_to_score 按命中率分档映射星级
+    # 校准系数来源(LRN-20260809-002 深度因子分析83场分档实测):
+    #   p60-70%档: 预测64% 实际42% (高估22pp) → ×0.66
+    #   p50-60%档: 预测52% 实际55% (校准良好) → ×1.00
+    #   p40-50%档: 轻度低估 → ×1.15
+    #   p<40%档:  预测34% 实际55% (低估) → ×1.30
+    # 注: regression.db(verify_history)积累后可切换 isotonic 连续校准(升级10 conf_ece)
+    def calibrate_hit_rate(p):
+        """模型概率 → 校准命中率 (经验分段, 修正高概率系统性高估)"""
+        if p >= 0.60: return p * 0.66
+        if p >= 0.50: return p * 1.00
+        if p >= 0.40: return p * 1.15
+        return p * 1.30
+
+    def hit_rate_to_score(p_cal):
+        """校准命中率 → 星级分档 (越高越稳, 单调可解读)
+        5★≥65%(极稳) 4.5★≥58% 4★≥52% 3.5★≥45% 3★≥38% 2.5★≥33% 2★≥28% 1.5★≥24% 1★<24%"""
+        if p_cal >= 0.65: return 5.0
+        if p_cal >= 0.58: return 4.5
+        if p_cal >= 0.52: return 4.0
+        if p_cal >= 0.45: return 3.5
+        if p_cal >= 0.38: return 3.0
+        if p_cal >= 0.33: return 2.5
+        if p_cal >= 0.28: return 2.0
+        if p_cal >= 0.24: return 1.5
         return 1.0
 
     had_spread = sorted(had_probs, reverse=True)
     had_delta = had_spread[0] - had_spread[1]
-    had_conf_score = delta_to_score(had_delta)
+    had_hit_rate = calibrate_hit_rate(had_probs[had_min_idx])   # 主推方向校准命中率
+    had_conf_score = hit_rate_to_score(had_hit_rate)
 
     # Ultra 8.0: 平局风险惩罚 — 预测"胜/负"但平局概率>25%时置信度封顶★★★★
     # (29场回归: 预测"胜"→实际"平"8次, 平局概率高时高置信度是虚假信心)
@@ -7244,7 +7284,8 @@ def predict_match(match_num, data):
 
     hhad_spread = sorted(hhad_final_probs, reverse=True)
     hhad_delta = hhad_spread[0] - hhad_spread[1]
-    hhad_conf_score = delta_to_score(hhad_delta)
+    hhad_hit_rate = calibrate_hit_rate(hhad_final_probs[hhad_final_idx])
+    hhad_conf_score = hit_rate_to_score(hhad_hit_rate)
 
     # 数据质量调节 (Ultra 1.0): 质量差则降星
     # Ultra 7.6 (P7): 复用上方dq结果, 不再重复调用 assess_data_quality(sp)
@@ -7424,13 +7465,9 @@ def predict_match(match_num, data):
         had_conf_score = min(had_conf_score - 0.5, 2.5)
         v611_notes.append(f"[因子] 高置信≥4★+低赔{odds:.2f}<1.8热量陷阱(命中29%), 置信度封顶★★½")
 
-    # ② 概率校准修正 — 模型高估高概率
-    # 因子发现: p60-70%档实际命中42%(偏差22pp), 模型在"自认为有把握"时过度自信
-    # 修正: 预测方向概率≥60% → 置信度降一档(映射到真实命中率水平)
-    # 仅HAD主推方向适用(分析基于HAD主推), ≥60%高概率档
-    if _had_main_prob >= 0.60 and had_conf_score >= 3.0:
-        had_conf_score = max(1.0, had_conf_score - 0.5)
-        v611_notes.append(f"[因子] 预测概率{_had_main_prob*100:.0f}%≥60%高估(实际命中42%), 置信度-0.5★")
+    # ② 概率校准修正 — Ultra 12.1 已移除: 高概率高估(≥60%档实际42%)现已由
+    #    calibrate_hit_rate 在基础分中统一处理(p≥0.60 ×0.66), 此处不再重复-0.5★,
+    #    避免与命中率校准双重惩罚同一场景
 
     # ③ 黄金窗口加码 — HAD负/HHAD让负 + 低赔<1.5
     # 因子发现: 该两窗口命中+ROI双正(HAD负100%/HHAD让负75%), 是可控的盈利甜区
@@ -7579,6 +7616,7 @@ def predict_match(match_num, data):
             'dir': had_dir,
             'odds': odds,
             'conf': had_conf if had_open else '—',
+            'conf_hit_rate': round(had_hit_rate * 100, 1) if had_open else None,  # Ultra 12.1: 校准命中率%
             'p': f"{p1_w:.0%}/{p1_d:.0%}/{p1_l:.0%}" if had_open else '未开盘',
             'had_open': had_open,
         },
@@ -7587,6 +7625,7 @@ def predict_match(match_num, data):
             'handicap': handicap,
             'odds': hhad_odds_val,
             'conf': hhad_conf,
+            'conf_hit_rate': round(hhad_hit_rate * 100, 1),  # Ultra 12.1: 校准命中率%
             'p': f"{hhad_final_probs[0]:.0%}/{hhad_final_probs[1]:.0%}/{hhad_final_probs[2]:.0%}",
             'poisson': hhad_wdl_str,
         },
@@ -8040,10 +8079,14 @@ def main():
             ds_display = f"{ds} ⚠️{fr}" if fr else ds
             summary_lines.append(f"  {key} {m['home']} vs {m['away']} [{ds_display}]")
             if had_info.get('had_open', True):
-                summary_lines.append(f"    HAD:  {had_info['dir']}@{had_info['odds']} {had_info['conf']} P={had_info['p']}")
+                _hr = had_info.get('conf_hit_rate')
+                _hr_s = f" 校准命中≈{_hr:.0f}%" if _hr is not None else ""
+                summary_lines.append(f"    HAD:  {had_info['dir']}@{had_info['odds']} {had_info['conf']}{_hr_s} P={had_info['p']}")
             else:
                 summary_lines.append(f"    HAD:  未开盘 (仅参考HHAD)")
-            summary_lines.append(f"    HHAD: {hhad_info['dir']}@{hhad_info['odds']} {hhad_info['conf']} P={hhad_info['p']}")
+            _hhr = hhad_info.get('conf_hit_rate')
+            _hhr_s = f" 校准命中≈{_hhr:.0f}%" if _hhr is not None else ""
+            summary_lines.append(f"    HHAD: {hhad_info['dir']}@{hhad_info['odds']} {hhad_info['conf']}{_hhr_s} P={hhad_info['p']}")
             summary_lines.append(f"    盘口({r.get('market_gl_source','')}): {gl_str} (市场盘口)")
             # 初赔对比
             init = r.get('initial')
