@@ -257,11 +257,29 @@
     "update_count": 0,
     "match_count": 10,
     "is_complete": true
+   },
+   {
+    "seq": 19,
+    "file": "pred_20260814_周四__v19.json",
+    "archived_at": "2026-08-13 21:07:53",
+    "mode": "predict",
+    "update_count": 0,
+    "match_count": 10,
+    "is_complete": true
+   },
+   {
+    "seq": 20,
+    "file": "pred_20260814_周四__v20.json",
+    "archived_at": "2026-08-13 21:31:52",
+    "mode": "predict",
+    "update_count": 0,
+    "match_count": 10,
+    "is_complete": true
    }
   ],
-  "latest_seq": 18,
+  "latest_seq": 20,
   "max_covered": 10,
-  "last_complete_seq": 18
+  "last_complete_seq": 20
  },
  "pred_20260814_周五": {
   "versions": [],
