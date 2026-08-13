@@ -18,6 +18,7 @@ cloud_daily.py — 云端/无人值守调度入口 (GitHub Actions / crontab)
 
 import argparse
 import glob
+import json
 import os
 import subprocess
 import sys
@@ -63,20 +64,50 @@ def fetch_today_matches(target_date=None):
 
 
 def numbers_from_pred_file(target_date):
-    """verify/update 回退: 从当日预测文件提取场次编号
-    (体彩 match list API 只覆盖在售后场次, 历史场次无法检测)"""
-    pattern = os.path.join(SCRIPT_DIR, "predictions", f"pred_{target_date.strftime('%Y%m%d')}_*.json")
+    """verify/update 回退: 从预测文件提取场次编号和match_key
+
+    文件名以 match_date(比赛实际日期) 命名, 可能与 target_date(体彩开盘日) 不同。
+    先精确匹配文件名, 失败则扩大搜索按 meta.match_date 反查。
+
+    返回: (numbers ['001','002',...], match_keys ['周三001','周三002',...])
+          无匹配时返回 ([], [])
+    """
+    target_str = target_date.strftime("%Y-%m-%d")
+    date_tag = target_date.strftime("%Y%m%d")
+
+    # 1) 精确匹配: pred_{date}_*.json
+    pattern = os.path.join(SCRIPT_DIR, "predictions", f"pred_{date_tag}_*.json")
     hits = sorted(glob.glob(pattern), key=os.path.getmtime)
-    if not hits:
-        return []
-    import json
-    try:
-        with open(hits[-1], encoding="utf-8") as f:
-            data = json.load(f)
-        return sorted({k[-3:] for k in (data.get("results") or {})})
-    except Exception as e:
-        print(f"[cloud] ⚠️ 读取预测文件失败: {e}")
-        return []
+    if hits:
+        try:
+            with open(hits[-1], encoding="utf-8") as f:
+                data = json.load(f)
+            results = data.get("results") or {}
+            match_keys = sorted(results.keys())
+            numbers = sorted({k[-3:] for k in match_keys})
+            if numbers:
+                return numbers, match_keys
+        except Exception as e:
+            print(f"[cloud] ⚠️ 读取预测文件失败: {e}")
+
+    # 2) 扩大搜索: 按 meta.match_date 反查 (文件名日期 ≠ 比赛实际日期时)
+    all_pattern = os.path.join(SCRIPT_DIR, "predictions", "pred_*.json")
+    all_hits = sorted(glob.glob(all_pattern), key=os.path.getmtime, reverse=True)
+    for hit in all_hits[:7]:  # 最近7个文件
+        try:
+            with open(hit, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+        meta = data.get("meta") or {}
+        matched_keys = [k for k, m in meta.items()
+                        if isinstance(m, dict) and m.get("match_date") == target_str]
+        if matched_keys:
+            numbers = sorted({k[-3:] for k in matched_keys})
+            print(f"[cloud] 按match_date反查: {os.path.basename(hit)} → {len(matched_keys)}场")
+            return numbers, sorted(matched_keys)
+
+    return [], []
 
 
 def run(cmd):
@@ -118,29 +149,44 @@ def main():
         except ValueError:
             print(f"[cloud] ⚠️ 无法解析日期 '{args.date}', 使用缺省日期")
     if target_date is None:
-        target_date = now_bjt().date() - timedelta(days=1) if args.mode == "verify" else now_bjt().date()
+        target_date = now_bjt().date()
 
     manual_numbers = [x.strip()[-3:] for x in args.numbers.replace("，", ",").split(",") if x.strip()]
 
-    # verify/update 需要定位场次: 手动编号优先, 否则从当日开盘检测
-    detected = fetch_today_matches(target_date)
-    if detected:
-        code_date, weekday, numbers, day_str = detected
-        print(f"[cloud] 检测到 {day_str} ({weekday}) 开盘 {len(numbers)} 场: {','.join(numbers)}")
+    verify_match_keys = None
+    if args.mode == "verify":
+        # verify: 直接从预测文件查找 (API 只覆盖在售场次, 历史场次无法检测)
+        # 预测文件按 match_date 命名, 与 businessDate 可能差一天
+        code_date, weekday = target_date.strftime("%y%m%d"), ""
+        day_str = target_date.strftime("%Y-%m-%d")
+        if manual_numbers:
+            numbers = manual_numbers
+        else:
+            numbers, verify_match_keys = numbers_from_pred_file(target_date)
+        if not numbers:
+            print(f"[cloud] {day_str} 无预测文件可验证, 退出")
+            return 0
+        print(f"[cloud] 从预测文件提取 {len(numbers)} 场: {','.join(numbers)}")
     else:
-        code_date, weekday, day_str = target_date.strftime("%y%m%d"), "", target_date.strftime("%Y-%m-%d")
-        numbers = []
-        print(f"[cloud] {day_str} 无开盘场次检测不到(verify/update 可用手动编号)")
+        # predict/update: 从当日开盘检测
+        detected = fetch_today_matches(target_date)
+        if detected:
+            code_date, weekday, numbers, day_str = detected
+            print(f"[cloud] 检测到 {day_str} ({weekday}) 开盘 {len(numbers)} 场: {','.join(numbers)}")
+        else:
+            code_date, weekday, day_str = target_date.strftime("%y%m%d"), "", target_date.strftime("%Y-%m-%d")
+            numbers = []
+            print(f"[cloud] {day_str} 无开盘场次检测不到(update 可用手动编号)")
 
-    if manual_numbers:
-        numbers = manual_numbers
-    if not numbers:
-        numbers = numbers_from_pred_file(target_date)
-        if numbers:
-            print(f"[cloud] 从预测文件回退提取 {len(numbers)} 场: {','.join(numbers)}")
-    if not numbers:
-        print(f"[cloud] {day_str} 无场次可处理, 退出")
-        return 0
+        if manual_numbers:
+            numbers = manual_numbers
+        if not numbers:
+            numbers, verify_match_keys = numbers_from_pred_file(target_date)
+            if numbers:
+                print(f"[cloud] 从预测文件回退提取 {len(numbers)} 场: {','.join(numbers)}")
+        if not numbers:
+            print(f"[cloud] {day_str} 无场次可处理, 退出")
+            return 0
 
     print(f"[cloud] 模式={args.mode} 日期={day_str} 场次={','.join(numbers)}")
     if args.dry_run:
@@ -154,7 +200,9 @@ def main():
         return rc
     if args.mode == "update":
         return run([sys.executable, "v215_update.py", day_str, ",".join(numbers)])
-    # verify
+    # verify: 优先用从预测文件提取的 match_key (避免日期/星期偏移)
+    if verify_match_keys:
+        return run([sys.executable, "v215_verify.py", ",".join(verify_match_keys)])
     return run([sys.executable, "v215_verify.py", f"{day_str} {','.join(numbers)}"])
 
 
