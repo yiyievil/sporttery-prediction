@@ -93,37 +93,72 @@ DB_PATH = os.path.join(PREDICTIONS_DIR, 'regression.db')
 def find_match_keys_by_date(target_date, target_nums):
     """从预测文件中按比赛日期查找match_key
 
-    体彩的match_key(如'周四001')基于开盘日星期, 不基于比赛实际日期。
-    从预测文件按比赛实际日期反查是最可靠的方式, 不受星期前缀偏移影响。
+    体彩的match_key(如'周四001')基于开盘日(businessDate)星期,
+    但比赛实际日期(match_date)可能比开盘日晚1天。
+    例如: 260812(周三)体彩开盘, 比赛实际在8月13日进行,
+    预测文件名为 pred_20260813_周三.json, match_key=周三001。
+
+    搜索策略: target_date ±1天, 评分优先(匹配数>前缀一致),
+    避免"周三001"匹配到上周的周二003。
 
     Args:
-        target_date: 比赛日期 '2026-07-31'
+        target_date: 用户输入的日期 '2026-08-12' (通常是体彩开盘日)
         target_nums: 比赛编号列表 ['001', '002', '003']
     Returns:
         [match_key, ...] 按用户输入顺序, 或 None
     """
     if not os.path.exists(PREDICTIONS_DIR):
         return None
+
+    # 体彩开盘日与比赛实际日期可能差1天, 搜索 ±1 天
+    try:
+        dt = datetime.strptime(target_date, '%Y-%m-%d')
+        weekday_cn = ['一', '二', '三', '四', '五', '六', '日']
+        expected_prefix = f"周{weekday_cn[dt.weekday()]}"
+        search_dates = [target_date,
+                        (dt + timedelta(days=1)).strftime('%Y-%m-%d'),
+                        (dt - timedelta(days=1)).strftime('%Y-%m-%d')]
+    except Exception:
+        search_dates = [target_date]
+        expected_prefix = None
+
     pred_files = sorted([f for f in os.listdir(PREDICTIONS_DIR)
                          if f.startswith('pred_') and f.endswith('.json')],
                         reverse=True)
+
+    best_matched = None
+    best_score = -1  # 评分: 匹配数 × 10 + 前缀一致数
+
     for pf in pred_files:
         filepath = os.path.join(PREDICTIONS_DIR, pf)
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-        except:
+        except Exception:
             continue
         meta = data.get('meta', {})
-        matched = {}
-        for key, m in meta.items():
-            if m.get('match_date', '') != target_date:
-                continue
-            num_m = re.search(r'(\d{3})$', key)
-            if num_m and num_m.group(1) in target_nums:
-                matched[num_m.group(1)] = key
-        if matched:
-            return [matched[n] for n in target_nums if n in matched]
+
+        for search_date in search_dates:
+            matched = {}
+            prefix_ok = 0
+            for key, m in meta.items():
+                if m.get('match_date', '') != search_date:
+                    continue
+                num_m = re.search(r'(\d{3})$', key)
+                if num_m and num_m.group(1) in target_nums:
+                    matched[num_m.group(1)] = key
+                    if expected_prefix and key.startswith(expected_prefix):
+                        prefix_ok += 1
+
+            if matched:
+                # 评分: 匹配数权重更高, 前缀一致作为加分项
+                score = len(matched) * 10 + prefix_ok
+                if score > best_score:
+                    best_score = score
+                    best_matched = matched
+
+    if best_matched:
+        return [best_matched[n] for n in target_nums if n in best_matched]
     return None
 
 
