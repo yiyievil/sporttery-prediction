@@ -1,0 +1,842 @@
+{
+  "ts": 1786620493.7820673,
+  "matches": [
+    {
+      "game_id": "111445685490",
+      "home": "杜保尔",
+      "away": "贝尔格莱德游击",
+      "time": "23:00",
+      "league": "欧协联",
+      "date": "2026-08-13",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "112218531606",
+      "home": "葡萄牙女足U17",
+      "away": "英格兰女足U17",
+      "time": "23:30",
+      "league": "国际赛八月",
+      "date": "2026-08-13",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "112273283288",
+      "home": "葡萄牙女足U20",
+      "away": "英格兰女足U20",
+      "time": "23:30",
+      "league": "国际赛八月",
+      "date": "2026-08-13",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111431682252",
+      "home": "埃尔维斯",
+      "away": "里耶卡",
+      "time": "00:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111432230038",
+      "home": "塔林弗洛拉",
+      "away": "伊斯卡尔德斯",
+      "time": "00:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111438542312",
+      "home": "卡拉巴克",
+      "away": "基辅迪纳摩",
+      "time": "00:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111161528770",
+      "home": "艾卜哈",
+      "away": "哈森姆",
+      "time": "00:15",
+      "league": "沙特联第1轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "112292940000",
+      "home": "阿曼U17",
+      "away": "巴林U17",
+      "time": "00:15",
+      "league": "国际赛八月",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "112293442070",
+      "home": "阿曼U20",
+      "away": "叙利亚U20",
+      "time": "00:15",
+      "league": "国际赛八月",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111439572446",
+      "home": "里加足球学院",
+      "away": "亚布洛内茨",
+      "time": "00:30",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111380941204",
+      "home": "克拉约瓦大学",
+      "away": "古比斯",
+      "time": "01:00",
+      "league": "欧联杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111381845826",
+      "home": "帕福斯FC",
+      "away": "萨尔茨堡红牛",
+      "time": "01:00",
+      "league": "欧联杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111382879960",
+      "home": "奥莫尼亚",
+      "away": "林肯红魔",
+      "time": "01:00",
+      "league": "欧联杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111386823681",
+      "home": "扎布热矿工",
+      "away": "费伦茨瓦罗斯",
+      "time": "01:00",
+      "league": "欧联杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111389108752",
+      "home": "贝西克塔斯",
+      "away": "赫拉德茨",
+      "time": "01:00",
+      "league": "欧联杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111421774893",
+      "home": "明斯克迪纳摩",
+      "away": "布拉加",
+      "time": "01:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111424487170",
+      "home": "多瑙斯特雷达",
+      "away": "特温特",
+      "time": "01:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111430912218",
+      "home": "哈马比",
+      "away": "琴斯托霍瓦",
+      "time": "01:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111433511488",
+      "home": "中日德兰",
+      "away": "波希米亚人",
+      "time": "01:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111434727299",
+      "home": "ML麦克斯林",
+      "away": "巴尼亚卢卡战士",
+      "time": "01:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111436844751",
+      "home": "北西兰",
+      "away": "瓦鲁尔",
+      "time": "01:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111446360840",
+      "home": "特罗姆瑟",
+      "away": "克卢日",
+      "time": "01:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111379111263",
+      "home": "维京古",
+      "away": "图恩",
+      "time": "01:30",
+      "league": "欧联杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111383388974",
+      "home": "克拉克斯维克",
+      "away": "波兹南莱赫",
+      "time": "01:30",
+      "league": "欧联杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111437596313",
+      "home": "NSI鲁纳维克",
+      "away": "卢加诺",
+      "time": "01:30",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111447193758",
+      "home": "瓦杜兹",
+      "away": "图尔库国际",
+      "time": "01:30",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111162346104",
+      "home": "德拉伊耶",
+      "away": "吉达国民",
+      "time": "02:00",
+      "league": "沙特联第1轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111163453678",
+      "home": "利雅得青年人",
+      "away": "卡迪西亚",
+      "time": "02:00",
+      "league": "沙特联第1轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111388464166",
+      "home": "索非亚中央陆军",
+      "away": "特拉维夫马卡比",
+      "time": "02:00",
+      "league": "欧联杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111423970049",
+      "home": "德利塔",
+      "away": "泰科奥里",
+      "time": "02:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111441567115",
+      "home": "斯肯迪亚",
+      "away": "希伯尼安",
+      "time": "02:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111444482724",
+      "home": "圣加仑",
+      "away": "谢里夫",
+      "time": "02:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111442872785",
+      "home": "锡永",
+      "away": "诺亚FC",
+      "time": "02:15",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111390482037",
+      "home": "安德莱赫特",
+      "away": "塞萨洛尼基",
+      "time": "02:30",
+      "league": "欧联杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111391318499",
+      "home": "流浪者",
+      "away": "乔治罗尼亚",
+      "time": "02:30",
+      "league": "欧联杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111419896540",
+      "home": "奥地利维也纳",
+      "away": "贝塔耶路撒冷",
+      "time": "02:30",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111426710638",
+      "home": "根特",
+      "away": "哥德堡",
+      "time": "02:30",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111428318217",
+      "home": "吉奥里",
+      "away": "里加FC",
+      "time": "02:30",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111435898293",
+      "home": "马瑟韦尔",
+      "away": "赫尔辛基",
+      "time": "02:30",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111385797147",
+      "home": "哈茨",
+      "away": "本菲卡",
+      "time": "02:45",
+      "league": "欧联杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111440112029",
+      "home": "舒尔本",
+      "away": "阿贾克斯",
+      "time": "02:45",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111387322935",
+      "home": "埃格纳蒂亚",
+      "away": "沙姆洛克",
+      "time": "03:00",
+      "league": "欧联杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111422461847",
+      "home": "地拉那迪纳摩",
+      "away": "奥达里加",
+      "time": "03:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111429280191",
+      "home": "哈伊杜克",
+      "away": "萨尔格里斯",
+      "time": "03:00",
+      "league": "欧协联",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111909200238",
+      "home": "美国女足U17",
+      "away": "墨西哥女足U17",
+      "time": "05:00",
+      "league": "国际赛八月",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110985395080",
+      "home": "米拉索",
+      "away": "基多大学体育",
+      "time": "06:00",
+      "league": "解放者杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111910511595",
+      "home": "智利女足U17",
+      "away": "加拿大女足U17",
+      "time": "08:00",
+      "league": "国际赛八月",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110986125394",
+      "home": "罗萨里奥中央",
+      "away": "科林蒂安",
+      "time": "08:30",
+      "league": "解放者杯",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "112294715093",
+      "home": "中国香港女足U17",
+      "away": "马来西亚女足U17",
+      "time": "16:00",
+      "league": "国际赛八月",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110709192513",
+      "home": "东京绿茵",
+      "away": "柏太阳神",
+      "time": "18:00",
+      "league": "日职联第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110710203812",
+      "home": "山东泰山",
+      "away": "青岛海牛",
+      "time": "19:35",
+      "league": "中超第23轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110711473842",
+      "home": "武汉三镇",
+      "away": "上海海港",
+      "time": "19:35",
+      "league": "中超第23轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110712849704",
+      "home": "青岛西海岸",
+      "away": "重庆铜梁龙",
+      "time": "20:00",
+      "league": "中超第23轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "112295836483",
+      "home": "印尼女足U17",
+      "away": "沙特阿拉伯女足U17",
+      "time": "21:00",
+      "league": "国际赛八月",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110713615358",
+      "home": "VPS瓦萨",
+      "away": "TPS图尔库",
+      "time": "23:00",
+      "league": "芬超第20轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110778663440",
+      "home": "布伦瑞克",
+      "away": "波鸿",
+      "time": "00:30",
+      "league": "德乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110780416749",
+      "home": "基尔",
+      "away": "圣保利",
+      "time": "00:30",
+      "league": "德乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111164411885",
+      "home": "新未来城体育",
+      "away": "费哈",
+      "time": "00:50",
+      "league": "沙特联第1轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110726986002",
+      "home": "罗森博格",
+      "away": "维京",
+      "time": "01:00",
+      "league": "挪超第18轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110926159480",
+      "home": "埃夫斯堡",
+      "away": "瓦斯特拉斯",
+      "time": "01:00",
+      "league": "瑞典超第17轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110727919108",
+      "home": "阿尔梅勒城",
+      "away": "埃因霍温青年队",
+      "time": "02:00",
+      "league": "荷乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110728276501",
+      "home": "FC埃因霍温",
+      "away": "马斯特里赫特",
+      "time": "02:00",
+      "league": "荷乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110729762883",
+      "home": "赫拉克勒",
+      "away": "邓博施",
+      "time": "02:00",
+      "league": "荷乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110730702694",
+      "home": "布雷达",
+      "away": "芬洛",
+      "time": "02:00",
+      "league": "荷乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110731240368",
+      "home": "罗达JC",
+      "away": "赫尔蒙德",
+      "time": "02:00",
+      "league": "荷乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110732178346",
+      "home": "瓦尔韦克",
+      "away": "多德勒支",
+      "time": "02:00",
+      "league": "荷乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110733717660",
+      "home": "特尔斯达",
+      "away": "鹿斯巴达",
+      "time": "02:00",
+      "league": "荷甲第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111165516411",
+      "home": "达曼协作",
+      "away": "利雅得体育",
+      "time": "02:00",
+      "league": "沙特联第1轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "111166638401",
+      "home": "利雅新月",
+      "away": "费萨里哈曼",
+      "time": "02:00",
+      "league": "沙特联第1轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110949897071",
+      "home": "皇家社会B队",
+      "away": "卡斯迪隆",
+      "time": "02:30",
+      "league": "西乙第1轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110734993503",
+      "home": "昂纳西",
+      "away": "罗德兹",
+      "time": "02:45",
+      "league": "法乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110735814345",
+      "home": "第戎",
+      "away": "波城",
+      "time": "02:45",
+      "league": "法乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110736482643",
+      "home": "格勒诺布尔",
+      "away": "梅斯",
+      "time": "02:45",
+      "league": "法乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110737609733",
+      "home": "甘冈",
+      "away": "布洛涅",
+      "time": "02:45",
+      "league": "法乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110738159252",
+      "home": "拉瓦勒",
+      "away": "南特",
+      "time": "02:45",
+      "league": "法乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110739363522",
+      "home": "南锡",
+      "away": "蒙彼利埃",
+      "time": "02:45",
+      "league": "法乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110740415553",
+      "home": "红星",
+      "away": "索肖",
+      "time": "02:45",
+      "league": "法乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110741536951",
+      "home": "兰斯",
+      "away": "敦刻尔克",
+      "time": "02:45",
+      "league": "法乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110742745517",
+      "home": "圣埃蒂安",
+      "away": "克莱蒙",
+      "time": "02:45",
+      "league": "法乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110743589019",
+      "home": "狼队",
+      "away": "布莱克本",
+      "time": "03:00",
+      "league": "英冠第1轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110744690392",
+      "home": "葡萄牙体育",
+      "away": "吉马良斯",
+      "time": "03:15",
+      "league": "葡超第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110747594114",
+      "home": "鹿岛鹿角",
+      "away": "名古屋鲸",
+      "time": "17:00",
+      "league": "日职联第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110748264211",
+      "home": "水户蜀葵",
+      "away": "大阪钢巴",
+      "time": "17:00",
+      "league": "日职联第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110749243237",
+      "home": "秋田蓝闪电",
+      "away": "富山胜利",
+      "time": "17:00",
+      "league": "日职乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110750681728",
+      "home": "枥木市FC",
+      "away": "八户于南乡",
+      "time": "17:00",
+      "league": "日职乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110751184278",
+      "home": "清水鼓动",
+      "away": "横滨水手",
+      "time": "17:30",
+      "league": "日职联第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110752740972",
+      "home": "藤枝MYFC",
+      "away": "磐城FC",
+      "time": "17:30",
+      "league": "日职乙第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110753374106",
+      "home": "冈山绿雉",
+      "away": "长崎成功丸",
+      "time": "17:55",
+      "league": "日职联第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110754719641",
+      "home": "千叶市原",
+      "away": "町田泽维",
+      "time": "18:00",
+      "league": "日职联第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110755858543",
+      "home": "川崎前锋",
+      "away": "京都",
+      "time": "18:00",
+      "league": "日职联第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110756848405",
+      "home": "浦和红钻",
+      "away": "广岛三箭",
+      "time": "18:00",
+      "league": "日职联第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110757616131",
+      "home": "神户胜利",
+      "away": "东京FC",
+      "time": "18:00",
+      "league": "日职联第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    },
+    {
+      "game_id": "110758748338",
+      "home": "福冈黄蜂",
+      "away": "大阪樱花",
+      "time": "18:00",
+      "league": "日职联第2轮 联赛",
+      "date": "2026-08-14",
+      "status": "scheduled"
+    }
+  ]
+}
