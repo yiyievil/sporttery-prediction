@@ -26,8 +26,14 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-SPORTTERY_URL = "https://webapi.sporttery.cn/gateway/uniform/football/getMatchListV1.qry?clientCode=3001"
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+# Ultra 8.2: Calculator API 优先 (不受 WAF 567 拦截), MatchList API 兜底
+SPORTTERY_URL = "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had,crs,ttg,hafu&channel=c"
+SPORTTERY_URL_FALLBACK = "https://webapi.sporttery.cn/gateway/uniform/football/getMatchListV1.qry?clientCode=3001"
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    "Referer": "https://www.sporttery.cn/jc/jsq/zqspf/",
+    "Accept": "application/json",
+}
 BJT = timezone(timedelta(hours=8))  # 北京时间
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -40,26 +46,66 @@ def now_bjt():
 def fetch_today_matches(target_date=None):
     """从体彩API获取指定日期(缺省=今日, 北京时间)的开盘场次
 
+    Ultra 8.2: Calculator API 优先 (不受 WAF 567 拦截), MatchList API 兜底
+
     返回: (code_date '260811', weekday '周二', numbers ['001','002',...], match_date 'YYYY-MM-DD')
     无开盘场次时返回 None
     """
     day = target_date or now_bjt().date()
     day_str = day.strftime("%Y-%m-%d")
-    try:
-        r = requests.get(SPORTTERY_URL, headers=HEADERS, timeout=20)
-        data = r.json()
-    except Exception as e:
-        print(f"[cloud] sporttery API 请求失败: {e}")
+
+    def _parse_calculator(data):
+        """解析 Calculator API 响应 (matchNum 为 4位如 '4001')"""
+        for mi in (data.get("value") or {}).get("matchInfoList", []) or []:
+            if mi.get("businessDate") != day_str:
+                continue
+            subs = mi.get("subMatchList", []) or []
+            if not subs:
+                continue
+            # Calculator API: matchNum 为 4位 (如 '4001'), 取后3位
+            numbers = sorted({str(s.get("matchNum", ""))[-3:] for s in subs if s.get("matchNum")})
+            if not numbers:
+                return None
+            return day.strftime("%y%m%d"), mi.get("weekday", ""), numbers, day_str
         return None
 
-    for mi in (data.get("value") or {}).get("matchInfoList", []) or []:
-        if mi.get("businessDate") != day_str:
-            continue
-        subs = mi.get("subMatchList", []) or []
-        numbers = sorted({str(s.get("matchNum", ""))[-3:] for s in subs if s.get("matchNum")})
-        if not numbers:
-            return None
-        return day.strftime("%y%m%d"), mi.get("weekday", ""), numbers, day_str
+    def _parse_matchlist(data):
+        """解析 MatchList API 响应 (matchNum 为 3位如 '001')"""
+        for mi in (data.get("value") or {}).get("matchInfoList", []) or []:
+            if mi.get("businessDate") != day_str:
+                continue
+            subs = mi.get("subMatchList", []) or []
+            numbers = sorted({str(s.get("matchNum", ""))[-3:] for s in subs if s.get("matchNum")})
+            if not numbers:
+                return None
+            return day.strftime("%y%m%d"), mi.get("weekday", ""), numbers, day_str
+        return None
+
+    # 1) 主 API: Calculator API (不受 WAF 567)
+    try:
+        r = requests.get(SPORTTERY_URL, headers=HEADERS, timeout=20)
+        if r.status_code == 200:
+            result = _parse_calculator(r.json())
+            if result:
+                return result
+            print(f"[cloud] Calculator API 返回200但无数据, 尝试回退...")
+        else:
+            print(f"[cloud] Calculator API HTTP {r.status_code}, 尝试回退...")
+    except Exception as e:
+        print(f"[cloud] Calculator API 请求失败: {e}, 尝试回退...")
+
+    # 2) 回退: MatchList API (可能被 WAF 567)
+    try:
+        r = requests.get(SPORTTERY_URL_FALLBACK, headers=HEADERS, timeout=20)
+        if r.status_code == 200:
+            result = _parse_matchlist(r.json())
+            if result:
+                return result
+        else:
+            print(f"[cloud] MatchList API HTTP {r.status_code}")
+    except Exception as e:
+        print(f"[cloud] MatchList API 请求失败: {e}")
+
     return None
 
 

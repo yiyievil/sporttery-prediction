@@ -219,11 +219,21 @@ def apply_cli_match_input():
             MATCH_NUMBERS = [f[1] for f in full]
             print(f"  [输入] 编号日期 {full[0][0]} → {wd}, 场次 {MATCH_NUMBERS}")
             return
-    # 形式2: 编号日期+场次 260728 001,002
-    m = re.match(r'^(\d{6})\s+([0-9,\s]+)$', text)
+    # 形式2: 编号日期+场次 260728 001,002 或 260728 001-010
+    m = re.match(r'^(\d{6})\s+([0-9,\s\-]+)$', text)
     if m:
         d, wd = parse_code_date(m.group(1))
-        nums = [x[-3:] for x in re.split(r'[,\s]+', m.group(2).strip()) if x]
+        raw = m.group(2).strip()
+        nums = []
+        # 处理范围: 001-010
+        for part in re.split(r'[,\s]+', raw):
+            part = part.strip()
+            if '-' in part:
+                rng = part.split('-')
+                if len(rng) == 2 and rng[0].isdigit() and rng[1].isdigit():
+                    nums.extend(str(i).zfill(3) for i in range(int(rng[0]), int(rng[1]) + 1))
+            elif part.isdigit():
+                nums.append(part.zfill(3))
         if wd and nums:
             TARGET_WEEKDAY = wd
             MATCH_NUMBERS = nums
@@ -374,8 +384,12 @@ def stars_to_score(stars_str):
 
 # ============================================================
 # Phase 1: sporttery.cn API — 体彩核心: 获取场次+赔率+队名+开赛时间 (预测基准)
+# Ultra 8.2: 从 getMatchListV1 切换到 getMatchCalculatorV1
+#   getMatchListV1.qry 被 WAF 拦截 (HTTP 567, 数据中心 IP geo-block)
+#   getMatchCalculatorV1.qry 不受此限制, 且直接返回 HAD/HHAD 赔率、
+#   单关标识、排名、赔率趋势等增强字段, 无需二次请求 enrich
 # ============================================================
-SPORTTERY_URL = "https://webapi.sporttery.cn/gateway/uniform/football/getMatchListV1.qry?clientCode=3001"
+SPORTTERY_URL = "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had,crs,ttg,hafu&channel=c"
 SPORTTERY_HEADERS = {
     'User-Agent': 'Mozilla/5.0',
     'Referer': 'https://www.sporttery.cn/jc/jsq/zqspf/',
@@ -430,56 +444,71 @@ def fetch_with_retry(url, headers, timeout=10, max_retries=2, encoding=None, par
     return r
 
 def fetch_sporttery_matches(match_numbers, target_date=None):
-    """从 sporttery.cn API 获取指定场次的赔率和基本信息
-    Key格式: '周X编号' (如 '周四201')，避免不同天同号覆盖
-    target_date: 若指定则只保留该日期的比赛
+    """从 sporttery.cn Calculator API 获取指定场次的赔率和基本信息
+    Ultra 8.2: 使用 getMatchCalculatorV1.qry (不受 WAF 拦截)
+    返回格式: Key='周X编号' (如 '周四001'), 避免不同天同号覆盖
     
-    若比赛已结束(getMatchListV1不再返回), 自动回退到结果API获取赔率
+    Calculator API 直接返回:
+      had.h/d/a, hhad.h/d/a (含 goalLine), bettingSingle,
+      homeRank, awayRank, hadTrend, hhadTrend
+    无需二次 enrich_sporttery_extra 请求
     """
     try:
         r = fetch_with_retry(SPORTTERY_URL, SPORTTERY_HEADERS)
         data = r.json()
     except Exception as e:
-        print(f"  [错误] sporttery 主API请求/解析失败: {e}")
+        print(f"  [错误] sporttery Calculator API 请求/解析失败: {e}")
         return {}
     
     matches = {}
-    for mi in (data.get('value') or {}).get('matchInfoList', []) or []:
-        weekday = mi.get('weekday', '')
-        for s in mi.get('subMatchList', []) or []:
+    for g in (data.get('value') or {}).get('matchInfoList', []) or []:
+        weekday = g.get('weekday', '')
+        for s in g.get('subMatchList', []) or []:
             try:
-                full_num = str(s.get('matchNum', ''))
-                match_num = full_num[-3:] if full_num else ''
+                # Calculator API: matchNumStr = "周四001", matchNum = "001"
+                match_num = str(s.get('matchNum', '') or '')
+                if not match_num:
+                    continue
+                match_num = match_num[-3:]  # 取后3位
                 
                 if match_num not in match_numbers:
                     continue
                 
                 match_date = s.get('matchDate', '')
-                # 日期过滤 (统一为字符串比较, 避免 date 对象与字符串恒不等)
                 if target_date and match_date != str(target_date):
                     continue
                 
-                # Key: 周X+编号 (如 '周四201')
                 key = f"{weekday}{match_num}"
-                # 同键去重保护: 若已有更晚的 matchDate 则跳过, 否则覆盖
                 if key in matches and matches[key].get('match_date', '') >= match_date:
                     continue
                 
-                had = hhad = {}
-                had_in_list = False  # Ultra 7.10: 跟踪体彩API是否实际返回HAD盘口
-                for o in s.get('oddsList', []) or []:
-                    if o.get('poolCode') == 'HAD':
-                        had = {'h': float(o.get('h') or 0), 'd': float(o.get('d') or 0),
-                               'a': float(o.get('a') or 0)}
-                        had_in_list = True
-                    elif o.get('poolCode') == 'HHAD':
-                        hhad = {'h': float(o.get('h') or 0), 'd': float(o.get('d') or 0),
-                                'a': float(o.get('a') or 0),
-                                'goalLine': float(o.get('goalLine', 0) or 0)}
-
+                # Calculator API 赔率字段: had/hhad 直接返回 (字符串, 需转float)
+                had_raw = s.get('had') or {}
+                hhad_raw = s.get('hhad') or {}
+                
+                had = {}
+                if had_raw.get('h'):
+                    had = {'h': float(had_raw['h']), 'd': float(had_raw.get('d', 0)),
+                           'a': float(had_raw.get('a', 0))}
+                
+                hhad = {}
+                if hhad_raw.get('h'):
+                    hhad = {'h': float(hhad_raw['h']), 'd': float(hhad_raw.get('d', 0)),
+                            'a': float(hhad_raw.get('a', 0)),
+                            'goalLine': float(hhad_raw.get('goalLine', 0) or 0)}
+                
+                # 趋势标志 (涨跌: 1=升 0=平 -1=降)
+                def _tr(flag):
+                    return {'1': '↑', '0': '→', '-1': '↓'}.get(str(flag or '').strip(), '')
+                had_trend = f"{_tr(had_raw.get('hf'))}{_tr(had_raw.get('df'))}{_tr(had_raw.get('af'))}"
+                hhad_trend = f"{_tr(hhad_raw.get('hf'))}{_tr(hhad_raw.get('df'))}{_tr(hhad_raw.get('af'))}"
+                
+                # 单关标识: Calculator API 返回整数 0/1
+                betting_single = int(s.get('bettingSingle', 0) or 0) == 1
+                
                 matches[key] = {
                     'match_num': match_num,
-                    'full_num': full_num,
+                    'full_num': s.get('matchNumStr', '') or f"{weekday}{match_num}",
                     'weekday': weekday,
                     'key': key,
                     'match_id': s.get('matchId'),
@@ -487,25 +516,30 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
                     'home': s.get('homeTeamAbbName', ''),
                     'away': s.get('awayTeamAbbName', ''),
                     'match_date': match_date,
-                    'match_time': s.get('matchTime', ''),
+                    'match_time': (s.get('matchTime', '') or '')[:5],  # "00:15:00" → "00:15"
                     'HAD': had,
                     'HHAD': hhad,
-                    'had_in_list': had_in_list,  # Ultra 7.10: HAD是否在体彩开盘列表
-                    'data_source': 'sporttery',  # 核心赔率来源
+                    'had_in_list': bool(had),  # Calculator API 始终有 HAD
+                    'data_source': 'sporttery',
+                    # 增强字段 (原 enrich_sporttery_extra 的功能)
+                    'betting_single': betting_single,
+                    'home_rank': s.get('homeRank') or '',
+                    'away_rank': s.get('awayRank') or '',
+                    'had_trend': had_trend,
+                    'hhad_trend': hhad_trend,
                 }
             except Exception as _e:
-                print(f"  [错误] 解析场次 {s.get('matchNum', '?')} 失败, 跳过: {_e}")
+                print(f"  [错误] 解析场次 {s.get('matchNumStr', '?')} 失败, 跳过: {_e}")
                 continue
     
-    # 周几过滤: 如果指定了TARGET_WEEKDAY, 只保留该周几的比赛
+    # 周几过滤
     if TARGET_WEEKDAY:
         matches = {k: v for k, v in matches.items() if v.get('weekday', '') == TARGET_WEEKDAY}
         if not matches:
-            print(f"  [过滤] match list API中无{TARGET_WEEKDAY}的比赛编号 {match_numbers}")
+            print(f"  [过滤] Calculator API 中无{TARGET_WEEKDAY}的比赛编号 {match_numbers}")
 
-    # 回退: 如果match list API没找到, 从结果API获取(仅限已完赛场次)
+    # 回退: 如果 Calculator API 没找到, 从结果API获取
     if not matches:
-        # 从编号日期解析目标日期 (如 260729 → 2026-07-29)
         _target_date_str = None
         _cli_args = [a for a in sys.argv[1:] if a.strip()]
         if _cli_args:
@@ -525,8 +559,6 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
         if _target_date_str:
             print(f"  [回退] 从结果API获取 (目标日期: {_target_date_str})...")
             matches = fetch_sporttery_matches_from_results(match_numbers, target_date=_target_date_str)
-            # 结果API已在±1天窗口内查询, 优先按周几前缀匹配(如"周一201"匹配TARGET_WEEKDAY="周一")
-            # 若周几匹配有结果则直接采用; 否则回退到精确日期匹配
             if matches:
                 _before = len(matches)
                 if TARGET_WEEKDAY:
@@ -536,37 +568,32 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
                         matches = _weekday_matches
                         print(f"  [回退] 结果API按周几匹配({TARGET_WEEKDAY}): {len(matches)}场")
                     else:
-                        # 周几不匹配时, 尝试精确日期匹配
                         _date_matches = {k: v for k, v in matches.items()
                                    if v.get('match_date', '') == _target_date_str}
                         if _date_matches:
                             matches = _date_matches
                             print(f"  [回退] 结果API精确匹配 {_target_date_str}: {len(matches)}场")
                         else:
-                            # 周几和精确日期都不匹配 → 中止预测 (Ultra 7.6 / Bug-1修复)
-                            # 旧逻辑: 保留结果继续预测, 导致预测了其他日期可能已完赛的比赛
                             _wd_list = [v.get('weekday','') for v in matches.values()]
                             _md_list = [v.get('match_date','') for v in matches.values()]
                             print(f"  [回退] ❌ 编号 {match_numbers} 在 {TARGET_WEEKDAY}({_target_date_str}) 不存在, 中止预测!")
                             print(f"         结果API匹配到的实为: 周几={set(_wd_list)}, 比赛日={set(_md_list)}")
-                            print(f"         如确需预测这些比赛, 请用对应编号日期重新输入")
-                            matches = {}  # 清空, 触发下方"可用编号"提示并中止
+                            matches = {}
                 else:
                     print(f"  [回退] 结果API匹配: {len(matches)}场")
         else:
             print(f"  [回退] 无法解析目标日期, 从结果API获取最近7天...")
             matches = fetch_sporttery_matches_from_results(match_numbers)
         
-        # 最终检查: 仍然没找到 → 列出当日可用编号
         if not matches:
             _available_nums = []
             try:
                 _r = fetch_with_retry(SPORTTERY_URL, SPORTTERY_HEADERS)
                 _data = _r.json()
-                for mi in _data['value']['matchInfoList']:
-                    if mi.get('weekday', '') == TARGET_WEEKDAY:
-                        for s in mi['subMatchList']:
-                            _available_nums.append(str(s['matchNum'])[-3:])
+                for g in _data['value']['matchInfoList']:
+                    if g.get('weekday', '') == TARGET_WEEKDAY:
+                        for s in g['subMatchList']:
+                            _available_nums.append(str(s.get('matchNum', ''))[-3:])
             except:
                 pass
             if _available_nums:
@@ -578,45 +605,22 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
     return matches
 
 
-# 竞彩官方计算器API (含单关标识/排名/赔率趋势标志, getMatchListV1没有这些字段)
-SPORTTERY_CALC_URL = "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?clientCode=3001"
-
-
+# 竞彩官方计算器API — Ultra 8.2: 已合并到主 API (SPORTTERY_URL)
+# enrich_sporttery_extra 不再需要单独请求, Calculator API 已直接返回
+# bettingSingle / homeRank / awayRank / hadTrend / hhadTrend
 def enrich_sporttery_extra(matches):
-    """用官方计算器API补充: 单关标识 bettingSingle / 联赛排名 / 赔率趋势标志
-
-    趋势标志: 官方对每个赔率给出涨跌标记 (1=升 0=平 -1=降),
-    可与我们基于快照的趋势推断交叉校验 (借鉴 SportteryAPI parse.ts)
+    """Ultra 8.2: 无需额外请求 (Calculator API 已含增强字段)
+    
+    保留此函数以兼容旧调用链, 不执行任何操作。
+    增强字段已由 fetch_sporttery_matches 直接注入:
+      betting_single, home_rank, away_rank, had_trend, hhad_trend
     """
     if not matches:
         return
-    try:
-        r = fetch_with_retry(SPORTTERY_CALC_URL, SPORTTERY_HEADERS)
-        data = r.json()
-    except Exception:
-        return
-
-    def _tr(flag):
-        return {'1': '↑', '0': '→', '-1': '↓'}.get(str(flag or '').strip(), '')
-
-    extra = {}
-    for mi in data.get('value', {}).get('matchInfoList', []):
-        for s in mi.get('subMatchList', []):
-            had = s.get('had') or {}
-            extra[s.get('matchId')] = {
-                'betting_single': str(s.get('bettingSingle', '0')) == '1',
-                'home_rank': s.get('homeRank') or '',
-                'away_rank': s.get('awayRank') or '',
-                'had_trend': f"{_tr(had.get('hf'))}{_tr(had.get('df'))}{_tr(had.get('af'))}",
-            }
-    n = 0
-    for m in matches.values():
-        e = extra.get(m.get('match_id'))
-        if e:
-            m.update(e)
-            n += 1
+    # 增强字段已在 fetch_sporttery_matches 中注入, 此处仅打印确认
+    n = sum(1 for m in matches.values() if m.get('had_trend'))
     if n:
-        print(f"  [增强] 单关标识/排名/赔率趋势: {n}场")
+        print(f"  [增强] 单关标识/排名/赔率趋势: {n}场 (Calculator API 自带)")
 
 
 def fetch_sporttery_matches_from_results(match_numbers, target_date=None):

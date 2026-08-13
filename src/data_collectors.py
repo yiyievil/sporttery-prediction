@@ -1,12 +1,13 @@
 """football-prediction-pipeline · 数据采集层
 
-FBrefCollector  — FBref 比赛数据 (需Chrome, 环境不支持时自动降级)
+FBrefCollector  — FBref 比赛数据 (cloudscraper 直连 + proxy 降级)
 UnderstatCollector — Understat xG/xGA/PPDA 数据 (HTTP直连, 无需浏览器)
 EloBuilder       — 从比赛历史构建 Elo 评级时间序列
 """
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 import time
 
@@ -14,7 +15,8 @@ import pandas as pd
 
 from .config import (
     config, DB_PATH, LEAGUE_MAP, LEAGUE_MAP_REVERSE,
-    TEAM_NAME_MAP_REVERSE,
+    TEAM_NAME_MAP_REVERSE, FBREF_LEAGUE_MAP, FBREF_LEAGUE_MAP_REVERSE,
+    FBREF_CALENDAR_YEAR_LEAGUES,
 )
 
 logger = logging.getLogger("collectors")
@@ -161,48 +163,510 @@ class UnderstatCollector:
 
 
 # ============================================================
-# FBref 采集器 (需Chrome浏览器, 不支持时降级)
+# FBref 采集器 (cloudscraper 直连 + curl_cffi + proxy 三层回退)
 # ============================================================
 class FBrefCollector:
-    """从 FBref 抓取比赛数据和 xG 统计
+    """从 FBref 抓取比赛数据和 xG 统计 (StatsBomb 模型)
 
-    FBref 被 Cloudflare 保护, 需要 Chrome 浏览器。
-    环境不支持时自动降级为示例数据模式。
+    FBref 被 Cloudflare Turnstile 保护, 本采集器实现了三层回退策略:
+
+    1. cloudscraper 模式: 使用 cloudscraper 绕过 Cloudflare JS 挑战,
+       用 BeautifulSoup 解析 HTML 表格提取 xG 数据。
+       适用于有住宅 IP 或 cloudscraper 可用的环境。
+       数据标记 source_type='fbref_direct'。
+
+    2. curl_cffi 模式: 使用 curl_cffi 的 TLS 指纹伪装 (Chrome/Safari),
+       尝试绕过 Cloudflare。比 cloudscraper 更轻量。
+       数据标记 source_type='fbref_direct'。
+
+    3. proxy 模式 (兜底): 从 historical_matches 表读取实际进球,
+       按联赛计算均值作为 xG 代理。大样本下实际进球 ≈ xG (相关性 ~0.9),
+       代理模式在不牺牲方向正确性的前提下提供合理的 xG 估计。
+       数据标记 source_type='fbref_proxy'。
+
+    数据字段:
+        home_xg, away_xg          — 预期进球
+        home_goals, away_goals    — 实际进球
+        league_cn, season, match_date, home_team, away_team
     """
 
-    def __init__(self, seasons: list[str] | None = None):
+    # FBref 联赛名 → URL slug 映射 (用于构建 URL)
+    _FBREF_SLUG_MAP = {
+        "J1 League": "J1-League",
+        "J2 League": "J2-League",
+        "K League 1": "K-League-1",
+        "Major League Soccer": "Major-League-Soccer",
+        "Serie A": "Serie-A",           # 巴甲
+        "Primeira Liga": "Primeira-Liga",
+        "Eredivisie": "Eredivisie",
+        "Championship": "Championship",
+        "Saudi Pro League": "Saudi-Pro-League",
+        "A-League Men": "A-League-Men",
+        "Allsvenskan": "Allsvenskan",
+        "Eliteserien": "Eliteserien",
+        "Veikkausliiga": "Veikkausliiga",
+        "Chinese Super League": "Chinese-Super-League",
+        "Liga MX": "Liga-MX",
+        "Champions League": "Champions-League",
+        "Europa League": "Europa-League",
+        "Conference League": "Conference-League",
+        "League One": "League-One",
+        "2. Bundesliga": "2-Bundesliga",
+        "Ligue 2": "Ligue-2",
+        "Eerste Divisie": "Eerste-Divisie",
+        "Copa Libertadores": "Copa-Libertadores",
+    }
+
+    def __init__(self, seasons: list[str] | None = None,
+                 leagues: dict | None = None,
+                 mode: str = "auto"):
+        """初始化 FBref 采集器
+
+        Args:
+            seasons: 赛季列表, 默认 config.seasons
+            leagues: 联赛映射 {中文名: (sd_id, comp_id, fbref_name)},
+                     默认 FBREF_LEAGUE_MAP
+            mode: 采集模式
+                  "auto"  — 自动回退 (cloudscraper → curl_cffi → proxy)
+                  "cloudscraper" — 仅 cloudscraper
+                  "curl_cffi"    — 仅 curl_cffi
+                  "proxy"        — 仅 proxy
+        """
         self.seasons = seasons or config.seasons
+        self.leagues = leagues if leagues else FBREF_LEAGUE_MAP
+        self.mode = mode
         self._data: pd.DataFrame | None = None
         self._available = False
+        self._source_type = "fbref_proxy"  # 默认, 直连成功时更新
 
+    # ── 公共接口 ──────────────────────────────────────────
     def collect(self) -> pd.DataFrame:
-        """采集 FBref 赛程和球队统计"""
-        try:
-            import soccerdata as sd
-            fbref = sd.FBref(leagues=list(LEAGUE_MAP.values()),
-                             seasons=self.seasons)
-            schedule = fbref.read_schedule()
-            # 尝试获取 shooting 统计 (含 xG)
-            try:
-                shooting = fbref.read_team_season_stats(stat_type="shooting")
-            except Exception:
-                shooting = None
+        """采集 FBref 数据, 自动选择最佳模式"""
+        if self.mode == "proxy":
+            return self._collect_proxy()
+        elif self.mode == "cloudscraper":
+            return self._collect_cloudscraper()
+        elif self.mode == "curl_cffi":
+            return self._collect_curl_cffi()
+        else:  # auto
+            return self._collect_auto()
 
-            df = schedule.copy()
-            df["league_cn"] = df["league"].map(LEAGUE_MAP_REVERSE)
-            self._data = df
-            self._available = True
-            logger.info(f"  FBref: {len(df)} 场比赛")
-            return df
+    def _collect_auto(self) -> pd.DataFrame:
+        """自动模式: cloudscraper → curl_cffi → proxy"""
+        # 第1层: cloudscraper
+        logger.info("FBref: 尝试 cloudscraper 直连...")
+        try:
+            df = self._collect_cloudscraper()
+            if not df.empty:
+                return df
         except Exception as e:
-            logger.warning(f"  FBref 不可用 (需Chrome): {e}")
-            logger.info("  FBref 降级: 仅使用 Understat 数据")
-            self._available = False
+            logger.info(f"  cloudscraper 不可用: {e}")
+
+        # 第2层: curl_cffi
+        logger.info("FBref: 尝试 curl_cffi 直连...")
+        try:
+            df = self._collect_curl_cffi()
+            if not df.empty:
+                return df
+        except Exception as e:
+            logger.info(f"  curl_cffi 不可用: {e}")
+
+        # 第3层: proxy
+        logger.info("FBref: 降级到 proxy 模式")
+        return self._collect_proxy()
+
+    # ── cloudscraper 直连模式 ──────────────────────────────
+    def _collect_cloudscraper(self) -> pd.DataFrame:
+        """cloudscraper 直连: 绕过 Cloudflare JS 挑战, 解析 HTML 表格"""
+        import cloudscraper
+        from bs4 import BeautifulSoup
+
+        scraper = cloudscraper.create_scraper(
+            browser={'browser': 'chrome', 'platform': 'linux', 'mobile': False},
+            delay=10,
+        )
+
+        all_rows = []
+        success_count = 0
+
+        for cn_league, (sd_id, comp_id, fbref_name) in self.leagues.items():
+            for season in self.seasons:
+                url = self._build_fbref_url(comp_id, fbref_name, cn_league, season)
+                if not url:
+                    continue
+
+                try:
+                    resp = scraper.get(url, timeout=30)
+                    if resp.status_code != 200:
+                        logger.debug(f"  cloudscraper {cn_league} {season}: HTTP {resp.status_code}")
+                        continue
+                    if "Just a moment" in resp.text[:200]:
+                        logger.debug(f"  cloudscraper {cn_league} {season}: Turnstile 拦截")
+                        continue
+
+                    rows = self._parse_fbref_schedule(resp.text, cn_league, fbref_name, season)
+                    if rows:
+                        all_rows.extend(rows)
+                        success_count += 1
+                        logger.info(f"  cloudscraper ✓ {cn_league} {season}: {len(rows)} 场")
+                    time.sleep(2)
+
+                except Exception as e:
+                    logger.debug(f"  cloudscraper {cn_league} {season}: {e}")
+                    continue
+
+        if not all_rows:
+            raise Exception("cloudscraper: 未获取到任何数据 (所有联赛均被 Cloudflare 拦截)")
+
+        df = pd.DataFrame(all_rows)
+        self._data = df
+        self._available = True
+        self._source_type = "fbref_direct"
+        logger.info(f"  FBref cloudscraper 总计: {len(df)} 场比赛, {success_count} 个联赛-赛季")
+        return df
+
+    # ── curl_cffi 直连模式 ──────────────────────────────────
+    def _collect_curl_cffi(self) -> pd.DataFrame:
+        """curl_cffi 直连: TLS 指纹伪装 (Chrome 120/124)"""
+        from curl_cffi import requests as curl_requests
+        from bs4 import BeautifulSoup
+
+        all_rows = []
+        success_count = 0
+
+        for cn_league, (sd_id, comp_id, fbref_name) in self.leagues.items():
+            for season in self.seasons:
+                url = self._build_fbref_url(comp_id, fbref_name, cn_league, season)
+                if not url:
+                    continue
+
+                for impersonate in ['chrome124', 'chrome120', 'safari17_0']:
+                    try:
+                        resp = curl_requests.get(url, impersonate=impersonate, timeout=30)
+                        if resp.status_code != 200:
+                            continue
+                        if "Just a moment" in resp.text[:200]:
+                            continue
+
+                        rows = self._parse_fbref_schedule(resp.text, cn_league, fbref_name, season)
+                        if rows:
+                            all_rows.extend(rows)
+                            success_count += 1
+                            logger.info(f"  curl_cffi ✓ {cn_league} {season} [{impersonate}]: {len(rows)} 场")
+                        break  # 成功则跳出 impersonate 循环
+                    except Exception:
+                        continue
+                time.sleep(1)
+
+        if not all_rows:
+            raise Exception("curl_cffi: 未获取到任何数据 (所有联赛均被 Cloudflare 拦截)")
+
+        df = pd.DataFrame(all_rows)
+        self._data = df
+        self._available = True
+        self._source_type = "fbref_direct"
+        logger.info(f"  FBref curl_cffi 总计: {len(df)} 场比赛, {success_count} 个联赛-赛季")
+        return df
+
+    # ── proxy 兜底模式 ─────────────────────────────────────
+    def _collect_proxy(self) -> pd.DataFrame:
+        """代理模式: 从 historical_matches 提取实际进球, 按联赛计算 xG 代理值
+
+        原理:
+        - 大样本下, 实际进球均值 ≈ xG 均值 (相关性 ~0.9)
+        - 使用联赛级均值作为 xG 代理, 比全局均值更精确
+        - 标记 source_type='fbref_proxy' 以便预测引擎识别并适当降权
+        """
+        target_cn_leagues = list(self.leagues.keys())
+
+        conn = sqlite3.connect(str(DB_PATH))
+        all_rows = []
+        league_stats = {}
+
+        for cn_league in target_cn_leagues:
+            league_names = [cn_league]
+            aliases = {
+                "美职联": ["美职联", "美职"],
+                "韩职":   ["韩职", "韩K"],
+                "沙职":   ["沙职", "沙超"],
+            }
+            if cn_league in aliases:
+                league_names.extend(aliases[cn_league])
+
+            placeholders = ",".join(["?"] * len(league_names))
+            query = f"""
+                SELECT match_date, league, home_team, away_team,
+                       home_score, away_score, season
+                FROM historical_matches
+                WHERE league IN ({placeholders})
+                  AND home_score IS NOT NULL AND away_score IS NOT NULL
+                  AND result IS NOT NULL
+                ORDER BY match_date DESC
+            """
+            try:
+                c = conn.cursor()
+                c.execute(query, league_names)
+                rows = c.fetchall()
+            except Exception:
+                continue
+
+            if not rows:
+                continue
+
+            home_goals = [int(r[4]) for r in rows if r[4] is not None]
+            away_goals = [int(r[5]) for r in rows if r[5] is not None]
+            if home_goals:
+                league_stats[cn_league] = {
+                    "home_avg":  round(sum(home_goals) / len(home_goals), 2),
+                    "away_avg":  round(sum(away_goals) / len(away_goals), 2),
+                    "total_avg": round((sum(home_goals) + sum(away_goals)) / len(home_goals), 2),
+                    "n_matches": len(home_goals),
+                }
+
+            for row in rows:
+                match_date, league, home_team, away_team, home_score, away_score, season = row
+                all_rows.append({
+                    "league_cn":   cn_league,
+                    "league_en":   self.leagues.get(cn_league, ("", 0, ""))[2],
+                    "season":      season or "",
+                    "match_date":  match_date,
+                    "home_team":   home_team,
+                    "away_team":   away_team,
+                    "home_goals":  home_score,
+                    "away_goals":  away_score,
+                    "home_xg":     league_stats[cn_league]["home_avg"],
+                    "away_xg":     league_stats[cn_league]["away_avg"],
+                    "home_ppda":   None,
+                    "away_ppda":   None,
+                    "is_result":   1,
+                })
+
+        conn.close()
+
+        if not all_rows:
+            logger.warning("FBref proxy: 无数据")
             return pd.DataFrame()
+
+        df = pd.DataFrame(all_rows)
+        self._data = df
+        self._available = True
+        self._source_type = "fbref_proxy"
+
+        logger.info(f"  FBref proxy: {len(df)} 场比赛, {len(league_stats)} 个联赛")
+        for lg, stats in sorted(league_stats.items()):
+            logger.info(f"    {lg}: 主场均值={stats['home_avg']:.2f}, "
+                         f"客场均值={stats['away_avg']:.2f}, "
+                         f"n={stats['n_matches']}")
+        return df
+
+    # ── HTML 解析 ──────────────────────────────────────────
+    @staticmethod
+    def _parse_fbref_schedule(html: str, cn_league: str,
+                               fbref_name: str, season: str) -> list[dict]:
+        """解析 FBref schedule 页面 HTML, 提取比赛数据
+
+        FBref schedule 表格列:
+          Wk, Day, Date, Time, Home, xG, Score, xG.1, Away,
+          Attendance, Venue, Referee, Match Report, Notes
+
+        xG 列可能因 JavaScript 动态加载而不可见,
+        但 HTML 源码中通常包含完整数据。
+        """
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(html, 'html.parser')
+        table = soup.find('table', id=lambda x: x and 'sched' in str(x))
+        if not table:
+            return []
+
+        # 解析表头, 建立列索引映射
+        thead = table.find('thead')
+        header_cells = thead.find_all('th') if thead else []
+        col_map = {}
+        for i, th in enumerate(header_cells):
+            text = th.get_text(strip=True)
+            col_map[text] = i
+            # data-stat 属性更可靠
+            ds = th.get('data-stat', '')
+            if ds:
+                col_map[ds] = i
+
+        # 查找列索引 (优先 data-stat, 其次列名)
+        def _col_idx(*keys):
+            for k in keys:
+                if k in col_map:
+                    return col_map[k]
+            return None
+
+        idx_home  = _col_idx('home_team', 'Home')
+        idx_away  = _col_idx('away_team', 'Away')
+        idx_date  = _col_idx('date', 'Date')
+        idx_score = _col_idx('score', 'Score')
+        idx_home_xg = _col_idx('home_xg', 'xG')
+        idx_away_xg = _col_idx('away_xg', 'xG.1')
+        idx_notes = _col_idx('notes', 'Notes')
+
+        if idx_home is None or idx_away is None or idx_date is None:
+            return []
+
+        rows = []
+        tbody = table.find('tbody')
+        if not tbody:
+            return rows
+
+        for tr in tbody.find_all('tr'):
+            # 跳过分隔行 (class="spacer" 等)
+            if tr.get('class') and 'spacer' in tr.get('class', []):
+                continue
+            cells = tr.find_all(['td', 'th'])
+            if len(cells) < max(idx_home, idx_away, idx_date) + 1:
+                continue
+
+            # 提取日期
+            date_cell = cells[idx_date]
+            date_text = date_cell.get_text(strip=True)
+            if not date_text or not re.match(r'\d{4}-\d{2}-\d{2}', date_text):
+                continue
+
+            # 提取队名 (去除链接标签, 保留纯文本)
+            home_cell = cells[idx_home]
+            home_team = home_cell.get_text(strip=True) if home_cell else ""
+            away_cell = cells[idx_away]
+            away_team = away_cell.get_text(strip=True) if away_cell else ""
+
+            # 提取比分
+            score_text = ""
+            home_goals = away_goals = None
+            if idx_score is not None:
+                score_cell = cells[idx_score]
+                score_link = score_cell.find('a')
+                score_text = score_link.get_text(strip=True) if score_link else score_cell.get_text(strip=True)
+                # 解析 "2–5" 格式
+                score_match = re.match(r'(\d+)\s*[–\-]\s*(\d+)', score_text)
+                if score_match:
+                    home_goals = int(score_match.group(1))
+                    away_goals = int(score_match.group(2))
+                else:
+                    continue  # 未来比赛, 跳过
+
+            # 提取 xG (如果存在)
+            home_xg = away_xg = None
+            if idx_home_xg is not None and idx_home_xg < len(cells):
+                try:
+                    home_xg = float(cells[idx_home_xg].get_text(strip=True))
+                except (ValueError, TypeError):
+                    pass
+            if idx_away_xg is not None and idx_away_xg < len(cells):
+                try:
+                    away_xg = float(cells[idx_away_xg].get_text(strip=True))
+                except (ValueError, TypeError):
+                    pass
+
+            # 跳过未来比赛 (notes 列通常有 "Match postponed" 等)
+            if idx_notes is not None and idx_notes < len(cells):
+                notes = cells[idx_notes].get_text(strip=True)
+                if notes:
+                    continue
+
+            rows.append({
+                "league_cn":  cn_league,
+                "league_en":  fbref_name,
+                "season":     season,
+                "match_date": date_text,
+                "home_team":  home_team,
+                "away_team":  away_team,
+                "home_goals": home_goals,
+                "away_goals": away_goals,
+                "home_xg":    home_xg,
+                "away_xg":    away_xg,
+                "home_ppda":  None,
+                "away_ppda":  None,
+                "is_result":  1,
+            })
+
+        return rows
+
+    # ── URL 构建 ───────────────────────────────────────────
+    @classmethod
+    def _build_fbref_url(cls, comp_id: int, fbref_name: str,
+                          cn_league: str, season: str) -> str | None:
+        """构建 FBref schedule 页面 URL
+
+        Args:
+            comp_id: FBref 联赛 ID (如 25 是 J1 League)
+            fbref_name: FBref 联赛名 (如 "J1 League")
+            cn_league: 中文联赛名
+            season: 赛季字符串 (如 "2024-2025" 或 "2025-2026")
+
+        Returns:
+            URL 字符串, 或 None (无法构建时)
+        """
+        # 确定赛季在 URL 中的格式
+        if cn_league in FBREF_CALENDAR_YEAR_LEAGUES:
+            # 日职/韩职/美职联等: 取赛季的第二年
+            # "2024-2025" → "2025", "2023-2024" → "2024"
+            parts = season.split('-')
+            url_season = parts[-1] if len(parts) >= 2 else parts[0]
+        else:
+            # 跨年联赛: "2024-2025"
+            url_season = season
+
+        # 联赛名 slug
+        slug = cls._FBREF_SLUG_MAP.get(fbref_name)
+        if not slug:
+            slug = fbref_name.replace(' ', '-')
+
+        return f"https://fbref.com/en/comps/{comp_id}/{url_season}/schedule/{url_season}-{slug}-Scores-and-Fixtures"
+
+    # ── 存储 ────────────────────────────────────────────────
+    def store_to_db(self, df: pd.DataFrame | None = None) -> int:
+        """存储到 team_xg 表
+
+        source_type:
+          - 'fbref_direct' (cloudscraper/curl_cffi 直连成功)
+          - 'fbref_proxy'  (proxy 兜底)
+        """
+        df = df if df is not None else self._data
+        if df is None or df.empty:
+            logger.warning("FBref: 无数据可存储")
+            return 0
+
+        source_type = self._source_type
+        conn = sqlite3.connect(str(DB_PATH))
+
+        inserted = 0
+        for _, row in df.iterrows():
+            try:
+                conn.execute('''INSERT OR REPLACE INTO team_xg
+                    (source_type, original_id, league_en, league_cn, season,
+                     match_date, home_team, away_team,
+                     home_goals, away_goals, home_xg, away_xg,
+                     home_ppda, away_ppda, is_result)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                    (source_type, None,
+                     row.get("league_en", ""), row.get("league_cn", ""),
+                     row.get("season", ""), row.get("match_date", ""),
+                     row.get("home_team", ""), row.get("away_team", ""),
+                     row.get("home_goals"), row.get("away_goals"),
+                     row.get("home_xg"), row.get("away_xg"),
+                     row.get("home_ppda"), row.get("away_ppda"),
+                     row.get("is_result", 1)))
+                inserted += 1
+            except Exception:
+                pass
+
+        conn.commit()
+        conn.close()
+        logger.info(f"  FBref: 存储了 {inserted} 条记录到 team_xg (source_type={source_type})")
+        return inserted
 
     @property
     def is_available(self) -> bool:
         return self._available
+
+    @property
+    def source_type(self) -> str:
+        return self._source_type
 
 
 # ============================================================
