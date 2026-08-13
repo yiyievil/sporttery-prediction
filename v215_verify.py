@@ -85,7 +85,9 @@ ZQBFZB_HEADERS = {
 # Ultra-Opt: 通用路径 — 优先 SPORTTERY_WORKSPACE 环境变量, 缺省脚本所在目录
 _WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__))
 PREDICTIONS_DIR = os.path.join(_WORKSPACE, 'predictions')
-REPORT_DIR = '/workspace'  # PDF 输出到 /workspace/ 根目录, 便于手机端直接访问
+# Ultra 12.2: 修复云端路径硬编码 — 云端(GitHub Actions 设 SPORTTERY_WORKSPACE=/workspace)
+# 与本地(脚本目录)自适应, 此前固定 '/workspace' 导致本地验证 PDF 生成失败 [Errno 2]
+REPORT_DIR = os.environ.get('SPORTTERY_WORKSPACE') or _WORKSPACE
 DB_PATH = os.path.join(PREDICTIONS_DIR, 'regression.db')
 
 def find_match_keys_by_date(target_date, target_nums):
