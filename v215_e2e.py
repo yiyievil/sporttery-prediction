@@ -1636,58 +1636,17 @@ def compute_scores(lam_h, lam_a, goal_line=0, market_goal_line=2.5, top_n=5, use
     big_high = [(s, p) for s, p in sorted_all if total_goals(s) >= high_threshold]
     small_high = [(s, p) for s, p in sorted_all if total_goals(s) < high_threshold]
 
-    # ===== 确定主推方向并选择比分 =====
-    if over_main > 0.5:
-        top3_filtered = big_main[:top_n]
-        main_dir = '大'
-    else:
-        top3_filtered = small_main[:top_n]
-        main_dir = '小'
-
-    # 副盘口方向
-    if over_high > 0.5:
-        high_top3 = big_high[:top_n]
-        high_dir = '大'
-    else:
-        high_top3 = small_high[:top_n]
-        high_dir = '小'
-
-    # ===== Ultra 12.3: 比分top3平局方向不偏废 =====
-    # 根因: Over/Under方向过滤系统性排除平局比分
-    # 例: 盘口1.5/2 → 方向"小" → 阈值2 → 1-1(总进球=2)被排除
-    # 实证: 周三002 实际1-1, top3仅1-0/0-0/0-1, 平局比分全部缺失
-    # 策略: 当Poisson平局概率≥25%时, 确保top3至少包含一个非0-0的平局比分
-    # 不影响主盘口方向判断, 仅修正top3展示的平局偏废
-    _draw_prob = d  # d = sum(p for s,p in probs.items() if s[0]==s[2])
-    _has_draw_in_top3 = any(s[0] == s[2] and s != '0-0' for s, _ in top3_filtered[:3])
-    if not _has_draw_in_top3 and _draw_prob >= 0.25:
-        # 从完整排序中找到概率最高的非0-0平局比分
-        _best_draw = None
-        for s, p in sorted_all:
-            if s[0] == s[2] and s != '0-0':
-                _best_draw = (s, p)
-                break
-        if _best_draw:
-            # 替换top3中概率最低的非平局比分
-            _non_draws = [(i, s, p) for i, (s, p) in enumerate(top3_filtered[:3])
-                          if s[0] != s[2]]
-            if _non_draws:
-                _min_idx = min(_non_draws, key=lambda x: x[2])[0]
-                top3_filtered[_min_idx] = _best_draw
-                # 同步修正high_top3 (如果同样没有平局比分)
-                _has_draw_in_high = any(s[0] == s[2] and s != '0-0' for s, _ in high_top3[:3])
-                if not _has_draw_in_high:
-                    _best_draw_high = None
-                    for s, p in sorted_all:
-                        if s[0] == s[2] and s != '0-0':
-                            _best_draw_high = (s, p)
-                            break
-                    if _best_draw_high:
-                        _non_draws_h = [(i, s, p) for i, (s, p) in enumerate(high_top3[:3])
-                                        if s[0] != s[2]]
-                        if _non_draws_h:
-                            _min_idx_h = min(_non_draws_h, key=lambda x: x[2])[0]
-                            high_top3[_min_idx_h] = _best_draw_high
+    # ===== Ultra 12.4: 比分预测 model-first, 盘口方向仅作大小球参考 =====
+    # 根因: 盘口方向过滤(Over/Under)用庄家盈利锚点校准模型预测
+    #   - 2.0盘口: 总进球=2走水, 庄家通吃 → 系统性排除1-1/2-0等
+    #   - 1.5/2盘口: 总进球=2赢一半, 同样有利庄家
+    #   - 庄家选择盘口线以最大化利润, 不是中立的概率信号
+    # 修复: 比分top3直接使用模型概率排名, 不做Over/Under方向过滤
+    #   盘口方向(main_dir/high_dir)保留为独立的大小球参考信号
+    top3_filtered = sorted_all[:top_n]
+    main_dir = '大' if over_main > 0.5 else '小'
+    high_top3 = sorted_all[:top_n]
+    high_dir = '大' if over_high > 0.5 else '小'
 
     # HHAD概率: 使用Skellam分布精确计算 (覆盖所有进球数)
     # goal_line: 负=主让, 正=主受; 净胜球+goal_line>0=让胜, =0=让平, <0=让负
@@ -6950,44 +6909,11 @@ def predict_match(match_num, data):
             scores['over_ml'] = round(_over_prob_for(round(_gl_main - 0.25, 2)) * 100, 1)
             scores['over_mh'] = round(_over_prob_for(round(_gl_main + 0.25, 2)) * 100, 1)
             scores['over_high'] = round(_over_prob_for(round(_gl_main + 0.5, 2)) * 100, 1)
-            # 主/副盘口方向过滤
-            def _threshold(gl):
-                thr = int(math.ceil(gl))
-                return int(gl) + 1 if gl == int(gl) else thr
-            _thr_main = _threshold(_gl_main)
-            _thr_high = _threshold(round(_gl_main + 0.5, 2))
-            _big_m = [(s, p) for s, p in _sorted if _tg(s) >= _thr_main]
-            _big_h = [(s, p) for s, p in _sorted if _tg(s) >= _thr_high]
+            # Ultra 12.4: 比分预测 model-first, 盘口方向仅作大小球参考
             scores['main_dir'] = '大' if _over_prob_for(_gl_main) > 0.5 else '小'
             scores['high_dir'] = '大' if _over_prob_for(round(_gl_main + 0.5, 2)) > 0.5 else '小'
-            scores['top3_filtered'] = [[s, round(p * 100, 1)] for s, p in
-                                       (_big_m if scores['main_dir'] == '大' else
-                                        [(s, p) for s, p in _sorted if _tg(s) < _thr_main])[:3]]
-            scores['high_top3'] = [[s, round(p * 100, 1)] for s, p in
-                                   (_big_h if scores['high_dir'] == '大' else
-                                    [(s, p) for s, p in _sorted if _tg(s) < _thr_high])[:3]]
-            # ===== Ultra 12.3: 比分top3平局方向不偏废 (0-0修正后同步) =====
-            _draw_prob_00 = d_new  # 0-0修正后的Poisson平局概率
-            _has_draw_00 = any(s[0] == s[2] and s != '0-0' for s, _ in scores['top3_filtered'][:3])
-            if not _has_draw_00 and _draw_prob_00 >= 0.25:
-                _best_draw_00 = None
-                for s, p in _sorted:
-                    if s[0] == s[2] and s != '0-0':
-                        _best_draw_00 = (s, round(p * 100, 1))
-                        break
-                if _best_draw_00:
-                    _nd_00 = [(i, s, p) for i, (s, p) in enumerate(scores['top3_filtered'][:3])
-                              if s[0] != s[2]]
-                    if _nd_00:
-                        _mi_00 = min(_nd_00, key=lambda x: x[2])[0]
-                        scores['top3_filtered'][_mi_00] = list(_best_draw_00)
-                    _has_draw_h00 = any(s[0] == s[2] and s != '0-0' for s, _ in scores['high_top3'][:3])
-                    if not _has_draw_h00:
-                        _nd_h00 = [(i, s, p) for i, (s, p) in enumerate(scores['high_top3'][:3])
-                                   if s[0] != s[2]]
-                        if _nd_h00:
-                            _mi_h00 = min(_nd_h00, key=lambda x: x[2])[0]
-                            scores['high_top3'][_mi_h00] = list(_best_draw_00)
+            scores['top3_filtered'] = [[s, round(p * 100, 1)] for s, p in _sorted[:3]]
+            scores['high_top3'] = [[s, round(p * 100, 1)] for s, p in _sorted[:3]]
         v611_notes.append(f"0-0低估修正(模型{_model_00:.1%}→市场{_market_00:.1%}), 低进球区间+{_00_adj:.0%}")
         v611_flags['zero_zero_fix'] = True
     
@@ -8190,7 +8116,7 @@ def main():
                     init_parts.append(f"亚指:{init.get('yazhi_init','')}→{init.get('yazhi_now','')}")
                 if init_parts:
                     summary_lines.append(f"    初赔: {' | '.join(init_parts)}")
-            summary_lines.append(f"    比分({sc['main_dir']}{gl_str}): {sc['top3']}")
+            summary_lines.append(f"    比分: {sc['top3']}")
             # Ultra 3.0: 精简盘口概率行, 仅显示主盘口
             summary_lines.append(f"    盘口({gl_str}): 大{sc.get('over_main','')}% 小{100-sc.get('over_main',0):.1f}%")
             # 半全场 (Pro 3.2)
