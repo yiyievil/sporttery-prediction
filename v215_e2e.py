@@ -1652,6 +1652,43 @@ def compute_scores(lam_h, lam_a, goal_line=0, market_goal_line=2.5, top_n=5, use
         high_top3 = small_high[:top_n]
         high_dir = '小'
 
+    # ===== Ultra 12.3: 比分top3平局方向不偏废 =====
+    # 根因: Over/Under方向过滤系统性排除平局比分
+    # 例: 盘口1.5/2 → 方向"小" → 阈值2 → 1-1(总进球=2)被排除
+    # 实证: 周三002 实际1-1, top3仅1-0/0-0/0-1, 平局比分全部缺失
+    # 策略: 当Poisson平局概率≥25%时, 确保top3至少包含一个非0-0的平局比分
+    # 不影响主盘口方向判断, 仅修正top3展示的平局偏废
+    _draw_prob = d  # d = sum(p for s,p in probs.items() if s[0]==s[2])
+    _has_draw_in_top3 = any(s[0] == s[2] and s != '0-0' for s, _ in top3_filtered[:3])
+    if not _has_draw_in_top3 and _draw_prob >= 0.25:
+        # 从完整排序中找到概率最高的非0-0平局比分
+        _best_draw = None
+        for s, p in sorted_all:
+            if s[0] == s[2] and s != '0-0':
+                _best_draw = (s, p)
+                break
+        if _best_draw:
+            # 替换top3中概率最低的非平局比分
+            _non_draws = [(i, s, p) for i, (s, p) in enumerate(top3_filtered[:3])
+                          if s[0] != s[2]]
+            if _non_draws:
+                _min_idx = min(_non_draws, key=lambda x: x[2])[0]
+                top3_filtered[_min_idx] = _best_draw
+                # 同步修正high_top3 (如果同样没有平局比分)
+                _has_draw_in_high = any(s[0] == s[2] and s != '0-0' for s, _ in high_top3[:3])
+                if not _has_draw_in_high:
+                    _best_draw_high = None
+                    for s, p in sorted_all:
+                        if s[0] == s[2] and s != '0-0':
+                            _best_draw_high = (s, p)
+                            break
+                    if _best_draw_high:
+                        _non_draws_h = [(i, s, p) for i, (s, p) in enumerate(high_top3[:3])
+                                        if s[0] != s[2]]
+                        if _non_draws_h:
+                            _min_idx_h = min(_non_draws_h, key=lambda x: x[2])[0]
+                            high_top3[_min_idx_h] = _best_draw_high
+
     # HHAD概率: 使用Skellam分布精确计算 (覆盖所有进球数)
     # goal_line: 负=主让, 正=主受; 净胜球+goal_line>0=让胜, =0=让平, <0=让负
     hw = sum(v for k, v in margin_probs.items() if k + goal_line > 0)
@@ -6929,6 +6966,28 @@ def predict_match(match_num, data):
             scores['high_top3'] = [[s, round(p * 100, 1)] for s, p in
                                    (_big_h if scores['high_dir'] == '大' else
                                     [(s, p) for s, p in _sorted if _tg(s) < _thr_high])[:3]]
+            # ===== Ultra 12.3: 比分top3平局方向不偏废 (0-0修正后同步) =====
+            _draw_prob_00 = d_new  # 0-0修正后的Poisson平局概率
+            _has_draw_00 = any(s[0] == s[2] and s != '0-0' for s, _ in scores['top3_filtered'][:3])
+            if not _has_draw_00 and _draw_prob_00 >= 0.25:
+                _best_draw_00 = None
+                for s, p in _sorted:
+                    if s[0] == s[2] and s != '0-0':
+                        _best_draw_00 = (s, round(p * 100, 1))
+                        break
+                if _best_draw_00:
+                    _nd_00 = [(i, s, p) for i, (s, p) in enumerate(scores['top3_filtered'][:3])
+                              if s[0] != s[2]]
+                    if _nd_00:
+                        _mi_00 = min(_nd_00, key=lambda x: x[2])[0]
+                        scores['top3_filtered'][_mi_00] = list(_best_draw_00)
+                    _has_draw_h00 = any(s[0] == s[2] and s != '0-0' for s, _ in scores['high_top3'][:3])
+                    if not _has_draw_h00:
+                        _nd_h00 = [(i, s, p) for i, (s, p) in enumerate(scores['high_top3'][:3])
+                                   if s[0] != s[2]]
+                        if _nd_h00:
+                            _mi_h00 = min(_nd_h00, key=lambda x: x[2])[0]
+                            scores['high_top3'][_mi_h00] = list(_best_draw_00)
         v611_notes.append(f"0-0低估修正(模型{_model_00:.1%}→市场{_market_00:.1%}), 低进球区间+{_00_adj:.0%}")
         v611_flags['zero_zero_fix'] = True
     
