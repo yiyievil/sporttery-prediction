@@ -181,7 +181,9 @@ def apply_cli_match_input():
       260801 周六 001-016           → 编号日期+周几+范围 (带空格, Ultra 11.2)
     """
     global TARGET_WEEKDAY, MATCH_NUMBERS
-    args = [a for a in sys.argv[1:] if a.strip()]
+    # Ultra 12.5.1: 过滤 --force 标志 (apply_cli_mode 会把它加回 argv 末尾,
+    # 不过滤会破坏编号/日期解析, 导致回退文件顶部配置跑错比赛)
+    args = [a for a in sys.argv[1:] if a.strip() and a != '--force']
     if not args:
         return
     text = ' '.join(args).replace('，', ',').replace('、', ',').strip()
@@ -3763,7 +3765,7 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         if _hhad_dir_val and _hhad_odds_val2 and _hhad_odds_val2 > 0:
             _dw_ref = f"HHAD参考{_hhad_dir_val}@{_hhad_odds_val2}"
         else:
-            _dw_ref = ("让球盘方向优先参考HHAD" if (hhad or {}).get('h', 0) > 0
+            _dw_ref = ("让球盘方向优先参考HHAD" if (hhad_dict or {}).get('h', 0) > 0
                        else "让球盘未开盘, 平局概率偏高注意提防")
         insight_parts.append(
             f"平局窗口HHAD优先: HAD平局P={_dar_p*100:.0f}%≥30%,让球盘判别力更稳"
@@ -5260,37 +5262,65 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
         }
 
     try:
+        # 动态检测 is_result 列 (旧库/不同版本表结构可能无此列,
+        # 直接引用会 no such column 被 except 吞掉 → xG/代理永不生效)
+        _isr_where = ''
+        try:
+            c.execute('PRAGMA table_info(historical_matches)')
+            if any(r[1] == 'is_result' for r in c.fetchall()):
+                _isr_where = 'is_result = 1 AND '
+        except Exception:
+            _isr_where = ''
+
         # 优先: team_xg 表 (含真实xG数据)
-        placeholders = ','.join(['?'] * len(team_names))
-        c.execute(f'''
-            SELECT home_team, away_team, home_xg, away_xg, home_goals, away_goals,
-                   home_ppda, away_ppda, match_date
-            FROM team_xg
-            WHERE match_date < ? AND is_result = 1
-              AND (home_team IN ({placeholders}) OR away_team IN ({placeholders}))
-              AND home_xg IS NOT NULL AND away_xg IS NOT NULL
-              AND home_goals IS NOT NULL AND away_goals IS NOT NULL
-            ORDER BY match_date DESC
-            LIMIT ?
-        ''', (match_date, *team_names, *team_names, window))
+        # Ultra 12.5.1: 表不存在(旧库/本地未构建)时跳过, 直接走实际进球代理,
+        # 不再被 except 吞掉导致代理永不执行 (修复: xg_data 全 None)
+        _has_team_xg = False
+        _txg_isr_where = ''
+        try:
+            c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='team_xg'")
+            _has_team_xg = c.fetchone() is not None
+            if _has_team_xg:
+                c.execute('PRAGMA table_info(team_xg)')
+                if any(r[1] == 'is_result' for r in c.fetchall()):
+                    _txg_isr_where = 'is_result = 1 AND '
+        except Exception:
+            _has_team_xg = False
 
-        rows = c.fetchall()
-        if rows:
-            return _build_result(rows, is_proxy=False)
+        if _has_team_xg:
+            placeholders = ','.join(['?'] * len(team_names))
+            c.execute(f'''
+                SELECT home_team, away_team, home_xg, away_xg, home_goals, away_goals,
+                       home_ppda, away_ppda, match_date
+                FROM team_xg
+                WHERE match_date < ? AND {_txg_isr_where}
+                  (home_team IN ({placeholders}) OR away_team IN ({placeholders}))
+                  AND home_xg IS NOT NULL AND away_xg IS NOT NULL
+                  AND home_goals IS NOT NULL AND away_goals IS NOT NULL
+                ORDER BY match_date DESC
+                LIMIT ?
+            ''', (match_date, *team_names, *team_names, window))
 
-        # Ultra 12.5: team_xg无数据, 用historical_matches实际进球作xG代理
+            rows = c.fetchall()
+            if rows:
+                return _build_result(rows, is_proxy=False)
+
+        # Ultra 12.5: team_xg无数据(或表不存在), 用historical_matches实际进球作xG代理
         # 实际进球≈xG在大样本下一致, 关键差异仅在于运气噪声
         # 代理模式: 不获取PPDA, cv_quality反映为中等
+        # Ultra 12.5.1: historical_matches 列名是 home_score/away_score
+        # (team_xg 表才是 home_goals/away_goals), 修复代理查询列名
+        placeholders = ','.join(['?'] * len(team_names))
         c.execute(f'''
             SELECT home_team, away_team,
-                   CAST(home_goals AS REAL) as home_xg,
-                   CAST(away_goals AS REAL) as away_xg,
-                   home_goals, away_goals,
+                   CAST(home_score AS REAL) as home_xg,
+                   CAST(away_score AS REAL) as away_xg,
+                   home_score, away_score,
                    NULL as home_ppda, NULL as away_ppda, match_date
             FROM historical_matches
-            WHERE match_date < ? AND is_result = 1
-              AND (home_team IN ({placeholders}) OR away_team IN ({placeholders}))
-              AND home_goals IS NOT NULL AND away_goals IS NOT NULL
+            WHERE match_date < ? AND {_isr_where}
+              (home_team IN ({placeholders}) OR away_team IN ({placeholders}))
+              AND home_score IS NOT NULL AND away_score IS NOT NULL
             ORDER BY match_date DESC
             LIMIT ?
         ''', (match_date, *team_names, *team_names, window))
