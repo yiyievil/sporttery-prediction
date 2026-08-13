@@ -54,8 +54,8 @@ if len(sys.argv) > 1:
 MANUAL_SCORES = {
     "周三005": "0:0",  # 弗鲁米嫩 0-0 巴伊亚 (来源: flashscore/fichajes 2026-07-30, 平局)
     "周三006": "0:4",  # 维多利亚 0-4 帕梅拉斯 (来源: 懂球帝/flashscore 2026-07-30, 半场0-2)
-    "周三001": "1:3",  # 弗鲁米嫩 1-3 瓦斯科达伽马 (来源: 球迷屋/懂球帝/onefootball 2026-08-06 巴西杯1/8决赛次回合, 客胜)
     "周六025": "1:1",  # 博塔弗戈 1-1 弗鲁米嫩塞 (来源: 懂球帝/球迷屋/唯彩 2026-08-09 巴甲第22轮, 平局; 特莱斯破门+伊格纳西奥救主)
+    # 注意: 已删除过期的周三001(旧: 弗鲁米嫩1-3瓦斯科达伽马 2026-08-06巴西杯), 避免污染后续周三001场次验证
 }
 
 # ============================================================
@@ -72,6 +72,10 @@ SPORTTERY_HEADERS = {
 # 优势: 比赛结束后立即更新比分, 比赛果API(getUniformMatchResultV1)更快
 # API: getMatchDataPageListV1.qry?method=all (全部=已完成+进行中+待开)
 ZQBFZB_API_URL = "https://webapi.sporttery.cn/gateway/uniform/fb/getMatchDataPageListV1.qry"
+# Ultra 7.11.1: 详情比分API (getMatchLiveV1) — 官网 zqbfzb 实际使用的接口
+# 修复: getMatchDataPageListV1 在 matchStatus=10(待开奖)/6(直播结束) 时
+#       sectionsNo999 常为空, 该接口能返回完整比分(含半场), 作为比分缺失时的补充源
+ZQBFZB_LIVE_API_URL = "https://webapi.sporttery.cn/gateway/uniform/fb/getMatchLiveV1.qry"
 ZQBFZB_HEADERS = {
     'User-Agent': 'Mozilla/5.0',
     'Referer': 'https://www.sporttery.cn/jc/zqbfzb/',
@@ -418,6 +422,38 @@ def fetch_500_results(match_keys):
     return results
 
 
+def _fetch_live_score(match_id):
+    """Ultra 7.11.1: 用 getMatchLiveV1 获取单场完整比分(含半场)。
+
+    fix: getMatchDataPageListV1 在 matchStatus=10(待开奖)/6(直播结束) 时
+         sectionsNo999 常为空, 官网 zqbfzb 实际用 getMatchLiveV1 展示比分。
+    返回 {'sectionsNo999','sectionsNo1','matchStatus','matchStatusName'} 或 None。
+    """
+    if not match_id:
+        return None
+    try:
+        r = requests.get(ZQBFZB_LIVE_API_URL,
+                        params={'matchIds': str(match_id), 'eventTc': 'goals,penalty_shootout',
+                                'method': 'live'},
+                        headers=ZQBFZB_HEADERS, timeout=15)
+        if r.status_code != 200:
+            return None
+        data = r.json()
+    except Exception:
+        return None
+    if data.get('errorCode') != '0':
+        return None
+    for item in data.get('value', []):
+        if item.get('matchId') == match_id:
+            return {
+                'sectionsNo999': item.get('sectionsNo999', ''),
+                'sectionsNo1': item.get('sectionsNo1', ''),
+                'matchStatus': item.get('matchStatus', ''),
+                'matchStatusName': item.get('matchStatusName', ''),
+            }
+    return None
+
+
 def fetch_zqbfzb_results(match_keys):
     """从sporttery比分直播页面API获取赛果 (主数据源, Ultra 7.11)
 
@@ -469,6 +505,16 @@ def fetch_zqbfzb_results(match_keys):
         score = m.get('sectionsNo999', '')
         half = m.get('sectionsNo1', '')
         status = m.get('matchStatusName', '')
+
+        # Ultra 7.11.1: 当全场比赛比分缺失时, 用 getMatchLiveV1 补充
+        # (getMatchDataPageListV1 在 matchStatus=10待开奖/6直播结束 时 sectionsNo999 常为空)
+        if ':' not in score:
+            live = _fetch_live_score(m.get('matchId'))
+            if live:
+                score = live.get('sectionsNo999', score)
+                half = live.get('sectionsNo1', half)
+                if not status:
+                    status = live.get('matchStatusName', '')
 
         result = {
             'matchNumStr': key,
