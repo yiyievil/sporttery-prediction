@@ -78,13 +78,34 @@ def discover_leisu_guides(session):
 
 
 def _team_match(sp_name, leisu_name):
-    """sporttery队名 vs leisu队名 模糊匹配 (双向包含 + 别名表)"""
+    """sporttery队名 vs leisu队名 模糊匹配 (双向包含 + 别名表 + 字符重叠兜底)
+
+    三层匹配策略:
+      1. 别名表: TEAM_NAME_ALIASES 中查到的别名直接双向包含
+      2. 原始名: sp_name 和 leisu_name 直接双向包含
+      3. 字符重叠: 中文队名共享≥60%字符视为匹配 (兜底未录入别名表的新译名)
+    """
     if not sp_name or not leisu_name:
         return False
     aliases = TEAM_NAME_ALIASES.get(sp_name, [sp_name])
     for alias in aliases + [sp_name]:
         if alias and (alias in leisu_name or leisu_name in alias):
             return True
+
+    # 字符重叠兜底: 中文队名共享字符比例 ≥ 60%
+    sp_chars = set(sp_name)
+    lei_chars = set(leisu_name)
+    # 仅对中文队名启用 (至少一方有2个以上中文字符)
+    if (len(sp_chars) >= 2 or len(lei_chars) >= 2):
+        # 检查是否都是中文名 (非纯英文/数字)
+        sp_is_cn = any('\u4e00' <= c <= '\u9fff' for c in sp_name)
+        lei_is_cn = any('\u4e00' <= c <= '\u9fff' for c in leisu_name)
+        if sp_is_cn and lei_is_cn:
+            overlap = sp_chars & lei_chars
+            shorter_len = min(len(sp_chars), len(lei_chars))
+            if shorter_len > 0 and len(overlap) / shorter_len >= 0.6:
+                return True
+
     return False
 
 
