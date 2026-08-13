@@ -247,16 +247,32 @@ def fuse_swot_into_predictions(pred_file):
         # 尝试匹配SWOT数据
         swot_data = swot_all.get(key, None)
         
-        # 如果key没匹配到, 尝试用球队名匹配
+        # 如果key没匹配到, 尝试用球队名匹配 (多信号融合)
         if not swot_data:
-            for swot_key, swot_val in swot_all.items():
-                swot_home = swot_val.get('home_name', '')
-                swot_away = swot_val.get('away_name', '')
-                # 模糊匹配球队名
-                if (home and swot_home and (home in swot_home or swot_home in home)) and \
-                   (away and swot_away and (away in swot_away or swot_away in away)):
-                    swot_data = swot_val
-                    break
+            try:
+                from match_utils import MatchFingerprint, find_best_match
+                sp_fp = MatchFingerprint(home=home, away=away)
+                candidates = []
+                candidate_keys = []
+                for swot_key, swot_val in swot_all.items():
+                    candidates.append(MatchFingerprint(
+                        home=swot_val.get('home_name', ''),
+                        away=swot_val.get('away_name', ''),
+                    ))
+                    candidate_keys.append(swot_key)
+                if candidates:
+                    best_idx, score = find_best_match(sp_fp, candidates, threshold=0.55)
+                    if best_idx is not None:
+                        swot_data = swot_all[candidate_keys[best_idx]]
+            except ImportError:
+                # 回退到旧逻辑: 子串包含
+                for swot_key, swot_val in swot_all.items():
+                    swot_home = swot_val.get('home_name', '')
+                    swot_away = swot_val.get('away_name', '')
+                    if (home and swot_home and (home in swot_home or swot_home in home)) and \
+                       (away and swot_away and (away in swot_away or swot_away in away)):
+                        swot_data = swot_val
+                        break
         
         if not swot_data:
             # 无SWOT数据, 标记但不调整

@@ -4,7 +4,7 @@
 主流程: leisu.com 情报指南 (定性SWOT: 有利/不利情报)
   1. discover_leisu_guides(): 从 leisu.com/guide 列表页发现当日SWOT卡片
      (队名/时间/联赛/swot-ID), 纯requests + jsdom WAF求解, 无需人工提供URL
-  2. 按队名模糊匹配到sporttery场次 (复用nowscore_fetch的别名表)
+  2. 按多信号融合匹配到sporttery场次 (队名+时间+联赛, 复用 match_utils)
   3. 批量获取SWOT页并解析 (复用swot_fast_v3.parse_swot_from_html, cookie复用)
 
 备用: 当leisu无该场卡片或解析为空时, 用已获取的500/nowscore统计数据
@@ -23,18 +23,16 @@ import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from leisu_session import leisu_get, HEADERS as LEISU_HEADERS
+from match_utils import (
+    MatchFingerprint, match_score, find_best_match, team_match_bool,
+    LEAGUE_ALIASES,
+)
 
 _WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__))
 PREDICTIONS_DIR = os.path.join(_WORKSPACE, 'predictions')
 SWOT_DATA_FILE = os.path.join(PREDICTIONS_DIR, 'swot_data_refreshed.json')
 
 # 队名匹配: 复用nowscore_fetch的别名表与匹配逻辑
-try:
-    from nowscore_fetch import TEAM_NAME_ALIASES
-except ImportError:
-    TEAM_NAME_ALIASES = {}
-
-# SWOT解析: 复用swot_fast_v3的解析器
 try:
     from swot_fast_v3 import parse_swot_from_html
 except ImportError:
@@ -78,50 +76,48 @@ def discover_leisu_guides(session):
 
 
 def _team_match(sp_name, leisu_name):
-    """sporttery队名 vs leisu队名 模糊匹配 (双向包含 + 别名表 + 字符重叠兜底)
+    """sporttery队名 vs leisu队名 模糊匹配 (委托 match_utils.team_match_bool)
 
-    三层匹配策略:
-      1. 别名表: TEAM_NAME_ALIASES 中查到的别名直接双向包含
-      2. 原始名: sp_name 和 leisu_name 直接双向包含
-      3. 字符重叠: 中文队名共享≥60%字符视为匹配 (兜底未录入别名表的新译名)
+    保留此函数以兼容旧调用路径, 实际逻辑已迁移到 match_utils。
     """
-    if not sp_name or not leisu_name:
-        return False
-    aliases = TEAM_NAME_ALIASES.get(sp_name, [sp_name])
-    for alias in aliases + [sp_name]:
-        if alias and (alias in leisu_name or leisu_name in alias):
-            return True
-
-    # 字符重叠兜底: 中文队名共享字符比例 ≥ 60%
-    sp_chars = set(sp_name)
-    lei_chars = set(leisu_name)
-    # 仅对中文队名启用 (至少一方有2个以上中文字符)
-    if (len(sp_chars) >= 2 or len(lei_chars) >= 2):
-        # 检查是否都是中文名 (非纯英文/数字)
-        sp_is_cn = any('\u4e00' <= c <= '\u9fff' for c in sp_name)
-        lei_is_cn = any('\u4e00' <= c <= '\u9fff' for c in leisu_name)
-        if sp_is_cn and lei_is_cn:
-            overlap = sp_chars & lei_chars
-            shorter_len = min(len(sp_chars), len(lei_chars))
-            if shorter_len > 0 and len(overlap) / shorter_len >= 0.6:
-                return True
-
-    return False
+    return team_match_bool(sp_name, leisu_name)
 
 
 def match_guides_to_sporttery(guides, matches):
-    """将leisu卡片匹配到sporttery场次
+    """将leisu卡片匹配到sporttery场次 (多信号融合: 队名+时间+联赛)
+
+    匹配策略:
+      1. 构建 sporttery 指纹列表 (MatchFingerprint)
+      2. 对每张 leisu 卡片, 计算与所有 sporttery 场次的多信号评分
+      3. 最高分 ≥ 0.55 且队名信号 ≥ 0.4 视为匹配
 
     返回: {match_key: guide}
     """
     result = {}
+
+    # 构建 sporttery 指纹
+    sp_fps = {}
     for key, mi in matches.items():
-        sp_home, sp_away = mi.get('home', ''), mi.get('away', '')
-        for g in guides:
-            if (_team_match(sp_home, g['home']) and _team_match(sp_away, g['away'])) or \
-               (_team_match(sp_home, g['away']) and _team_match(sp_away, g['home'])):
+        sp_fps[key] = MatchFingerprint.from_sporttery(mi)
+
+    # 构建 leisu 指纹
+    lei_fps = [MatchFingerprint.from_leisu(g) for g in guides]
+
+    for key, sp_fp in sp_fps.items():
+        # 对每个 sporttery 场次, 找最佳 leisu 匹配
+        best_idx, best_score = find_best_match(sp_fp, lei_fps, threshold=0.55)
+        if best_idx is not None:
+            # 额外验证: 队名信号必须 ≥ 0.4 (防止纯时间+联赛撞车)
+            g = guides[best_idx]
+            lei_fp = lei_fps[best_idx]
+            name_score = match_score(sp_fp, lei_fp,
+                                     weights={"team_name": 1.0, "league": 0.0, "time": 0.0, "date": 0.0})
+            if name_score >= 0.4:
                 result[key] = g
-                break
+                if best_score < 0.8:  # 低于 0.8 的匹配打印评分供调试
+                    print(f"  [SWOT] 🟡 {key} 匹配 {g['home']} vs {g['away']} "
+                          f"(score={best_score:.2f}, name={name_score:.2f})")
+
     return result
 
 

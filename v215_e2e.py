@@ -221,11 +221,21 @@ def apply_cli_match_input():
             MATCH_NUMBERS = [f[1] for f in full]
             print(f"  [输入] 编号日期 {full[0][0]} → {wd}, 场次 {MATCH_NUMBERS}")
             return
-    # 形式2: 编号日期+场次 260728 001,002
-    m = re.match(r'^(\d{6})\s+([0-9,\s]+)$', text)
+    # 形式2: 编号日期+场次 260728 001,002 或 260728 001-010
+    m = re.match(r'^(\d{6})\s+([0-9,\s\-]+)$', text)
     if m:
         d, wd = parse_code_date(m.group(1))
-        nums = [x[-3:] for x in re.split(r'[,\s]+', m.group(2).strip()) if x]
+        raw = m.group(2).strip()
+        nums = []
+        # 处理范围: 001-010
+        for part in re.split(r'[,\s]+', raw):
+            part = part.strip()
+            if '-' in part:
+                rng = part.split('-')
+                if len(rng) == 2 and rng[0].isdigit() and rng[1].isdigit():
+                    nums.extend(str(i).zfill(3) for i in range(int(rng[0]), int(rng[1]) + 1))
+            elif part.isdigit():
+                nums.append(part.zfill(3))
         if wd and nums:
             TARGET_WEEKDAY = wd
             MATCH_NUMBERS = nums

@@ -732,7 +732,22 @@ def find_match_by_teams(matches, home_name, away_name):
     
     if best_score >= SIM_THRESHOLD and best_mid:
         return best_mid
-    
+
+    # Level 4: 多信号融合匹配 (队名+联赛+时间)
+    # 当 L1-L3 都失败时, 用 match_utils 的多信号评分作为最后兜底
+    try:
+        from match_utils import MatchFingerprint, find_best_match as _fbm
+        sp_fp = MatchFingerprint(home=home_name, away=away_name)
+        ns_fps = [MatchFingerprint(
+            home=m.get('home', ''), away=m.get('away', ''),
+            league=m.get('league', ''), match_time=m.get('time', ''),
+        ) for m in matches]
+        best_idx, score = _fbm(sp_fp, ns_fps, threshold=0.55)
+        if best_idx is not None:
+            return matches[best_idx]['mid']
+    except ImportError:
+        pass
+
     return None
 
 
