@@ -109,8 +109,8 @@ except ImportError:
 # Phase 0: 用户输入
 # ============================================================
 TARGET_DATE = None   # ← 不限日期(避免跨天分类问题)
-TARGET_WEEKDAY = "周日"  # ← 指定周几过滤(如"周四"), None=不过滤
-MATCH_NUMBERS = ["001","002","003","004","005","006","007","008","009","010","011","012","013","014","015","016","017","018","019","020","021","022","023","024"]  # ← 场次编号(后3位)
+TARGET_WEEKDAY = "周四"  # ← 指定周几过滤(如"周四"), None=不过滤
+MATCH_NUMBERS = ["001","002","003","004","005","006","007","008","009","010"]  # ← 场次编号(后3位)
 
 # ===== 工作模式 (Ultra 8.1) =====
 # predict: 全新预测 — 所有数据重新拉取, 不读缓存, 完成后写入缓存
@@ -5497,6 +5497,35 @@ def apply_advanced_calibration(probs, sp, had, hhad):
         if total >= 3:
             notes.append(f'H2H: {h2h["home_wins"]}-{h2h["draws"]}-{h2h["away_wins"]}(n={total})')
 
+    # --- 6b. H2H 时间衰减 (Ultra 6.12: qiumiwu 增强) ---
+    qe = sp.get('qiumiwu_enhancements')
+    if qe:
+        h2h_decayed = qe.get('h2h_decayed', {})
+        if h2h_decayed.get('raw_total', 0) >= 2:
+            # 使用时间衰减后的加权胜率作为贝叶斯先验
+            # 与旧版 H2H 先验合并: 旧版占 60%, 时间衰减版占 40%
+            decayed_total = h2h_decayed['weighted_total']
+            if decayed_total > 0:
+                d_h_rate = h2h_decayed['home_win_rate']
+                d_d_rate = h2h_decayed['weighted_draws'] / decayed_total
+                d_a_rate = h2h_decayed['weighted_away_wins'] / decayed_total
+                # 衰减版先验权重: 与旧版相同公式, 但用时间衰减数据
+                decayed_prior_w = min(0.15, decayed_total * 0.03)
+                # 合并: 旧版先验(60%) + 时间衰减先验(40%)
+                # 注意: 旧版 H2H 已经应用了一次先验, 这里做增量调整
+                if h2h and h2h['total'] >= 2:
+                    # 已有旧版 H2H 先验, 时间衰减版做增量微调
+                    blend = 0.4  # 时间衰减版权重
+                    pw = pw * (1 - decayed_prior_w * blend) + d_h_rate * decayed_prior_w * blend
+                    pd = pd * (1 - decayed_prior_w * blend) + d_d_rate * decayed_prior_w * blend
+                    pl = pl * (1 - decayed_prior_w * blend) + d_a_rate * decayed_prior_w * blend
+                notes.append(
+                    f'H2H(衰减): {h2h_decayed["weighted_home_wins"]:.1f}W-'
+                    f'{h2h_decayed["weighted_draws"]:.1f}D-'
+                    f'{h2h_decayed["weighted_away_wins"]:.1f}L'
+                    f'(原始{h2h_decayed["raw_total"]}场, 主胜率{d_h_rate:.0%})'
+                )
+
     # --- 7. 模型校准偏差修正 (Ultra 10.3) ---
     # 基于3290场历史数据的闭环验证:
     #   模型在所有置信度区间系统性高估概率 (偏差-4.5~-6.8pp)
@@ -6880,6 +6909,47 @@ def predict_match(match_num, data):
         v611_notes.append(f"客队防守回升(近况{away_form[-4:]}, 场均失{away_stats.get('avg_ga',0):.1f}), λ_h×{def_factor:.2f} λ_a×1.10")
         v611_flags['defensive_away'] = True
 
+    # --- 修正6: qiumiwu 增强 (Ultra 6.12: 排名差+加权状态+伤停量化) ---
+    qe = sp.get('qiumiwu_enhancements')
+    if qe:
+        # 6a. 排名差 → λ 修正
+        rank_boost = qe.get('rank_boost', {})
+        if rank_boost.get('rank_diff') != 0 and abs(rank_boost.get('rank_diff', 0)) >= 2:
+            lam_h *= rank_boost['boost_factor']
+            lam_a *= rank_boost['penalty_factor']
+            if rank_boost.get('note'):
+                v611_notes.append(rank_boost['note'])
+
+        # 6b. 加权状态分 → 趋势修正 (替代/补充旧版 detect_form_slump)
+        form_enh = qe.get('form_enhanced', {})
+        hf = form_enh.get('home', {})
+        af = form_enh.get('away', {})
+        if hf and af:
+            # 状态分差距: 将加权状态分映射为 λ 调整
+            form_diff = hf.get('form_score', 1.5) - af.get('form_score', 1.5)
+            if abs(form_diff) > 0.5:
+                # 每 0.5 状态分差距 → ±3% λ 调整
+                form_adj = math.tanh(form_diff / 2.0) * 0.08
+                lam_h *= (1.0 + form_adj)
+                lam_a *= (1.0 - form_adj)
+                v611_notes.append(
+                    f"加权状态: 主{hf['form_score']:.2f} vs 客{af['form_score']:.2f}"
+                    f"(趋势主{hf['recent_trend']:+.2f}/客{af['recent_trend']:+.2f}), "
+                    f"λ_h×{1.0 + form_adj:.3f} λ_a×{1.0 - form_adj:.3f}"
+                )
+                v611_flags['qiumiwu_form'] = True
+
+        # 6c. 伤停量化 → λ 修正
+        injury_impact = qe.get('injury_impact', {})
+        if injury_impact.get('home_factor', 1.0) < 1.0:
+            lam_h *= injury_impact['home_factor']
+            v611_flags['qiumiwu_injury'] = True
+        if injury_impact.get('away_factor', 1.0) < 1.0:
+            lam_a *= injury_impact['away_factor']
+            v611_flags['qiumiwu_injury'] = True
+        if injury_impact.get('note'):
+            v611_notes.append(injury_impact['note'])
+
     # --- 修正3: 跨盘口矛盾 — 实证否决(backtest_v611b, 4222场) ---
     # "大球升盘+平赔降=诱大"不成立: 触发组实际/期望=1.011(不低于对照), 原λ×0.85惩罚移除
     # 保留检测作为信息字段, 不调整λ
@@ -8021,6 +8091,33 @@ def main():
     monitor.append(('Phase1-sporttery', dt1, len(raw_sporttery), 
                      f"匹配{len(matches)}场, 原始{fmt_size(raw_sporttery)}"))
     
+    # ===== Phase 1.3: qiumiwu (球迷屋 — 前瞻数据增强: 近况/交战/伤停/排名) =====
+    t13 = time.time()
+    qiumiwu_data = {}  # {match_key: {preview, stats}}
+    try:
+        from qiumiwu_fetch import match_and_fetch, fetch_match_preview, parse_preview_to_stats
+        from qiumiwu_fetch import load_schedule_cache, fetch_schedule_from_game_page
+        # 优先读缓存, 缓存为空则自动从 game 页面获取
+        schedule = load_schedule_cache()
+        if not schedule:
+            print("  [qiumiwu] 赛程缓存为空, 自动从 game 页面获取...")
+            schedule = fetch_schedule_from_game_page()
+        if schedule:
+            qiumiwu_data = match_and_fetch(matches, force_refresh=False)
+        else:
+            print("  [qiumiwu] 无法获取赛程数据, 跳过")
+            qiumiwu_data = {}
+    except ImportError:
+        print("  [qiumiwu] 模块未安装, 跳过")
+        qiumiwu_data = {}
+    except Exception as e:
+        print(f"  [qiumiwu] 错误: {e}")
+        qiumiwu_data = {}
+    dt13 = time.time() - t13
+    n_qiumiwu = len(qiumiwu_data)
+    monitor.append(('Phase1.3-qiumiwu', dt13, 0,
+                     f"qiumiwu {n_qiumiwu}场前瞻增强"))
+    
     # ===== Phase 1.5: nowscore (辅助 — 为体彩预测提供统计增强) =====
     t15 = time.time()
     nowscore_data, failed_keys = fetch_nowscore_for_matches(matches)
@@ -8096,6 +8193,53 @@ def main():
         pass
 
     t4 = time.time()
+    # 合并 qiumiwu 前瞻数据到 match_info
+    if qiumiwu_data:
+        for key, qd in qiumiwu_data.items():
+            if key in all_data:
+                all_data[key]['qiumiwu'] = qd
+                # 增量合并 stats 到直接字段 (方便 predict_match 消费)
+                preview = qd.get('preview', {})
+                if preview:
+                    stats = parse_preview_to_stats(preview)
+                    all_data[key]['qiumiwu_stats'] = stats
+                    # 近况/交锋/伤停/排名写入顶层
+                    if stats.get('home_recent_form'):
+                        all_data[key]['home_recent_form'] = stats['home_recent_form']
+                    if stats.get('away_recent_form'):
+                        all_data[key]['away_recent_form'] = stats['away_recent_form']
+                    if stats.get('home_rank'):
+                        all_data[key]['home_rank_qm'] = stats['home_rank']
+                    if stats.get('away_rank'):
+                        all_data[key]['away_rank_qm'] = stats['away_rank']
+                    if stats.get('h2h_matches', 0) > 0:
+                        all_data[key]['h2h_qm'] = stats
+            # 同时写入 meta (matches dict) 以便输出 JSON 包含 qiumiwu 数据
+            if key in matches:
+                matches[key]['qiumiwu_stats'] = all_data[key].get('qiumiwu_stats', {})
+                matches[key]['qiumiwu_game_id'] = qd.get('game_id', '')
+
+    # ===== Ultra 6.12: qiumiwu 增强因子计算 (排名差/加权状态/H2H衰减/伤停/PPG) =====
+    if qiumiwu_data:
+        try:
+            from qiumiwu_fetch import apply_qiumiwu_enhancements
+            for key, qd in qiumiwu_data.items():
+                if key in all_data:
+                    preview = qd.get('preview', {})
+                    stats = all_data[key].get('qiumiwu_stats', {})
+                    # 传入 match_date 用于 H2H 时间衰减
+                    if not stats.get('_match_date'):
+                        stats['_match_date'] = all_data[key].get('match_date', '')
+                    enhancements = apply_qiumiwu_enhancements(stats, preview)
+                    all_data[key]['qiumiwu_enhancements'] = enhancements
+                    if enhancements.get('notes'):
+                        for note in enhancements['notes']:
+                            print(f"  [qiumiwu增强] {key}: {note}")
+        except ImportError:
+            pass
+        except Exception as e:
+            print(f"  [qiumiwu增强] 错误: {e}")
+
     for key in all_data:
         try:
             results[key] = predict_match(key, all_data[key])
