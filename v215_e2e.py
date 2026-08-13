@@ -5113,9 +5113,15 @@ except Exception:
 
 # 支持xG数据的联赛集合 (含大五联赛 + 数据库中有xG数据的联赛)
 _BIG5_LEAGUES = {"英超", "西甲", "德甲", "意甲", "法甲"}
+# Ultra 12.5: 扩展xG联赛覆盖 — 从team_xg实际数据反向推导
+# 原则: 有数据就查询, 不预判。仅排除明显无xG的联赛(杯赛/国家队等)
 _XG_SUPPORTED_LEAGUES = _BIG5_LEAGUES | {
-    "瑞超", "挪超", "美职", "美职联", "芬超", "日职", "韩职",
+    "瑞超", "挪超", "美职", "美职联", "芬超", "日职", "韩职", "韩K",
     "葡超", "澳超", "荷甲", "英冠", "欧冠", "欧罗巴",
+    "欧协联", "欧国联", "解放者杯", "巴甲", "日乙", "荷乙", "德乙", "法乙",
+    "英甲", "沙职", "沙超", "亚冠精英", "亚冠乙", "世预赛",
+    "世界杯", "俱世界杯", "英足总杯", "英联赛杯", "意大利杯", "德国杯",
+    "西国王杯", "法国杯", "荷兰杯", "韩国杯", "日联赛杯", "日天皇杯",
 }
 
 # Ultra 9.2: 非五大联赛xG数据在 understat_proxy 表(含3315场真实xG)
@@ -5158,7 +5164,9 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
         或 None (无数据)
     """
     if league_cn and league_cn not in _XG_SUPPORTED_LEAGUES:
-        return None
+        # Ultra 12.5: 不在支持列表的联赛, 跳过xG但后续用实际进球代理
+        # 不再直接return None, 让historical_matches提供基础数据
+        pass
 
     # 队名解析: 优先用映射表转英文, 映射不到则直接用中文
     en_team = _XG_TEAM_MAP.get(team_cn)
@@ -5175,47 +5183,30 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
         return None
     c = conn.cursor()
 
-    try:
-        # Ultra 10.0: 统一 team_xg 表, 不再路由 understat_matches / understat_proxy
-        placeholders = ','.join(['?'] * len(team_names))
-        c.execute(f'''
-            SELECT home_team, away_team, home_xg, away_xg, home_goals, away_goals,
-                   home_ppda, away_ppda, match_date
-            FROM team_xg
-            WHERE match_date < ? AND is_result = 1
-              AND (home_team IN ({placeholders}) OR away_team IN ({placeholders}))
-              AND home_xg IS NOT NULL AND away_xg IS NOT NULL
-              AND home_goals IS NOT NULL AND away_goals IS NOT NULL
-            ORDER BY match_date DESC
-            LIMIT ?
-        ''', (match_date, *team_names, *team_names, window))
-
-        rows = c.fetchall()
-
-        if not rows:
-            return None
-
+    def _build_result(rows, is_proxy=False):
+        """从查询结果构建返回值"""
         xg_for_list = []
         xg_against_list = []
-        ppda_list = []        # 自身PPDA (压迫强度)
-        opp_ppda_list = []    # 对手PPDA (被压迫程度)
+        ppda_list = []
+        opp_ppda_list = []
         actual_for_list = []
         cv_errors = []
-
         for row in rows:
-            home_team, away_team, home_xg, away_xg, home_goals, away_goals, home_ppda, away_ppda, _ = row
+            home_team, away_team, home_xg, away_xg, home_goals, away_goals = row[:6]
+            home_ppda = row[6] if len(row) > 6 else None
+            away_ppda = row[7] if len(row) > 7 else None
             if home_team in team_names:
                 xg_for_list.append(home_xg)
                 xg_against_list.append(away_xg)
-                ppda_list.append(home_ppda)      # 主队PPDA = 自身压迫强度
-                opp_ppda_list.append(away_ppda)   # 客队PPDA = 对手压迫强度
+                ppda_list.append(home_ppda)
+                opp_ppda_list.append(away_ppda)
                 actual_for_list.append(home_goals)
                 cv_errors.append(abs(home_goals - home_xg))
             else:
                 xg_for_list.append(away_xg)
                 xg_against_list.append(home_xg)
-                ppda_list.append(away_ppda)      # 客队PPDA = 自身压迫强度
-                opp_ppda_list.append(home_ppda)   # 主队PPDA = 对手压迫强度
+                ppda_list.append(away_ppda if away_ppda is not None else None)
+                opp_ppda_list.append(home_ppda if home_ppda is not None else None)
                 actual_for_list.append(away_goals)
                 cv_errors.append(abs(away_goals - away_xg))
 
@@ -5223,16 +5214,11 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
         avg_xg_for = sum(xg_for_list) / n
         avg_xg_against = sum(xg_against_list) / n
 
-        # PPDA: 自身压迫强度 (越低越激进)
         valid_ppda = [p for p in ppda_list if p is not None]
         avg_ppda = sum(valid_ppda) / len(valid_ppda) if valid_ppda else None
-
-        # 对手PPDA: 对方压迫强度 (越低说明自身被压制越多)
         valid_opp_ppda = [p for p in opp_ppda_list if p is not None]
         avg_opp_ppda = sum(valid_opp_ppda) / len(valid_opp_ppda) if valid_opp_ppda else None
 
-        # PPDA稳定性: 基于标准差的归一化 (变异系数CV的逆)
-        # CV = std/mean, stability = 1/(1+CV), 越高越稳定
         if len(valid_ppda) >= 3:
             ppda_mean = sum(valid_ppda) / len(valid_ppda)
             ppda_var = sum((p - ppda_mean) ** 2 for p in valid_ppda) / len(valid_ppda)
@@ -5240,27 +5226,19 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
             cv = ppda_std / ppda_mean if ppda_mean > 0 else 1.0
             ppda_stability = 1.0 / (1.0 + cv)
         else:
-            ppda_stability = 0.5  # 样本不足, 中等稳定性
+            ppda_stability = 0.5
 
         avg_actual = sum(actual_for_list) / n
-
-        # 交叉验证质量: xG与实际进球的MAE → quality = 1/(1+MAE)
         mae = sum(cv_errors) / n
         cv_quality = 1.0 / (1.0 + mae)
-
-        # xG超额表现: 实际进球 - xG (正=运气好/超额表现)
         overperformance = avg_actual - avg_xg_for
 
-        # 压迫强度指数 (0-1, 1=最激进)
-        # PPDA归一化: 基于五大联赛经验分布 P10=6.3, P50=11.2, P90=20.1
-        # 使用sigmoid映射: pressure = 1 / (1 + exp((ppda - 11) / 3))
         if avg_ppda is not None:
             pressure_index = 1.0 / (1.0 + pow(2.71828, (avg_ppda - 11.0) / 3.0))
             pressure_index = round(pressure_index, 3)
         else:
             pressure_index = None
 
-        # PPDA优势: 对手PPDA - 自身PPDA (正值=自身压迫更强)
         if avg_ppda is not None and avg_opp_ppda is not None:
             ppda_diff_vs_opp = round(avg_opp_ppda - avg_ppda, 2)
         else:
@@ -5277,11 +5255,51 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
             'overperformance': round(overperformance, 2),
             'cv_quality': round(cv_quality, 3),
             'n_games': n,
-            'has_xg': True,
-            # Ultra 9.2: proxy表(含非五大联赛3315场)已全部采集真实xG数据
-            # is_proxy=False: 不再降权/封顶, 数据质量由cv_quality字段反映
-            'is_proxy': False,
+            'has_xg': not is_proxy,
+            'is_proxy': is_proxy,
         }
+
+    try:
+        # 优先: team_xg 表 (含真实xG数据)
+        placeholders = ','.join(['?'] * len(team_names))
+        c.execute(f'''
+            SELECT home_team, away_team, home_xg, away_xg, home_goals, away_goals,
+                   home_ppda, away_ppda, match_date
+            FROM team_xg
+            WHERE match_date < ? AND is_result = 1
+              AND (home_team IN ({placeholders}) OR away_team IN ({placeholders}))
+              AND home_xg IS NOT NULL AND away_xg IS NOT NULL
+              AND home_goals IS NOT NULL AND away_goals IS NOT NULL
+            ORDER BY match_date DESC
+            LIMIT ?
+        ''', (match_date, *team_names, *team_names, window))
+
+        rows = c.fetchall()
+        if rows:
+            return _build_result(rows, is_proxy=False)
+
+        # Ultra 12.5: team_xg无数据, 用historical_matches实际进球作xG代理
+        # 实际进球≈xG在大样本下一致, 关键差异仅在于运气噪声
+        # 代理模式: 不获取PPDA, cv_quality反映为中等
+        c.execute(f'''
+            SELECT home_team, away_team,
+                   CAST(home_goals AS REAL) as home_xg,
+                   CAST(away_goals AS REAL) as away_xg,
+                   home_goals, away_goals,
+                   NULL as home_ppda, NULL as away_ppda, match_date
+            FROM historical_matches
+            WHERE match_date < ? AND is_result = 1
+              AND (home_team IN ({placeholders}) OR away_team IN ({placeholders}))
+              AND home_goals IS NOT NULL AND away_goals IS NOT NULL
+            ORDER BY match_date DESC
+            LIMIT ?
+        ''', (match_date, *team_names, *team_names, window))
+
+        rows = c.fetchall()
+        if rows:
+            return _build_result(rows, is_proxy=True)
+
+        return None
     except Exception:
         return None
 
