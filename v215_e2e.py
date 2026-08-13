@@ -7040,6 +7040,35 @@ def predict_match(match_num, data):
     had_dirs = ['胜', '平', '负']
     had_min_idx = fused_probs.index(max(fused_probs))
 
+    # ===== Ultra 12.2: 平局方向覆盖 (HAD argmax结构性盲区修复) =====
+    # 根因: HAD方向=argmax([p_w, p_d, p_l]), 平局概率即使校准到27-32%也永远排不进前二
+    # 实证: 4484场历史中平局隐含概率成为HAD三选项最高的场次仅0.2%
+    # 回归(83场): 预测胜/负但实际平局23%误判率, "平"方向F1=0.00
+    # 策略: 平局概率≥30%且top2差≤8pp(势均力敌)时, 强制覆盖HAD方向为"平"
+    # 历史实证: 平局隐含30-34%时实际平局率36.6%(+12pp显著优于市场)
+    _draw_override = False
+    _draw_override_reason = ""
+    if had_min_idx != 1:  # 平局不是当前argmax
+        _home_odds = had.get('h', 0) if had else 0
+        _draw_prob = p1_d
+        _top_prob = fused_probs[had_min_idx]
+        _top2_gap = _top_prob - _draw_prob
+        # 触发条件: 平局概率≥30% (强信号) 且 (top2差≤8pp 或 平局概率≥32%)
+        _draw_strong = _draw_prob >= 0.30
+        _draw_very_strong = _draw_prob >= 0.32
+        _gap_small = _top2_gap <= 0.08
+        # 排除极端热门(主赔<1.50, 强队碾压局平局概率虚高来自校准)
+        _not_extreme_fav = _home_odds >= 1.50 or _home_odds == 0
+        if _draw_strong and (_gap_small or _draw_very_strong) and _not_extreme_fav:
+            had_min_idx = 1  # 覆盖为平局
+            _draw_override = True
+            _draw_override_reason = (
+                f"平局覆盖: P平={_draw_prob:.0%}≥30% top2差={_top2_gap:.0%}≤8pp "
+                f"主赔={_home_odds:.2f} (HAD argmax结构性盲区修复)"
+            )
+            v611_notes.append(_draw_override_reason)
+            v611_flags['draw_override'] = True
+
     # ===== Ultra 6.0: λ-赔率方向冲突校准 =====
     # 当λ统计模型的主客强弱方向与四源融合概率方向矛盾时
     # (典型场景: 主场优势×1.15反转了客队更强的原始数据),
@@ -7619,6 +7648,7 @@ def predict_match(match_num, data):
             'conf_hit_rate': round(had_hit_rate * 100, 1) if had_open else None,  # Ultra 12.1: 校准命中率%
             'p': f"{p1_w:.0%}/{p1_d:.0%}/{p1_l:.0%}" if had_open else '未开盘',
             'had_open': had_open,
+            'draw_override': _draw_override,  # Ultra 12.2: 平局方向覆盖标记
         },
         'HHAD': {
             'dir': hhad_dir,
@@ -8081,7 +8111,8 @@ def main():
             if had_info.get('had_open', True):
                 _hr = had_info.get('conf_hit_rate')
                 _hr_s = f" 校准命中≈{_hr:.0f}%" if _hr is not None else ""
-                summary_lines.append(f"    HAD:  {had_info['dir']}@{had_info['odds']} {had_info['conf']}{_hr_s} P={had_info['p']}")
+                _do_tag = " [平局覆盖]" if had_info.get('draw_override') else ""
+                summary_lines.append(f"    HAD:  {had_info['dir']}@{had_info['odds']} {had_info['conf']}{_hr_s}{_do_tag} P={had_info['p']}")
             else:
                 summary_lines.append(f"    HAD:  未开盘 (仅参考HHAD)")
             _hhr = hhad_info.get('conf_hit_rate')
