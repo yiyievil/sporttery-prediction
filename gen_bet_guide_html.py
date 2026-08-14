@@ -3,20 +3,22 @@
 """
 gen_bet_guide_html.py — 投注选择显性化指南 (HTML, 数据驱动)
 =============================================================
-从预测 JSON 读取每场数据, 按「三档显性化」规则给出每场该怎么买:
+从预测 JSON 读取每场数据, 按「四档显性化」规则给出每场该怎么买:
   ✅ 单选    方向明确(argmax≥50 且非误判高发) — 照主推买
-  ⚠️ 双选兜底 平局窗口(平P≥28联赛/≥22杯赛 且方向模糊<50) — 改买 HHAD 覆盖项(含平局)
-  🚫 避开    方向性误判高发(胜P≥60 且 平P≥25联赛/≥20杯赛) 或低质量场 — 不买
+  ⚠️ 双选兜底 平局窗口(平P≥28联赛/≥30杯赛 且方向模糊<50) — 改买 HHAD 覆盖项(含平局)
+  🚫 避开    方向性误判高发(胜P≥60 且 平P≥25) — 不买
 
 规则源自 260811 周二 9 场实测复盘 (用户彩票6中2的根因分析):
   - 005/010 平P32/33%+方向模糊 → HHAD覆盖项(受让胜/让负)命中, HAD单选全错
   - 003 胜P62%但平P25% → 方向性误判黑天鹅, HAD/HHAD全错
   - 004 胜P50%方向明确 → HAD单选命中 (平P28但方向不模糊, 不走覆盖)
 
-Ultra 12.0 (平局急救 2026-08-14): 杯赛感知阈值
-  - 260814周四 9场实测: 平局率44.4%, 单选3场全部平局击穿
-  - 杯赛(资格赛/淘汰赛)平局率远超联赛, 需降低双选触发阈值
-  - 杯赛: 双选阈值 28%→22%, 避开阈值 25%→20%
+平局阈值统一 (回测定参 4449场 2026-08, 真实模型融合概率, 与 v215_e2e.py 同口径):
+  - 平局直击: 联赛 P平≥30% / 杯赛 P平≥32% 且距argmax≤10pp
+  - 平局价值: 联赛 P平≥26% / 杯赛 P平≥28% 且距argmax≤10pp (1/3本金小注)
+  - 双选兜底: 联赛 P平≥28% / 杯赛 P平≥30% 且方向模糊(<50)
+  - 杯赛实际平局率18.7% < 联赛25.8%, 故杯赛阈值高于联赛
+    (原"杯赛平局率远超联赛"结论基于260814小样本9场过拟合, 已按674场回测修正)
 
 用法:
   python3 gen_bet_guide_html.py <pred_json路径>        # 指定预测文件
@@ -70,24 +72,26 @@ def _parse_probs(p_str):
 def classify(draw_p, argmax_p, win_p, loss_p, league=''):
     """四档判定。返回 (level, reason, draw_strike, draw_strike_reason, draw_value, draw_value_reason)。
     level: 'draw'|'single'|'cover'|'avoid'
-    draw_strike: bool — 平局紧贴argmax(≤8pp), 可博高赔平局
-    draw_value: bool — 平P≥28%但距argmax>8pp, 平局小注有正EV
-    Ultra 12.0: 杯赛感知 — 杯赛双选阈值 22%, 避开阈值 20%
+    draw_strike: bool — 平局直击 (P平≥30%联赛/32%杯赛 且距argmax≤10pp), 可博高赔平局
+    draw_value: bool — 平局价值 (26-30%联赛/28-32%杯赛 且距argmax≤10pp), 平局小注
+    阈值与 v215_e2e.py 平局覆盖规则统一 (回测定参 4449场 2026-08, 真实模型融合概率):
+      联赛: 覆盖 P平≥30% 差≤10pp (35场平局率40%净增益+17.1%); 价值单 P平≥26% 差≤10pp
+      杯赛: 覆盖 P平≥32% 差≤10pp; 价值单 P平≥28% 差≤10pp
+      (杯赛实际平局率18.7%<联赛25.8%, 原杯赛阈值下调22/20%基于260814小样本过拟合, 方向反了)
     Ultra 12.2: 平局为argmax → 直接出平推荐 ('draw' 档), 不再退化为双选兜底
-    Ultra 12.3: 平局价值 — cover场次平P≥28%额外推荐平局小注 (实测40%+平局率, 模型低估)"""
+    """
     is_cup = _is_cup_league(league)
-    _cover_threshold = 22 if is_cup else 28
-    _avoid_threshold = 20 if is_cup else 25
-    _draw_gap_threshold = 8  # Ultra 12.3: 放宽至8pp (原5pp太紧, 实测仅1/17命中)
-    _draw_min = 25 if not is_cup else 22  # 平局直击最低概率
-    _draw_value_min = 28  # 平局价值最低概率 (联赛)
-    _draw_value_min_cup = 22  # 平局价值最低概率 (杯赛)
+    _cover_threshold = 30 if is_cup else 28
+    _avoid_threshold = 25  # 联赛/杯赛统一 (杯赛平局率低, 不单独下调)
+    _draw_gap_threshold = 10  # 与引擎覆盖规则统一 (8→10pp)
+    _draw_min = 32 if is_cup else 30  # 平局直击最低概率 (与引擎覆盖阈值一致)
+    _draw_value_min = 28 if is_cup else 26  # 平局价值最低概率
     _cup_tag = ' [杯赛]' if is_cup else ''
 
     # 🎯 Ultra 12.2: 平局为argmax → 直接推荐平局 (不再退化为双选兜底)
     # 理由: 模型最看好的结果就是平局, 没理由躲到HHAD后面
     # 赔率差: 平局~3.0 vs HHAD覆盖项~1.4, 直接买平局收益高2倍+
-    if draw_p == argmax_p and draw_p >= _draw_min:
+    if draw_p == argmax_p and draw_p >= 25:
         _others = [p for p in [win_p, loss_p] if p != draw_p]
         _next = max(_others) if _others else 0
         return ('draw',
@@ -97,7 +101,7 @@ def classify(draw_p, argmax_p, win_p, loss_p, league=''):
                 f'平P{draw_p:.0f}%为argmax — 模型最看好平局, 直接买平局赔率~3.0',
                 False, '')
 
-    # 先判断平局直击: 平P紧贴argmax(≤8pp) 且 平P≥最低阈值
+    # 平局直击: P平≥30%(联赛)/32%(杯赛) 且 距argmax≤10pp (与引擎覆盖规则同口径)
     draw_strike = False
     draw_strike_reason = ''
     draw_value = False
@@ -108,22 +112,19 @@ def classify(draw_p, argmax_p, win_p, loss_p, league=''):
         _gap_dir = '胜' if win_p == argmax_p else '负'
         draw_strike_reason = (
             f'平P{draw_p:.0f}%仅差{_gap_dir}P{argmax_p:.0f}% {_gap:.0f}pp — '
-            f'模型几乎平局/方向五五开, 可博高赔平局(~3.0)'
+            f'回测该档平局率40%, 平局@~3.0有正EV, 可博高赔平局'
         )
 
-    # Ultra 12.3: 平局价值 — cover场次平P≥28%但距argmax>8pp, 实际平局率~40%,
-    # 平局@3.0的EV≈1.2, 建议小注(主推的1/3本金)博高赔
-    _dv_min = _draw_value_min_cup if is_cup else _draw_value_min
-    if not draw_strike and draw_p >= _dv_min:
+    # 平局价值单: 26-30%(联赛)/28-32%(杯赛) 且 距argmax≤10pp (与引擎 draw_value 同口径)
+    if not draw_strike and _draw_value_min <= draw_p < _draw_min and _gap <= _draw_gap_threshold:
         draw_value = True
         _gap_dir = '胜' if win_p == argmax_p else '负'
         draw_value_reason = (
             f'平P{draw_p:.0f}%距{_gap_dir}P{argmax_p:.0f}% {_gap:.0f}pp — '
-            f'实测平局率~40%, 模型低估平局, 平局@~3.0有正EV'
-            f'{_cup_tag}'
+            f'回测该档平局率33%, 优于热门方向EV, 建议1/3本金小注博平{_cup_tag}'
         )
 
-    # 🚫 方向性误判高发: 强主场(胜P≥60)但平局不可忽视(平P≥阈值) → 黑天鹅特征
+    # 🚫 方向性误判高发: 强主场(胜P≥60)但平局不可忽视(平P≥25) → 黑天鹅特征
     if win_p >= 60 and draw_p >= _avoid_threshold:
         return ('avoid',
                 f'强主场胜P{win_p:.0f}%但平P{draw_p:.0f}% — 方向性误判高发区(黑天鹅风险), 模型易高估主队{_cup_tag}',
@@ -132,16 +133,6 @@ def classify(draw_p, argmax_p, win_p, loss_p, league=''):
     if draw_p >= _cover_threshold and argmax_p < 50:
         return ('cover',
                 f'平P{draw_p:.0f}%且方向P{argmax_p:.0f}%模糊 — 平局高发, HAD单选易漏平{_cup_tag}',
-                draw_strike, draw_strike_reason, draw_value, draw_value_reason)
-    # ⚠️ Ultra 12.0: 杯赛强平局信号 — 平P≥28% 即使方向明确也强制升级(淘汰赛次回合平局率极高)
-    if is_cup and draw_p >= 28:
-        return ('cover',
-                f'平P{draw_p:.0f}%杯赛强平局信号 — 淘汰赛次回合平局率极高, 强制双选兜底{_cup_tag}',
-                draw_strike, draw_strike_reason, draw_value, draw_value_reason)
-    # ⚠️ Ultra 12.0: 杯赛平局警报 — 即使方向明确, 平P≥20%也加警告
-    if is_cup and draw_p >= 20 and argmax_p >= 50:
-        return ('single',
-                f'方向P{argmax_p:.0f}%明确, 平P{draw_p:.0f}% [杯赛平局警报 — 建议考虑双选兜底]',
                 draw_strike, draw_strike_reason, draw_value, draw_value_reason)
     # ✅ 方向明确
     return ('single', f'方向P{argmax_p:.0f}%明确, 平P{draw_p:.0f}%可控',
@@ -254,7 +245,7 @@ def generate(pred_json=None):
     single_list = [c for c in cards if c['level'] == 'single']
     cover_list = [c for c in cards if c['level'] == 'cover']
     draw_list = [c for c in cards if c['level'] == 'draw']
-    draw_value_list = [c for c in cards if c.get('draw_value') and c['level'] == 'cover']
+    draw_value_list = [c for c in cards if c.get('draw_value')]
     n_draw_value = len(draw_value_list)
 
     card_html = ''
@@ -263,7 +254,7 @@ def generate(pred_json=None):
         if c.get('draw_strike') and c['level'] != 'draw':
             ds_html = f'<div class="mc-draw-strike">🎯 平局直击: <b>平 @{c.get("draw_odds","3.00")}</b> (胜平负) — {c.get("draw_strike_reason","")}</div>'
         dv_html = ''
-        if c.get('draw_value') and c['level'] == 'cover':
+        if c.get('draw_value'):
             dv_html = f'<div class="mc-draw-value">💡 平局价值: <b>平 @{c.get("draw_odds","3.00")}</b> (胜平负·小注) — {c.get("draw_value_reason","")}</div>'
         card_html += f'''<div class="mc {c['rec_cls']}">
   <div class="mc-top"><span class="mc-no">{c['no']}</span>
@@ -288,12 +279,12 @@ def generate(pred_json=None):
         guide += f'<div class="ins warn">⚠️ <b>双选兜底 {n_cover} 场</b>：{picks}。平局高发，务必买 HHAD 覆盖项而非胜平负单选。</div>'
     if draw_value_list:
         picks = ' + '.join(f"{c['no']}(平@{c.get('draw_odds','3.00')})" for c in draw_value_list)
-        guide += f'<div class="ins draw">💡 <b>平局价值 {n_draw_value} 场</b>：{picks}。实测平局率~40%远超模型预测，平局@~3.0有正期望值。建议用主推的<b>1/3本金</b>小注博高赔，不影响主推收益。</div>'
+        guide += f'<div class="ins draw">💡 <b>平局价值 {n_draw_value} 场</b>：{picks}。回测该档(平P≥26%且差≤10pp)平局率33%、优于热门方向EV，平局@~3.0接近正期望值。建议用主推的<b>1/3本金</b>小注博高赔，不影响主推收益。</div>'
     if n_draw_strike:
         draw_strike_list = [c for c in cards if c.get('draw_strike') and c['level'] != 'draw']
         if draw_strike_list:
             picks = ' + '.join(f"{c['no']}(平@{c.get('draw_odds','3.00')})" for c in draw_strike_list)
-            guide += f'<div class="ins draw">🎯 <b>平局直击 {len(draw_strike_list)} 场</b>：{picks}。平P紧贴argmax(≤5pp)，模型五五开局，可博高赔平局。</div>'
+            guide += f'<div class="ins draw">🎯 <b>平局直击 {len(draw_strike_list)} 场</b>：{picks}。平P紧贴argmax(≤10pp)，回测该档平局率40%、平局正EV，可博高赔平局。</div>'
     if n_avoid:
         guide += f'<div class="ins bad">🚫 <b>避开 {n_avoid} 场</b>：方向性误判高发，不买。</div>'
 
@@ -360,10 +351,11 @@ h1{{font-size:21px;font-weight:800}}
 
 <div class="card"><div class="sec" style="margin-top:0">📏 判定规则</div>
 <div class="ins warn" style="border-color:#94a3b8;background:#f8fafc">
-<b>🎯 平局直击</b>：平P为argmax且≥25%(联赛)/≥22%(杯赛) — 模型最看好平局，直接买平局（赔率~3.0，收益远超HHAD覆盖项）<br>
-<b>💡 平局价值</b>：平P≥28%且距argmax≤8pp — 实测平局率~40%远超模型预测，平局@~3.0有正EV，建议1/3本金小注<br>
-<b>✅ 单选</b>：方向P≥50 且非误判高发 · <b>⚠️ 双选兜底</b>：平P≥28(联赛)/≥22(杯赛) 且 方向P&lt;50（平局窗口，改买HHAD覆盖项） · <b>🚫 避开</b>：胜P≥60 且 平P≥25(联赛)/≥20(杯赛)（强主场方向性误判黑天鹅）<br>
-<b>杯赛策略</b>：资格赛/淘汰赛/解放者杯平局率远高于联赛，双选阈值自动下调至22%，杯赛单选场会有平局警报提示。<br>
+<b>🎯 平局直击</b>：平P为argmax（≥25%） — 模型最看好平局，直接买平局（赔率~3.0，收益远超HHAD覆盖项）<br>
+<b>🎯 平局紧贴</b>：联赛平P≥30%/杯赛≥32% 且距argmax≤10pp — 回测该档平局率40%、平局正EV，可博高赔平局<br>
+<b>💡 平局价值</b>：联赛平P≥26%/杯赛≥28% 且距argmax≤10pp — 回测该档平局率33%、优于热门方向EV，建议1/3本金小注<br>
+<b>✅ 单选</b>：方向P≥50 且非误判高发 · <b>⚠️ 双选兜底</b>：平P≥28(联赛)/≥30(杯赛) 且 方向P&lt;50（平局窗口，改买HHAD覆盖项） · <b>🚫 避开</b>：胜P≥60 且 平P≥25（强主场方向性误判黑天鹅）<br>
+<b>杯赛策略</b>：杯赛实际平局率18.7%低于联赛25.8%（674场回测），故杯赛阈值高于联赛，不再单独下调。<br>
 <b>过关</b>：优先 2-3 关，忌 6 场全选（容错为0）。命中率第一，宁缺毋滥。</div></div>
 <div class="foot">基于 {base} {len(cards)} 场预测 · 规则源自 260811 实测复盘 · 仅供研究学习，不构成投注建议</div>
 </body></html>'''
