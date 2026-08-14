@@ -20,7 +20,7 @@ SWOT_DATA_FILE = os.path.join(PREDICTIONS_DIR, 'swot_data_refreshed.json')
 # SWOT不再只调置信度, 而是直接在胜/负之间迁移概率质量, 平局不受影响
 # (本系统平局本就系统性低估, 不能让SWOT调整再侵蚀平局概率)
 SWOT_SHIFT_PER_POINT = 0.01   # 每评分点 → 概率迁移1pp
-SWOT_MAX_SHIFT = 0.08         # 迁移上限 ±8pp
+SWOT_MAX_SHIFT = 0.12         # 迁移上限 ±12pp (联赛状态波动大, 8pp过于保守)
 SWOT_MIN_DIFF = 2.0           # 评分差低于此值不调整 (噪音区)
 
 
@@ -158,7 +158,7 @@ def apply_swot_prob_shift(wdl, home_score, away_score):
     原理: 
       - 评分差大(>=MIN_DIFF): 胜/负之间直接转移概率质量 s, 平局概率固定不变
       - 评分差小(<MIN_DIFF): SWOT指向平局, 从胜/负各抽一半概率给平局
-      - 有界(±8pp)、方向恒正确、概率和恒为1
+      - 有界(±12pp)、方向恒正确、概率和恒为1
 
     参数: wdl = [p_win, p_draw, p_lose]
     返回: (new_wdl, shift, applied)
