@@ -254,7 +254,7 @@ def generate(pred_json=None):
     single_list = [c for c in cards if c['level'] == 'single']
     cover_list = [c for c in cards if c['level'] == 'cover']
     draw_list = [c for c in cards if c['level'] == 'draw']
-    draw_value_list = [c for c in cards if c.get('draw_value')]
+    draw_value_list = [c for c in cards if c.get('draw_value') and c['level'] == 'cover']
     n_draw_value = len(draw_value_list)
 
     card_html = ''
