@@ -115,12 +115,50 @@ TEAM_NAME_MAP.update(TEAM_NAME_MAP_LIGUE1)
 TEAM_NAME_MAP_REVERSE = {v: k for k, v in TEAM_NAME_MAP.items()}
 
 # ============================================================
+# FBref 非五大联赛映射: 中文名 → FBref comp_id
+# ============================================================
+FBREF_LEAGUE_MAP = {
+    "日职":      ("JPN-J1 League",      25, "J1 League"),
+    "日乙":      ("JPN-J2 League",      49, "J2 League"),
+    "韩职":      ("KOR-K League 1",     55, "K League 1"),
+    "美职联":    ("USA-MLS",            22, "Major League Soccer"),
+    "巴甲":      ("BRA-Serie A",        24, "Serie A"),
+    "葡超":      ("POR-Primeira Liga",  32, "Primeira Liga"),
+    "荷甲":      ("NED-Eredivisie",     23, "Eredivisie"),
+    "英冠":      ("ENG-Championship",   10, "Championship"),
+    "沙职":      ("KSA-Saudi League",   70, "Saudi Pro League"),
+    "澳超":      ("AUS-A-League",       65, "A-League Men"),
+    "瑞超":      ("SWE-Allsvenskan",    29, "Allsvenskan"),
+    "挪超":      ("NOR-Eliteserien",    28, "Eliteserien"),
+    "芬超":      ("FIN-Veikkausliiga",  43, "Veikkausliiga"),
+    "中超":      ("CHN-Super League",   62, "Chinese Super League"),
+    "墨超":      ("MEX-Liga MX",        31, "Liga MX"),
+    "欧冠":      ("INT-Champions League", 8, "Champions League"),
+    "欧罗巴":    ("INT-Europa League",  19, "Europa League"),
+    "欧协联":    ("INT-Conference League", 882, "Conference League"),
+    "英甲":      ("ENG-League One",     15, "League One"),
+    "德乙":      ("GER-2. Bundesliga",  33, "2. Bundesliga"),
+    "法乙":      ("FRA-Ligue 2",        60, "Ligue 2"),
+    "荷乙":      ("NED-Eerste Divisie", 51, "Eerste Divisie"),
+    "解放者杯":  ("INT-Copa Libertadores", 14, "Copa Libertadores"),
+}
+
+# FBref 联赛赛季格式: calendar_year 联赛用单年, 其余用跨年
+FBREF_CALENDAR_YEAR_LEAGUES = {
+    "日职", "日乙", "韩职", "美职联", "巴甲", "澳超",
+    "瑞超", "挪超", "芬超", "中超", "墨超",
+}
+
+# FBref 反向映射
+FBREF_LEAGUE_MAP_REVERSE = {v[0]: k for k, v in FBREF_LEAGUE_MAP.items()}
+
+# ============================================================
 # 数据源配置
 # ============================================================
 class config:
     # 数据源开关
     understat_enabled = True
-    fbref_enabled = False     # FBref需要Chrome浏览器, 默认禁用 (Understat 已提供全部所需数据)
+    fbref_enabled = True      # FBref采集器 (proxy模式: 用historical_matches实际进球作xG代理)
     whoscored_enabled = False  # 已禁用
 
     # 赛季列表 (Understat格式)
