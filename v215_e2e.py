@@ -2713,11 +2713,15 @@ def calibrate_probabilities(probs, source='poisson', lam_total=None, lam_h=None,
     #       欧冠 7-8月资格赛平局率 20%~25%, 均高于模型默认先验
     # 关键: '欧冠'等主名会被 _CALIBRATION(sample>=20) 覆盖为低值(如0.1832),
     #       故杯赛分支必须用固定先验 CUP_DRAW_BASE, 不能依赖可能被覆盖的 LEAGUE_DRAW_RATE
-    # 机制: ① 固定杯赛平局先验 0.28 直接加权(权重0.5), 不受数据库覆盖影响
+    # 机制: ① 固定杯赛平局先验直接加权(权重0.5), 不受数据库覆盖影响
     #       ② 分级加成: λ差<0.40 +4pp(势均力敌强加成), <0.80 +2pp(小幅差距中加成)
     #       ③ 一边倒(λ差>=0.80)靠固定先验兜底, 不硬掰
-    if league and _is_cup_league(league):
-        # ① 固定杯赛平局先验 (取实测区间 20%~25% 上沿), 覆盖被数据库低值覆盖的情况
+    # Ultra 12.0 (平局急救 2026-08-14): 淘汰赛次回合加成 + 上限提升
+    #       ④ 淘汰赛次回合/资格赛: 额外 +3pp (落后方保守/领先方留力效应)
+    #       ⑤ 杯赛目标上限从 0.36 提升至 0.40 (260814周四实测 44.4% 平局率)
+    _is_cup = _is_cup_league(league) if league else False
+    if _is_cup:
+        # ① 固定杯赛平局先验, 覆盖被数据库低值覆盖的情况
         _cup_rate = max(CUP_DRAW_BASE, LEAGUE_DRAW_RATE.get(league, CUP_DRAW_BASE))
         target_draw = 0.5 * target_draw + 0.5 * _cup_rate
         # ② 分级平局加成 (杯赛整体倾向平局, 势均力敌更强)
@@ -2727,16 +2731,28 @@ def calibrate_probabilities(probs, source='poisson', lam_total=None, lam_h=None,
                 target_draw += 0.04
             elif _lam_diff_cup < 0.80:
                 target_draw += 0.02
+        # ④ Ultra 12.0: 淘汰赛/资格赛次回合加成
+        # 检测: league名含"资格赛"、"附"、"淘汰赛"、"第.*回合"、"决赛"
+        # 或 league 在 cup_leg_penalty 中被识别为两回合制杯赛
+        _is_knockout = any(kw in str(league) for kw in
+                           ['资格赛', '附', '淘汰赛', '决赛', '回合', '欧冠', '欧罗巴', '欧联', '欧协联', '解放者杯'])
+        if _is_knockout:
+            target_draw += 0.03
     # 平赔<3.4: 市场定价认为平局可能性高 → 目标+2pp
     # 平赔>4.0: 市场认为平局罕见 → 目标-1pp
+    # Ultra 12.0: 杯赛平赔信号放大 (杯赛平赔<3.5 时市场信号更强, 额外+1pp)
     if draw_odds and draw_odds > 1.5:
         if draw_odds < 3.4:
             target_draw += 0.02
+            if _is_cup and draw_odds < 3.5:
+                target_draw += 0.01  # 杯赛平赔信号放大
         elif draw_odds > 4.0:
             target_draw -= 0.01
     # Ultra 6.5: 平局偏差在线反馈 (verify_history 实际平局率 vs 预测均值, 有界±0.03)
     target_draw += query_draw_bias()
-    target_draw = max(0.18, min(0.36, target_draw))
+    # Ultra 12.0: 杯赛目标上限 0.40 (原 0.36 不足以应对 44% 实测平局率)
+    _cap = 0.40 if _is_cup else 0.36
+    target_draw = max(0.18, min(_cap, target_draw))
 
     def _logit(p):
         p = max(0.001, min(0.999, p))
@@ -4539,7 +4555,11 @@ LEAGUE_DRAW_RATE = {
 # 两回合制杯赛(欧冠/欧罗巴/欧协联资格赛)平局倾向实测 20%~25%, 取上沿 0.28
 # 需稳定高于主流联赛标定值(英超0.25/巴甲0.30), 否则加成被稀释
 # 不受 _CALIBRATION(sample>=20) 覆盖影响 — 杯赛主名如'欧冠'常被覆盖为低值(0.1832)
-CUP_DRAW_BASE = 0.28
+# Ultra 12.0 (平局急救 2026-08-14): 上调至 0.32
+# 260814周四 9 场实测: 杯赛平局率 4/6=66.7%, 全场 4/9=44.4%
+# 资格赛次回合落后方保守/领先方留力, 平局率远超联赛均值
+# 原 0.28 在极端杯赛环境下仍不足以覆盖平局高发
+CUP_DRAW_BASE = 0.32
 
 # Ultra 6.6: 用历史标定值覆盖平局率
 if _CALIBRATION:

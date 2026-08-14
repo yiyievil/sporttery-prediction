@@ -5,13 +5,18 @@ gen_bet_guide_html.py — 投注选择显性化指南 (HTML, 数据驱动)
 =============================================================
 从预测 JSON 读取每场数据, 按「三档显性化」规则给出每场该怎么买:
   ✅ 单选    方向明确(argmax≥50 且非误判高发) — 照主推买
-  ⚠️ 双选兜底 平局窗口(平P≥28 且方向模糊<50) — 改买 HHAD 覆盖项(含平局)
-  🚫 避开    方向性误判高发(胜P≥60 且 平P≥25) 或低质量场 — 不买
+  ⚠️ 双选兜底 平局窗口(平P≥28联赛/≥22杯赛 且方向模糊<50) — 改买 HHAD 覆盖项(含平局)
+  🚫 避开    方向性误判高发(胜P≥60 且 平P≥25联赛/≥20杯赛) 或低质量场 — 不买
 
 规则源自 260811 周二 9 场实测复盘 (用户彩票6中2的根因分析):
   - 005/010 平P32/33%+方向模糊 → HHAD覆盖项(受让胜/让负)命中, HAD单选全错
   - 003 胜P62%但平P25% → 方向性误判黑天鹅, HAD/HHAD全错
   - 004 胜P50%方向明确 → HAD单选命中 (平P28但方向不模糊, 不走覆盖)
+
+Ultra 12.0 (平局急救 2026-08-14): 杯赛感知阈值
+  - 260814周四 9场实测: 平局率44.4%, 单选3场全部平局击穿
+  - 杯赛(资格赛/淘汰赛)平局率远超联赛, 需降低双选触发阈值
+  - 杯赛: 双选阈值 28%→22%, 避开阈值 25%→20%
 
 用法:
   python3 gen_bet_guide_html.py <pred_json路径>        # 指定预测文件
@@ -23,8 +28,24 @@ import os
 import sys
 import json
 import glob
+import re
 
 _WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__))
+
+# Ultra 12.0: 杯赛识别关键词
+_CUP_KEYWORDS = ['欧冠', '欧罗巴', '欧联', '欧协联', '亚冠', '解放者杯',
+                 '南美杯', '中北美冠', '非洲冠', '资格赛', '附', '淘汰赛',
+                 '决赛', '冠军联赛', '欧洲联赛', '杯赛']
+
+
+def _is_cup_league(league):
+    """判断是否为杯赛/淘汰赛 (含资格赛、解放者杯等)"""
+    if not league:
+        return False
+    for kw in _CUP_KEYWORDS:
+        if kw in str(league):
+            return True
+    return False
 
 
 def _parse_probs(p_str):
@@ -34,17 +55,65 @@ def _parse_probs(p_str):
         return [0.0, 0.0, 0.0]
 
 
-def classify(draw_p, argmax_p, win_p, loss_p):
-    """三档判定。返回 (level, reason, cover_side)。
-    level: 'single'|'cover'|'avoid';  cover_side: 让球盘→'让负' / 受让盘→'受让胜'(含平局项)"""
-    # 🚫 方向性误判高发: 强主场(胜P≥60)但平局不可忽视(平P≥25) → 003黑天鹅特征
-    if win_p >= 60 and draw_p >= 25:
-        return 'avoid', f'强主场胜P{win_p:.0f}%但平P{draw_p:.0f}% — 方向性误判高发区(黑天鹅风险), 模型易高估主队'
-    # ⚠️ 平局窗口+方向模糊: 平P≥28 且 argmax<50 → HAD单选不稳, 用HHAD覆盖项
-    if draw_p >= 28 and argmax_p < 50:
-        return 'cover', f'平P{draw_p:.0f}%且方向P{argmax_p:.0f}%模糊 — 平局高发, HAD单选易漏平'
+def classify(draw_p, argmax_p, win_p, loss_p, league=''):
+    """四档判定。返回 (level, reason, draw_strike, draw_strike_reason)。
+    level: 'draw'|'single'|'cover'|'avoid'
+    draw_strike: bool — 平局紧贴argmax(≤5pp), 可博高赔平局
+    Ultra 12.0: 杯赛感知 — 杯赛双选阈值 22%, 避开阈值 20%
+    Ultra 12.2: 平局为argmax → 直接出平推荐 ('draw' 档), 不再退化为双选兜底"""
+    is_cup = _is_cup_league(league)
+    _cover_threshold = 22 if is_cup else 28
+    _avoid_threshold = 20 if is_cup else 25
+    _draw_gap_threshold = 5  # 平局与argmax差距≤5pp → 平局直击
+    _draw_min = 25 if not is_cup else 22  # 平局直击最低概率
+    _cup_tag = ' [杯赛]' if is_cup else ''
+
+    # 🎯 Ultra 12.2: 平局为argmax → 直接推荐平局 (不再退化为双选兜底)
+    # 理由: 模型最看好的结果就是平局, 没理由躲到HHAD后面
+    # 赔率差: 平局~3.0 vs HHAD覆盖项~1.4, 直接买平局收益高2倍+
+    if draw_p == argmax_p and draw_p >= _draw_min:
+        _others = [p for p in [win_p, loss_p] if p != draw_p]
+        _next = max(_others) if _others else 0
+        return ('draw',
+                f'平P{draw_p:.0f}%为最高概率, 领先次选P{_next:.0f}% {draw_p-_next:.0f}pp — '
+                f'模型看好平局, 直接博高赔平局(~3.0){_cup_tag}',
+                True,
+                f'平P{draw_p:.0f}%为argmax — 模型最看好平局, 直接买平局赔率~3.0')
+
+    # 先判断平局直击: 平P紧贴argmax(≤5pp) 且 平P≥最低阈值
+    draw_strike = False
+    draw_strike_reason = ''
+    _gap = argmax_p - draw_p
+    if draw_p >= _draw_min and _gap <= _draw_gap_threshold and draw_p != argmax_p:
+        draw_strike = True
+        _gap_dir = '胜' if win_p == argmax_p else '负'
+        draw_strike_reason = (
+            f'平P{draw_p:.0f}%仅差{_gap_dir}P{argmax_p:.0f}% {_gap:.0f}pp — '
+            f'模型几乎平局/方向五五开, 可博高赔平局(~3.0)'
+        )
+
+    # 🚫 方向性误判高发: 强主场(胜P≥60)但平局不可忽视(平P≥阈值) → 黑天鹅特征
+    if win_p >= 60 and draw_p >= _avoid_threshold:
+        return ('avoid',
+                f'强主场胜P{win_p:.0f}%但平P{draw_p:.0f}% — 方向性误判高发区(黑天鹅风险), 模型易高估主队{_cup_tag}',
+                draw_strike, draw_strike_reason)
+    # ⚠️ 平局窗口+方向模糊: 平P≥阈值 且 argmax<50 → HAD单选不稳, 用HHAD覆盖项
+    if draw_p >= _cover_threshold and argmax_p < 50:
+        return ('cover',
+                f'平P{draw_p:.0f}%且方向P{argmax_p:.0f}%模糊 — 平局高发, HAD单选易漏平{_cup_tag}',
+                draw_strike, draw_strike_reason)
+    # ⚠️ Ultra 12.0: 杯赛强平局信号 — 平P≥28% 即使方向明确也强制升级(淘汰赛次回合平局率极高)
+    if is_cup and draw_p >= 28:
+        return ('cover',
+                f'平P{draw_p:.0f}%杯赛强平局信号 — 淘汰赛次回合平局率极高, 强制双选兜底{_cup_tag}',
+                draw_strike, draw_strike_reason)
+    # ⚠️ Ultra 12.0: 杯赛平局警报 — 即使方向明确, 平P≥20%也加警告
+    if is_cup and draw_p >= 20 and argmax_p >= 50:
+        return ('single',
+                f'方向P{argmax_p:.0f}%明确, 平P{draw_p:.0f}% [杯赛平局警报 — 建议考虑双选兜底]',
+                draw_strike, draw_strike_reason)
     # ✅ 方向明确
-    return 'single', f'方向P{argmax_p:.0f}%明确, 平P{draw_p:.0f}%可控'
+    return ('single', f'方向P{argmax_p:.0f}%明确, 平P{draw_p:.0f}%可控', draw_strike, draw_strike_reason)
 
 
 def generate(pred_json=None):
@@ -66,7 +135,7 @@ def generate(pred_json=None):
     base = os.path.basename(pred_json).replace('pred_', '').replace('.json', '')
 
     cards = []
-    n_single = n_cover = n_avoid = 0
+    n_single = n_cover = n_avoid = n_draw = n_draw_strike = 0
     for key in sorted(res.keys(), key=lambda x: x.replace('周二', '').replace('周', '')):
         m = res[key]
         meta = meta_all.get(key, {})
@@ -74,7 +143,8 @@ def generate(pred_json=None):
         w, dr, l = _parse_probs(had.get('p', '0/0/0'))
         argmax_p = max(w, dr, l)
         handicap = hh.get('handicap')
-        level, reason = classify(dr, argmax_p, w, l)
+        league = meta.get('league', '')
+        level, reason, draw_strike, draw_strike_reason = classify(dr, argmax_p, w, l, league)
 
         # HHAD 覆盖项 (含平局的一侧): 让球盘→让负(平+负), 受让盘→受让胜(胜+平)
         if handicap is not None:
@@ -82,7 +152,11 @@ def generate(pred_json=None):
         else:
             cover_side = hh.get('dir', '')
 
-        if level == 'single':
+        if level == 'draw':
+            n_draw += 1
+            rec = f"平 @{had.get('draw_odds', '3.00')} (胜平负·平局直击)"
+            rec_cls, tag = 'draw', '🎯 平局直击'
+        elif level == 'single':
             n_single += 1
             rec = f"{had.get('dir','')} @{had.get('odds','')} (胜平负)"
             rec_cls, tag = 'single', '✅ 单选'
@@ -97,6 +171,9 @@ def generate(pred_json=None):
             rec = '— 本场不买 —'
             rec_cls, tag = 'avoid', '🚫 避开'
 
+        if draw_strike:
+            n_draw_strike += 1
+
         conf = had.get('conf', '')
         cards.append({
             'no': key, 'home': meta.get('home', '?'), 'away': meta.get('away', '?'),
@@ -104,30 +181,45 @@ def generate(pred_json=None):
             'probs': f'{w:.0f}/{dr:.0f}/{l:.0f}', 'conf': conf,
             'diff': m.get('difficulty', 0), 'agree': m.get('model_agreement', 0),
             'rec_cls': rec_cls,
+            'draw_strike': draw_strike, 'draw_strike_reason': draw_strike_reason,
+            'draw_odds': had.get('draw_odds', '3.00'),
         })
 
-    # 过关建议: 只用单选场
+    # 过关建议: 单选+平局直击场
     single_list = [c for c in cards if c['level'] == 'single']
     cover_list = [c for c in cards if c['level'] == 'cover']
+    draw_list = [c for c in cards if c['level'] == 'draw']
 
     card_html = ''
     for c in cards:
+        ds_html = ''
+        if c.get('draw_strike') and c['level'] != 'draw':
+            ds_html = f'<div class="mc-draw-strike">🎯 平局直击: <b>平 @{c.get("draw_odds","3.00")}</b> (胜平负) — {c.get("draw_strike_reason","")}</div>'
         card_html += f'''<div class="mc {c['rec_cls']}">
   <div class="mc-top"><span class="mc-no">{c['no']}</span>
     <span class="mc-teams"><b>{c['home']}</b> vs {c['away']}</span>
     <span class="mc-tag {c['rec_cls']}">{c['tag']}</span></div>
   <div class="mc-rec">{c['rec']}</div>
+  {ds_html}
   <div class="mc-meta">概率 {c['probs']}% · {c['conf']} · 可预测性 {c['diff']} · 一致性 {c['agree']:.0%}</div>
   <div class="mc-reason">{c['reason']}</div>
 </div>'''
 
     guide = ''
+    if draw_list:
+        picks = ' + '.join(f"{c['no']}({c['rec'].split('(')[0].strip()})" for c in draw_list)
+        guide += f'<div class="ins draw">🎯 <b>平局直击 {n_draw} 场</b>：{picks}。模型最看好平局，直接买平局赔率~3.0，比HHAD覆盖项高2倍收益。</div>'
     if single_list:
         picks = ' + '.join(f"{c['no']}({c['rec'].split('(')[0].strip()})" for c in single_list)
         guide += f'<div class="ins good">✅ <b>可单选 {n_single} 场</b>：{picks}。建议 <b>2-3 关</b> 组合（容错高），不要 6 场全选。</div>'
     if cover_list:
         picks = ' + '.join(f"{c['no']}({c['rec'].split('(')[0].strip()})" for c in cover_list)
         guide += f'<div class="ins warn">⚠️ <b>双选兜底 {n_cover} 场</b>：{picks}。平局高发，务必买 HHAD 覆盖项而非胜平负单选。</div>'
+    if n_draw_strike:
+        draw_strike_list = [c for c in cards if c.get('draw_strike') and c['level'] != 'draw']
+        if draw_strike_list:
+            picks = ' + '.join(f"{c['no']}(平@{c.get('draw_odds','3.00')})" for c in draw_strike_list)
+            guide += f'<div class="ins draw">🎯 <b>平局直击 {len(draw_strike_list)} 场</b>：{picks}。平P紧贴argmax(≤5pp)，模型五五开局，可博高赔平局。</div>'
     if n_avoid:
         guide += f'<div class="ins bad">🚫 <b>避开 {n_avoid} 场</b>：方向性误判高发，不买。</div>'
 
@@ -143,6 +235,7 @@ h1{{font-size:21px;font-weight:800}}
 .lg.single{{background:#f0fdf4;border:1px solid #86efac}}
 .lg.cover{{background:#fffbeb;border:1px solid #fcd34d}}
 .lg.avoid{{background:#fef2f2;border:1px solid #fca5a5}}
+.lg.draw{{background:#fefce8;border:1px solid #facc15}}
 .lg b{{font-size:14px;display:block;margin-bottom:3px}}
 .stat{{display:flex;gap:10px;margin-top:10px}}
 .st{{flex:1;text-align:center;background:#f8fafc;border-radius:10px;padding:10px}}
@@ -150,14 +243,16 @@ h1{{font-size:21px;font-weight:800}}
 .st span{{font-size:11px;color:#64748b}}
 .st.s1 b{{color:#16a34a}} .st.s2 b{{color:#d97706}} .st.s3 b{{color:#dc2626}}
 .mc{{background:#fff;border-radius:12px;padding:13px 14px;margin:10px 0;border-left:5px solid #cbd5e1;box-shadow:0 1px 3px rgba(15,23,42,.06)}}
-.mc.single{{border-left-color:#16a34a}} .mc.cover{{border-left-color:#f59e0b}} .mc.avoid{{border-left-color:#dc2626;background:#fafafa}}
+.mc.single{{border-left-color:#16a34a}} .mc.cover{{border-left-color:#f59e0b}} .mc.avoid{{border-left-color:#dc2626;background:#fafafa}} .mc.draw{{border-left-color:#eab308;background:linear-gradient(135deg,#fffbeb,#fefce8)}}
 .mc-top{{display:flex;align-items:center;gap:8px;flex-wrap:wrap}}
 .mc-no{{font-weight:800;color:#334155;background:#eef2f7;border-radius:6px;padding:2px 8px;font-size:12px}}
 .mc-teams{{font-size:14px;flex:1}}
 .mc-tag{{font-size:12px;font-weight:700;border-radius:6px;padding:3px 8px}}
-.mc-tag.single{{background:#dcfce7;color:#15803d}} .mc-tag.cover{{background:#fef3c7;color:#b45309}} .mc-tag.avoid{{background:#fee2e2;color:#b91c1c}}
+.mc-tag.single{{background:#dcfce7;color:#15803d}} .mc-tag.cover{{background:#fef3c7;color:#b45309}} .mc-tag.avoid{{background:#fee2e2;color:#b91c1c}} .mc-tag.draw{{background:#fef9c3;color:#92400e}}
 .mc-rec{{font-size:17px;font-weight:800;color:#0f172a;margin:9px 0 4px}}
 .mc.avoid .mc-rec{{color:#9ca3af}}
+.mc-draw-strike{{background:linear-gradient(135deg,#fef3c7,#fef9c3);border:1px solid #f59e0b;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;color:#92400e;line-height:1.5}}
+.mc-draw-strike b{{color:#b45309}}
 .mc-meta{{font-size:11px;color:#94a3b8}}
 .mc-reason{{font-size:12px;color:#475569;margin-top:6px;line-height:1.6;background:#f8fafc;border-radius:8px;padding:8px 10px}}
 .sec{{font-size:15px;font-weight:800;margin:16px 0 4px}}
@@ -166,15 +261,17 @@ h1{{font-size:21px;font-weight:800}}
 .foot{{text-align:center;color:#94a3b8;font-size:11px;margin:18px 0}}
 </style></head><body>
 <h1>🎯 投注选择指南</h1>
-<div class="sub">{base} · {len(cards)} 场 · 三档显性化（照标注选场即可）</div>
+<div class="sub">{base} · {len(cards)} 场 · 四档显性化（照标注选场即可）</div>
 
-<div class="card"><div class="sec" style="margin-top:0">📖 三档图例</div>
+<div class="card"><div class="sec" style="margin-top:0">📖 四档图例</div>
 <div class="legend">
+  <div class="lg draw"><b>🎯 平局直击</b>平局为最高概率，直接买平局</div>
   <div class="lg single"><b>✅ 单选</b>方向明确，照主推买</div>
   <div class="lg cover"><b>⚠️ 双选兜底</b>平局高发，买 HHAD 覆盖项（含平局）</div>
   <div class="lg avoid"><b>🚫 避开</b>方向性误判高发，不买</div>
 </div>
 <div class="stat">
+  <div class="st s1"><b>{n_draw}</b><span>🎯 平局直击</span></div>
   <div class="st s1"><b>{n_single}</b><span>✅ 可单选</span></div>
   <div class="st s2"><b>{n_cover}</b><span>⚠️ 双选兜底</span></div>
   <div class="st s3"><b>{n_avoid}</b><span>🚫 避开</span></div>
@@ -187,7 +284,9 @@ h1{{font-size:21px;font-weight:800}}
 
 <div class="card"><div class="sec" style="margin-top:0">📏 判定规则</div>
 <div class="ins warn" style="border-color:#94a3b8;background:#f8fafc">
-<b>✅ 单选</b>：方向P≥50 且非误判高发 · <b>⚠️ 双选兜底</b>：平P≥28 且 方向P&lt;50（平局窗口，改买HHAD覆盖项） · <b>🚫 避开</b>：胜P≥60 且 平P≥25（强主场方向性误判黑天鹅）<br>
+<b>🎯 平局直击</b>：平P为argmax且≥25%(联赛)/≥22%(杯赛) — 模型最看好平局，直接买平局（赔率~3.0，收益远超HHAD覆盖项）<br>
+<b>✅ 单选</b>：方向P≥50 且非误判高发 · <b>⚠️ 双选兜底</b>：平P≥28(联赛)/≥22(杯赛) 且 方向P&lt;50（平局窗口，改买HHAD覆盖项） · <b>🚫 避开</b>：胜P≥60 且 平P≥25(联赛)/≥20(杯赛)（强主场方向性误判黑天鹅）<br>
+<b>杯赛策略</b>：资格赛/淘汰赛/解放者杯平局率远高于联赛，双选阈值自动下调至22%，杯赛单选场会有平局警报提示。<br>
 <b>过关</b>：优先 2-3 关，忌 6 场全选（容错为0）。命中率第一，宁缺毋滥。</div></div>
 <div class="foot">基于 {base} {len(cards)} 场预测 · 规则源自 260811 实测复盘 · 仅供研究学习，不构成投注建议</div>
 </body></html>'''
@@ -197,7 +296,7 @@ h1{{font-size:21px;font-weight:800}}
     out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f'bet_guide_{base}.html')
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)
-    print(f'[指南] 已生成: {out_path} (✅{n_single} ⚠️{n_cover} 🚫{n_avoid})')
+    print(f'[指南] 已生成: {out_path} (🎯{n_draw} ✅{n_single} ⚠️{n_cover} 🚫{n_avoid})')
     return out_path
 
 
