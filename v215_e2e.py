@@ -8053,8 +8053,9 @@ def compare_and_adjust_for_update(prev_results, new_results):
                     had_odds_shift += pct
                     changes_for_key.append(f"HAD.{ok}: {po}→{no} ({pct*100:+.1f}%)")
 
-        # 方向是否反转
-        had_dir_reversed = (prev_had_dir and new_had_dir and prev_had_dir != new_had_dir)
+        # 方向是否反转 (修复: 排除"未开盘"→"胜/平/负"这类开盘事件, 它不该被当反转降级)
+        had_dir_reversed = (prev_had_dir and new_had_dir and prev_had_dir != new_had_dir
+                            and '未开' not in prev_had_dir and '未开' not in new_had_dir)
         if had_dir_reversed:
             changes_for_key.append(f"HAD方向反转: {prev_had_dir}→{new_had_dir}")
 
@@ -8064,7 +8065,8 @@ def compare_and_adjust_for_update(prev_results, new_results):
         prev_hhad_dir = prev_hhad.get('dir', '')
         new_hhad_dir = new_hhad.get('dir', '')
 
-        hhad_dir_reversed = (prev_hhad_dir and new_hhad_dir and prev_hhad_dir != new_hhad_dir)
+        hhad_dir_reversed = (prev_hhad_dir and new_hhad_dir and prev_hhad_dir != new_hhad_dir
+                             and '未开' not in prev_hhad_dir and '未开' not in new_hhad_dir)
         if hhad_dir_reversed:
             changes_for_key.append(f"HHAD方向反转: {prev_hhad_dir}→{new_hhad_dir}")
 

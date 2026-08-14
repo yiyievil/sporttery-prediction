@@ -361,10 +361,11 @@ def compare_predictions(old_pred, new_pred, history=None):
                 trend_details.append(f"HAD赔率{'↑' if change_pct > 0 else '↓'}{abs(change_pct):.1f}%")
                 trend_direction = '弱化' if change_pct > 0 else '强化'
 
-    # 方向是否反转
+    # 方向是否反转 (修复: 排除"未开盘"→"胜/平/负"这类开盘事件)
     old_had_dir = old_pred.get('HAD', {}).get('dir', '')
     new_had_dir = new_pred.get('HAD', {}).get('dir', '')
-    if old_had_dir and new_had_dir and old_had_dir != new_had_dir:
+    if (old_had_dir and new_had_dir and old_had_dir != new_had_dir
+            and '未开' not in old_had_dir and '未开' not in new_had_dir):
         trend_direction = '反转'
         trend_details.append(f"⚠️ HAD方向 {old_had_dir}→{new_had_dir}")
 
