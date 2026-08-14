@@ -153,46 +153,70 @@ def generate(pred_json=None):
         m = res[key]
         meta = meta_all.get(key, {})
         had, hh = m.get('HAD', {}), m.get('HHAD', {})
-        w, dr, l = _parse_probs(had.get('p', '0/0/0'))
-        argmax_p = max(w, dr, l)
+        had_open = had.get('had_open', True)  # 旧数据无此字段默认开盘
         handicap = hh.get('handicap')
         league = meta.get('league', '')
-        level, reason, draw_strike, draw_strike_reason = classify(dr, argmax_p, w, l, league)
 
-        # HHAD 覆盖项 (含平局的一侧): 让球盘→让负(平+负), 受让盘→受让胜(胜+平)
-        if handicap is not None:
-            cover_side = '受让胜' if float(handicap) > 0 else '让负'
-        else:
-            cover_side = hh.get('dir', '')
-
-        if level == 'draw':
-            n_draw += 1
-            rec = f"平 @{had.get('draw_odds', '3.00')} (胜平负·平局直击)"
-            rec_cls, tag = 'draw', '🎯 平局直击'
-        elif level == 'single':
-            n_single += 1
-            rec = f"{had.get('dir','')} @{had.get('odds','')} (胜平负)"
-            rec_cls, tag = 'single', '✅ 单选'
-        elif level == 'cover':
-            n_cover += 1
-            # 覆盖项赔率: 用HHAD对应项; 概率取覆盖侧概率
-            # 覆盖项赔率: 只有 cover_side 与 HHAD 主推方向一致时, hh.odds 才是该方向赔率;
-            # 不一致时不能拿主推赔率冒充该方向 (修复方向/赔率错配, 如让负却显示让胜的赔率)
-            cover_odds = hh.get('odds', '') if cover_side == hh.get('dir', '') else ''
-            if cover_odds:
-                rec = f"{cover_side} @{cover_odds} (让球·覆盖平局)"
+        if not had_open:
+            # 修复: HAD未开盘时直接用HHAD主推 (体彩HAD停售, 只剩让球盘可选),
+            # 原实现把 had.p='未开盘' 解析成 0/0/0 后输出 "未开盘 @None (胜平负)"
+            hh_dir = hh.get('dir', '')
+            hh_odds = hh.get('odds', '')
+            if hh_dir and hh_odds:
+                level = 'single'
+                n_single += 1
+                rec = f"{hh_dir} @{hh_odds} (让球·HAD未开盘)"
+                rec_cls, tag = 'single', '✅ 单选'
+                reason = f'HAD未开盘, 仅HHAD可选: {hh_dir} (HHAD P={hh.get("p","")})'
             else:
-                rec = f"{cover_side} (让球·覆盖平局, 赔率以盘口为准)"
-            rec_cls, tag = 'cover', '⚠️ 双选兜底'
+                level = 'avoid'
+                n_avoid += 1
+                rec = '— 本场不买 —'
+                rec_cls, tag = 'avoid', '🚫 避开'
+                reason = 'HAD/HHAD均未开盘, 不买'
+            draw_strike = False
+            draw_strike_reason = ''
+            # 概率列改用 HHAD 的胜平负分布 (HAD未开盘, 显示0/0/0会误导为无预测)
+            w, dr, l = _parse_probs(hh.get('p', '0/0/0'))
+            cover_side = hh_dir
         else:
-            n_avoid += 1
-            rec = '— 本场不买 —'
-            rec_cls, tag = 'avoid', '🚫 避开'
+            w, dr, l = _parse_probs(had.get('p', '0/0/0'))
+            argmax_p = max(w, dr, l)
+            level, reason, draw_strike, draw_strike_reason = classify(dr, argmax_p, w, l, league)
+
+            # HHAD 覆盖项 (含平局的一侧): 让球盘→让负(平+负), 受让盘→受让胜(胜+平)
+            if handicap is not None:
+                cover_side = '受让胜' if float(handicap) > 0 else '让负'
+            else:
+                cover_side = hh.get('dir', '')
+
+            if level == 'draw':
+                n_draw += 1
+                rec = f"平 @{had.get('draw_odds', '3.00')} (胜平负·平局直击)"
+                rec_cls, tag = 'draw', '🎯 平局直击'
+            elif level == 'single':
+                n_single += 1
+                rec = f"{had.get('dir','')} @{had.get('odds','')} (胜平负)"
+                rec_cls, tag = 'single', '✅ 单选'
+            elif level == 'cover':
+                n_cover += 1
+                # 覆盖项赔率: 只有 cover_side 与 HHAD 主推方向一致时, hh.odds 才是该方向赔率;
+                # 不一致时不能拿主推赔率冒充该方向 (修复方向/赔率错配, 如让负却显示让胜的赔率)
+                cover_odds = hh.get('odds', '') if cover_side == hh.get('dir', '') else ''
+                if cover_odds:
+                    rec = f"{cover_side} @{cover_odds} (让球·覆盖平局)"
+                else:
+                    rec = f"{cover_side} (让球·覆盖平局, 赔率以盘口为准)"
+                rec_cls, tag = 'cover', '⚠️ 双选兜底'
+            else:
+                n_avoid += 1
+                rec = '— 本场不买 —'
+                rec_cls, tag = 'avoid', '🚫 避开'
 
         if draw_strike:
             n_draw_strike += 1
 
-        conf = had.get('conf', '')
+        conf = hh.get('conf', '') if not had_open else had.get('conf', '')
         cards.append({
             'no': key, 'home': meta.get('home', '?'), 'away': meta.get('away', '?'),
             'level': level, 'tag': tag, 'rec': rec, 'reason': reason,
