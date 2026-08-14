@@ -485,4 +485,6 @@ for r in results:
 
 ---
 
+*代码许可: 本项目基于 [MIT License](LICENSE) 开源 (Copyright (c) 2026 yiyievil)，可自由使用、修改、分发。*
+
 *免责声明: 本系统仅供研究参考, 不构成投注建议。所有预测基于体彩(sporttery.cn)竞彩足球官方规则。*

@@ -6,6 +6,8 @@
 
 多源数据融合 · 五大玩法全覆盖 · 概率模型校准 · 赛果验证闭环 · 模拟投注
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 </div>
 
 ---
