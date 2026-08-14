@@ -103,61 +103,70 @@ class UnderstatCollector:
             return 0
 
         conn = sqlite3.connect(str(DB_PATH))
-        c = conn.cursor()
+        try:
+            c = conn.cursor()
 
-        # 创建表
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS understat_matches (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                game_id INTEGER UNIQUE,
-                league_en TEXT, league_cn TEXT, season TEXT,
-                match_date TEXT,
-                home_team TEXT, away_team TEXT,
-                home_team_cn TEXT, away_team_cn TEXT,
-                home_goals INTEGER, away_goals INTEGER,
-                home_xg REAL, away_xg REAL,
-                home_np_xg REAL, away_np_xg REAL,
-                home_np_xg_diff REAL, away_np_xg_diff REAL,
-                home_ppda REAL, away_ppda REAL,
-                home_deep_completions REAL, away_deep_completions REAL,
-                home_expected_points REAL, away_expected_points REAL,
-                is_result INTEGER,
-                created_at TEXT DEFAULT (datetime('now', 'localtime'))
-            )
-        ''')
+            # 创建表
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS understat_matches (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    game_id INTEGER UNIQUE,
+                    league_en TEXT, league_cn TEXT, season TEXT,
+                    match_date TEXT,
+                    home_team TEXT, away_team TEXT,
+                    home_team_cn TEXT, away_team_cn TEXT,
+                    home_goals INTEGER, away_goals INTEGER,
+                    home_xg REAL, away_xg REAL,
+                    home_np_xg REAL, away_np_xg REAL,
+                    home_np_xg_diff REAL, away_np_xg_diff REAL,
+                    home_ppda REAL, away_ppda REAL,
+                    home_deep_completions REAL, away_deep_completions REAL,
+                    home_expected_points REAL, away_expected_points REAL,
+                    is_result INTEGER,
+                    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+                )
+            ''')
 
-        # 插入数据
-        inserted = 0
-        for _, row in df.iterrows():
-            try:
-                c.execute('''INSERT OR REPLACE INTO understat_matches
-                    (game_id, league_en, league_cn, season, match_date,
-                     home_team, away_team, home_team_cn, away_team_cn,
-                     home_goals, away_goals, home_xg, away_xg,
-                     home_np_xg, away_np_xg, home_np_xg_diff, away_np_xg_diff,
-                     home_ppda, away_ppda, home_deep_completions, away_deep_completions,
-                     home_expected_points, away_expected_points, is_result)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                    (int(row.get("game_id", 0)),
-                     row.get("league_en", ""), row.get("league_cn", ""),
-                     row.get("season", ""), row.get("match_date", ""),
-                     row.get("home_team", ""), row.get("away_team", ""),
-                     row.get("home_team_cn", ""), row.get("away_team_cn", ""),
-                     row.get("home_goals"), row.get("away_goals"),
-                     row.get("home_xg"), row.get("away_xg"),
-                     row.get("home_np_xg"), row.get("away_np_xg"),
-                     # M11: 建表列名为 home_np_xg_diff/away_np_xg_diff, 取值列名需一致
-                     row.get("home_np_xg_diff"), row.get("away_np_xg_diff"),
-                     row.get("home_ppda"), row.get("away_ppda"),
-                     row.get("home_deep_completions"), row.get("away_deep_completions"),
-                     row.get("home_expected_points"), row.get("away_expected_points"),
-                     int(row.get("is_result", False))))
-                inserted += 1
-            except Exception:
-                pass
+            # 插入数据
+            inserted = 0
+            skipped = 0
+            for _, row in df.iterrows():
+                try:
+                    c.execute('''INSERT OR REPLACE INTO understat_matches
+                        (game_id, league_en, league_cn, season, match_date,
+                         home_team, away_team, home_team_cn, away_team_cn,
+                         home_goals, away_goals, home_xg, away_xg,
+                         home_np_xg, away_np_xg, home_np_xg_diff, away_np_xg_diff,
+                         home_ppda, away_ppda, home_deep_completions, away_deep_completions,
+                         home_expected_points, away_expected_points, is_result)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                        (int(row.get("game_id", 0)),
+                         row.get("league_en", ""), row.get("league_cn", ""),
+                         row.get("season", ""), row.get("match_date", ""),
+                         row.get("home_team", ""), row.get("away_team", ""),
+                         row.get("home_team_cn", ""), row.get("away_team_cn", ""),
+                         row.get("home_goals"), row.get("away_goals"),
+                         row.get("home_xg"), row.get("away_xg"),
+                         row.get("home_np_xg"), row.get("away_np_xg"),
+                         # M11: 建表列名为 home_np_xg_diff/away_np_xg_diff, 取值列名需一致
+                         row.get("home_np_xg_diff"), row.get("away_np_xg_diff"),
+                         row.get("home_ppda"), row.get("away_ppda"),
+                         row.get("home_deep_completions"), row.get("away_deep_completions"),
+                         row.get("home_expected_points"), row.get("away_expected_points"),
+                         int(row.get("is_result", False))))
+                    inserted += 1
+                except Exception as e:
+                    # 修复: 原 pass 静默丢行, 改为计数 + 首例日志, 让数据缺失可见
+                    skipped += 1
+                    if skipped == 1:
+                        logger.warning("Understat: 有行插入失败(示例 game_id=%r): %s",
+                                       row.get("game_id"), e)
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+        finally:
+            conn.close()
+        if skipped:
+            logger.warning("Understat: %d 行插入失败被跳过", skipped)
         logger.info(f"  Understat: 存储了 {inserted} 条比赛记录")
         return inserted
 

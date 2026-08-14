@@ -905,8 +905,9 @@ class FeatureBuilder:
             if not past.empty:
                 best = past.iloc[-1]
             else:
-                # 若无历史记录, 取最近的未来记录 (兜底)
-                best = candidates.iloc[0]
+                # 前瞻泄漏修复: 无目标日期之前的记录时, 不回填"未来"评级
+                # (未来评级的 elo_home_pre 已包含该场比赛之后的结果)
+                continue
 
             result.at[idx, "elo_home"] = best.get("elo_home")
             result.at[idx, "elo_away"] = best.get("elo_away")
@@ -949,10 +950,16 @@ class FeatureBuilder:
         if en and en in known_teams:
             return en
 
-        # 3. 模糊匹配 (子串包含)
-        for t in known_teams:
-            if name and (name in t or t in name):
-                return t
+        # 3. 模糊匹配 (子串包含) — 确定性排序, 避免 set 迭代顺序随 PYTHONHASHSEED 变化
+        cands = [t for t in known_teams if name and (name in t or t in name)]
+        if cands:
+            # 前缀命中优先, 再最短, 再字典序, 保证跨进程可复现
+            cands.sort(key=lambda t: (not t.startswith(name), len(t), t))
+            if len(cands) > 1:
+                logger.warning(
+                    "球队名 %r 模糊匹配到多个候选 %s, 取 %r", name, cands, cands[0]
+                )
+            return cands[0]
 
         # 4. 返回映射结果 (即使不在 known_teams 中, 仍可能是有效队名)
         if en:

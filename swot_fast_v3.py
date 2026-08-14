@@ -82,6 +82,10 @@ def solve_waf(session, url):
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
     cookie = result.stdout.strip()
+    # jsdom v2 求解器输出的是 "acw_sc__v2=xxx" 带前缀形式,
+    # 需剥离前缀再 set (否则 cookie 值变成 "acw_sc__v2=xxx", WAF 永远绕不过)
+    if 'acw_sc__v2=' in cookie:
+        cookie = cookie.split('acw_sc__v2=')[1].split(';')[0]
     if not cookie or len(cookie) < 10:
         print(f"  WAF solve failed: {result.stderr[-200:]}")
         return None, 'waf_solve_failed'

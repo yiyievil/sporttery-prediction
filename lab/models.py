@@ -605,11 +605,9 @@ class XGBoostModel:
             X["xg_overperformance"] = df["home_xg_overperformance"] - df["away_xg_overperformance"]
         elif "home_xg_overperformance" in df.columns:
             X["xg_overperformance"] = df["home_xg_overperformance"]
-        elif all(c in df.columns for c in ["home_goals", "home_xg", "away_goals", "away_xg"]):
-            X["xg_overperformance"] = (
-                (df["home_goals"] - df["home_xg"]) - (df["away_goals"] - df["away_xg"])
-            )
         else:
+            # 目标泄漏修复: 禁止用当前比赛自身进球反推 xG 超额表现
+            # (否则特征直接包含赛果, 训练/回测会高估; 预赛时该量本不可知)
             X["xg_overperformance"] = 0.0
 
         # 填充 NaN 为 0 (XGBoost 不接受 NaN)
@@ -622,8 +620,10 @@ class XGBoostModel:
             raise ValueError("XGBoostModel 需要 home_goals 与 away_goals 列以构建标签")
         hg = matches["home_goals"].to_numpy(dtype=float)
         ag = matches["away_goals"].to_numpy(dtype=float)
-        y = np.where(hg > ag, self.LABEL_WIN, np.where(hg == ag, self.LABEL_DRAW, self.LABEL_LOSE))
-        return y.astype(int)
+        y = np.where(hg > ag, self.LABEL_WIN, np.where(hg == ag, self.LABEL_DRAW, self.LABEL_LOSE)).astype(float)
+        # 进球缺失的场次标签无效 → NaN (原实现会因 NaN>ag 为 False 而误标为客胜)
+        y[np.isnan(hg) | np.isnan(ag)] = np.nan
+        return y
 
     # ---------- 训练 ----------
     def fit(self, matches: pd.DataFrame, **kwargs) -> float:

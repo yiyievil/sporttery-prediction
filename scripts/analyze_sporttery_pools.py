@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 """
 体彩各玩法（TTG/HAFU/CRS）赔率偏差分析 (Ultra 10.2)
 ================================================
@@ -15,9 +16,10 @@ import json
 import sqlite3
 from datetime import datetime
 from collections import defaultdict
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-DB_PATH = '/workspace/sporttery/predictions/historical_odds.db'
-OUTPUT_PATH = '/workspace/sporttery/predictions/sporttery_pools_calibration.json'
+DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
+OUTPUT_PATH = os.path.join(_WORKSPACE, 'predictions', 'sporttery_pools_calibration.json')
 
 
 def log(msg):

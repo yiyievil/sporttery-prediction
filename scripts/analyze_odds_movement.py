@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 """
 赔率变动方向与幅度的预测价值量化分析 (Ultra 10.1)
 ===============================================
@@ -14,9 +15,10 @@
 import json
 import sqlite3
 from datetime import datetime
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-DB_PATH = '/workspace/sporttery/predictions/historical_odds.db'
-OUTPUT_PATH = '/workspace/sporttery/predictions/odds_movement_calibration.json'
+DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
+OUTPUT_PATH = os.path.join(_WORKSPACE, 'predictions', 'odds_movement_calibration.json')
 
 def log(msg):
     print(f"  [{datetime.now().strftime('%H:%M:%S')}] {msg}")

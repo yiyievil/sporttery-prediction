@@ -17,12 +17,13 @@ import os
 import sqlite3
 from datetime import datetime
 from collections import defaultdict
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-DB_PATH = '/workspace/sporttery/predictions/historical_odds.db'
-OUTPUT_PATH = '/workspace/sporttery/predictions/model_calibration.json'
-CALIB_PATH = '/workspace/sporttery/predictions/advanced_calibration.json'
-ODDS_MOVEMENT_PATH = '/workspace/sporttery/predictions/odds_movement_calibration.json'
-POOLS_PATH = '/workspace/sporttery/predictions/sporttery_pools_calibration.json'
+DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
+OUTPUT_PATH = os.path.join(_WORKSPACE, 'predictions', 'model_calibration.json')
+CALIB_PATH = os.path.join(_WORKSPACE, 'predictions', 'advanced_calibration.json')
+ODDS_MOVEMENT_PATH = os.path.join(_WORKSPACE, 'predictions', 'odds_movement_calibration.json')
+POOLS_PATH = os.path.join(_WORKSPACE, 'predictions', 'sporttery_pools_calibration.json')
 
 
 def log(msg):

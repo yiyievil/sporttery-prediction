@@ -176,7 +176,14 @@ def find_last_complete(predictions_dir, base, expected_keys=None):
     # 回溯: 扫描所有版本文件, 取覆盖场次最多(且 >= expected)的
     best = None
     best_count = -1
-    for vfile in sorted(glob.glob(os.path.join(_versions_dir(predictions_dir), f'{base}__v*.json'))):
+
+    def _vseq(vfile):
+        m = re.search(r'__v(\d+)\.json$', vfile)
+        return int(m.group(1)) if m else -1
+
+    # 修复: 原 sorted() 是字典序 (v1 < v10 < v2), 平局时返回字典序首个而非"最后"版本;
+    # 改为按版本号数值排序, 且用 >= 让同覆盖数时取最新(更高 seq)
+    for vfile in sorted(glob.glob(os.path.join(_versions_dir(predictions_dir), f'{base}__v*.json')), key=_vseq):
         try:
             with open(vfile, 'r', encoding='utf-8') as f:
                 v = json.load(f)
@@ -185,9 +192,9 @@ def find_last_complete(predictions_dir, base, expected_keys=None):
         n = v.get('match_count', 0)
         if expected_keys:
             exp = set(expected_keys)
-            covered = [k for k in v.get('match_keys', []) if k in exp or k[-3:] in exp]
+            covered = {k for k in v.get('match_keys', []) if k in exp or k[-3:] in exp}
             n = len(covered)
-        if n > best_count:
+        if n >= best_count:
             best_count = n
             best = (v, vfile)
     return best if best_count >= 0 else (None, None)

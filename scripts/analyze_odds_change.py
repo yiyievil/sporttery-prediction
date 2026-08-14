@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 """
 体彩赔率变动特征分析 (Ultra 10.6)
 ===================================
@@ -20,9 +21,10 @@ import json
 import sqlite3
 from datetime import datetime
 from collections import defaultdict
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-DB_PATH = '/workspace/sporttery/predictions/historical_odds.db'
-OUTPUT_PATH = '/workspace/sporttery/predictions/odds_change_analysis.json'
+DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
+OUTPUT_PATH = os.path.join(_WORKSPACE, 'predictions', 'odds_change_analysis.json')
 
 
 def log(msg):

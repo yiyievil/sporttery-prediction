@@ -17,7 +17,7 @@ sporttery_history.py — 竞彩历史赛果+赔率历史抓取 (通用, 纯reque
   python sporttery_history.py stats          # 数据覆盖统计
 默认日期范围 2025-01-01 ~ 今天; 联赛过滤: 瑞超/芬超/挪超/巴甲/韩职
 """
-import os, sys, json, time, sqlite3, requests
+import os, sys, json, time, sqlite3, requests, threading
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
@@ -30,6 +30,11 @@ HEADERS = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.lottery.gov.cn/j
 
 LEAGUES = {'瑞超', '芬超', '挪超', '巴甲', '韩职'}
 START_DATE = '2025-01-01'
+
+# 全局限速: 多线程并发打体彩接口时限制请求频率, 避免触发IP封禁
+_rate_lock = threading.Lock()
+_last_request_time = [0.0]
+REQUEST_INTERVAL = 0.3  # 每秒最多约3次
 
 def db():
     conn = sqlite3.connect(DB_PATH)
@@ -49,6 +54,12 @@ def db():
 def get_json(url, params, retries=3):
     for i in range(retries):
         try:
+            # 全局限速: 并发时也保持最低请求间隔, 避免触发体彩IP封禁
+            with _rate_lock:
+                elapsed = time.time() - _last_request_time[0]
+                if elapsed < REQUEST_INTERVAL:
+                    time.sleep(REQUEST_INTERVAL - elapsed)
+                _last_request_time[0] = time.time()
             r = requests.get(url, params=params, headers=HEADERS, timeout=15)
             if r.status_code == 200:
                 return r.json()
@@ -91,18 +102,33 @@ def scan(only_league=None):
                         continue
                 elif m.get('leagueNameAbbr') not in LEAGUES:
                     continue
-                conn.execute("""INSERT OR REPLACE INTO matches
+                # 修复: 原 INSERT OR REPLACE 会删行重建, 把 odds_fetched 重置为0,
+                # 导致已抓赔率的场次每次重扫都被重新抓取; 改用 ON CONFLICT DO UPDATE 保留该列
+                conn.execute("""INSERT INTO matches
                     (matchId,matchDate,matchNumStr,league,home,away,homeId,awayId,
                      score,halfScore,winFlag,goalLine,close_h,close_d,close_a,poolStatus)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(matchId) DO UPDATE SET
+                        matchDate=excluded.matchDate, matchNumStr=excluded.matchNumStr,
+                        league=excluded.league, home=excluded.home, away=excluded.away,
+                        homeId=excluded.homeId, awayId=excluded.awayId,
+                        score=excluded.score, halfScore=excluded.halfScore,
+                        winFlag=excluded.winFlag, goalLine=excluded.goalLine,
+                        close_h=excluded.close_h, close_d=excluded.close_d, close_a=excluded.close_a,
+                        poolStatus=excluded.poolStatus""",
                     (m.get('matchId'), m.get('matchDate'), m.get('matchNumStr'),
                      m.get('leagueNameAbbr'), m.get('allHomeTeam') or m.get('homeTeam'),
                      m.get('allAwayTeam') or m.get('awayTeam'), m.get('homeTeamId'), m.get('awayTeamId'),
                      m.get('sectionsNo999'), m.get('sectionsNo1'), m.get('winFlag'), m.get('goalLine'),
                      _f(m.get('h')), _f(m.get('d')), _f(m.get('a')), m.get('poolStatus')))
                 n_new += 1
-            # S5: 兼容 totalPage/pages 两种字段名, 并int()保护
-            if page >= int(v.get('totalPage') or v.get('pages') or 1):
+            # S5: 兼容 totalPage/pages 两种字段名; 修复: 缺字段时不能默认1页(会丢第2页起的数据),
+            # 改为以"本页无数据"作为终止条件
+            tp = v.get('totalPage') or v.get('pages')
+            if tp:
+                if page >= int(tp):
+                    break
+            elif not ms:
                 break
             page += 1
         if only_league:

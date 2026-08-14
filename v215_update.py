@@ -635,8 +635,10 @@ def main():
             is_fresh = False
             if cache_time_str:
                 try:
-                    cache_time = datetime.strptime(cache_time_str, '%Y-%m-%d %H:%M:%S')
-                    age_hours = (datetime.now() - cache_time).total_seconds() / 3600
+                    # 修复: cached_at 是北京时间(UTC+8), 必须用相同时区比较,
+                    # 否则在 UTC 系统上 age = 真实年龄 - 8h (新鲜缓存被判过期/过期缓存被判新鲜)
+                    cache_time = datetime.strptime(cache_time_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=_BEIJING_TZ)
+                    age_hours = (datetime.now(_BEIJING_TZ) - cache_time).total_seconds() / 3600
                     is_fresh = 0 <= age_hours < 24
                 except:
                     is_fresh = False  # 无法解析时间则视为过期
@@ -843,7 +845,10 @@ def main():
     prev_update_count = pred_data.get('update_count', 0)
     update_count = prev_update_count + 1
 
-    updated_pred = {
+    # 修复: 从原 pred_data 复制, 保留 swot_fused_at 等顶层元数据,
+    # 原实现用固定字典重建会静默丢失这些字段
+    updated_pred = dict(pred_data)
+    updated_pred.update({
         'saved_at': bjnow_str(),
         'updated_from': pred_data.get('saved_at', ''),
         'mode': 'update',
@@ -852,7 +857,7 @@ def main():
         'results': merged_results,
         'cache': updated_cache,
         'history': history,
-    }
+    })
 
     # 保存到文件 (M17: 临时文件+os.replace原子替换, 避免写入中途失败损坏预测文件)
     # Ultra 11.20: 覆盖前把当前文件完整快照归档, 防止历史版本丢失

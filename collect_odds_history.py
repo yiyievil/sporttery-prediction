@@ -255,6 +255,9 @@ def backfill_match_ids():
         for api_mid, api_date, api_home, api_away, api_league in all_api_matches:
             if api_date != db_date_short:
                 continue
+            # 修复: 加入联赛匹配, 避免队名相似的不同联赛比赛(如"国际/纽约城")被错回填 matchId
+            if db_league and api_league and db_league != api_league:
+                continue
             if teams_match(db_home, api_home) and teams_match(db_away, api_away):
                 best_match = api_mid
                 break

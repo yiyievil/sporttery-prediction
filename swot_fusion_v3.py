@@ -65,7 +65,8 @@ def determine_swot_lean_v3(swot_data):
         bonus = 0
         for item in items:
             # 联赛排名相关 (第1/第2 = 强信号)
-            if '排名联赛第1' in item or '排名联赛第2' in item:
+            # 修复: 用负向前瞻排除 "第10"/"第20" 等双位数误匹配 (原 '第1' in 会命中'第10')
+            if re.search(r'排名联赛第[12](?!\d)', item):
                 bonus += 2.0
             # 进攻/防守极端值
             elif '进球数第1多' in item or '进球数第2多' in item:
@@ -112,13 +113,15 @@ def determine_swot_lean_v3(swot_data):
     # 4. 最终判断
     diff = home_score - away_score
     
+    # 修复: 阈值与 apply_swot_prob_shift 的 draw-boost (abs<SWOT_MIN_DIFF=2.0) 对齐,
+    # 否则 1<|diff|<2 时显示"略占优"却把概率往平局调, 自相矛盾
     if diff > 3:
         lean = '主队占优'
-    elif diff > 1:
+    elif diff > 2:
         lean = '主队略占优'
     elif diff < -3:
         lean = '客队占优'
-    elif diff < -1:
+    elif diff < -2:
         lean = '客队略占优'
     else:
         lean = '势均力敌'
@@ -313,11 +316,10 @@ def fuse_swot_into_predictions(pred_file):
                 had['p'] = _fmt_wdl(new_wdl)
                 had['dir'] = new_dir
                 if prob_adjust['flipped']:
-                    # 方向翻转时更新赔率为新方向的赔率
-                    meta_had = m.get('HAD', {})
-                    odds_map = {'胜': 'h', '平': 'd', '负': 'a'}
-                    if isinstance(meta_had, dict) and odds_map.get(new_dir) in meta_had:
-                        had['odds'] = meta_had[odds_map[new_dir]]
+                    # 修复: 原用 m.get('HAD') 取分项赔率是死代码 (meta 无 'HAD' 键, 且 HAD 结构
+                    # 只有主推 odds 无 h/d/a 分项), 导致翻转后 odds 仍为旧方向赔率;
+                    # 置 0 提示"以当前盘口为准", 避免误用旧方向赔率
+                    had['odds'] = 0
                 # 同步调整比分矩阵的wdl汇总 (保持顶层一致)
                 sc = result.get('score', {})
                 if isinstance(sc, dict) and sc.get('wdl'):

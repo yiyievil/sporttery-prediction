@@ -223,22 +223,45 @@ def predict_single(home: str, away: str) -> dict:
 
     ensemble = EnsemblePredictor(poisson, xgb, elo_model)
 
-    # 构造该对阵的特征行 (从历史推断)
-    h_match = features[(features["team_home"] == home)].tail(1)
-    if h_match.empty:
-        # 尝试中文名
-        from src.config import cn_to_en_team
-        en_home = cn_to_en_team(home)
-        if en_home:
-            h_match = features[(features["team_home"] == en_home)].tail(1)
+    # 构造该对阵的特征行: 主队取主队最近出场滚动统计, 客队取客队最近出场滚动统计
+    # (修复: 原实现只覆盖 team_away, away 侧特征仍是上一场对手的, 导致预测错对手)
+    from src.config import cn_to_en_team
 
-    if h_match.empty:
-        logger.warning(f"未找到 {home} 的历史数据, 使用默认特征")
-        row = features.iloc[-1].copy()
-        row["team_home"], row["team_away"] = home, away
-    else:
-        row = h_match.iloc[0].copy()
-        row["team_away"] = away
+    side_cols = [
+        "xg_for", "xg_against", "xg_diff",
+        "ppda", "opp_ppda", "ppda_diff",
+        "pressure_index", "ppda_stability",
+        "xg_overperformance", "n_games", "has_xg",
+    ]
+
+    def _team_names(team):
+        names = [str(team)]
+        en = cn_to_en_team(team)
+        if en and en != str(team):
+            names.append(en)
+        return names
+
+    def _latest(features, team, side):
+        """取 team 最近一次出场(任意侧)的滚动统计, 映射到 side 前缀列; 未找到返回 {}"""
+        names = _team_names(team)
+        rows = features[
+            features["team_home"].isin(names) | features["team_away"].isin(names)
+        ]
+        if rows.empty:
+            logger.warning(f"未找到 {team} 的历史数据, 沿用模板默认特征")
+            return {}
+        last = rows.iloc[-1]
+        src = "home" if last["team_home"] in names else "away"
+        out = {f"{side}_{c}": last.get(f"{src}_{c}") for c in side_cols}
+        out[f"elo_{side}"] = last.get(f"elo_{src}")
+        return out
+
+    row = features.iloc[-1].copy()
+    row.update(_latest(features, home, "home"))
+    row.update(_latest(features, away, "away"))
+    row["team_home"], row["team_away"] = home, away
+    if row.get("elo_home") is not None and row.get("elo_away") is not None:
+        row["elo_diff"] = row["elo_home"] - row["elo_away"]
 
     result = ensemble.predict(row)
     mc = ensemble.monte_carlo_simulation(row)

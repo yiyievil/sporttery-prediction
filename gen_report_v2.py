@@ -51,14 +51,20 @@ def parse_conf_stars(conf_str):
 
 
 def parse_prob_from_p(p_str, direction):
-    """从p字符串提取概率, 如 '30%/29%/41%' direction='负' -> 41"""
+    """从p字符串提取概率, 如 '30%/29%/41%' direction='负' -> 41
+
+    方向支持: 胜/平/负 以及 让胜/让平/让负、受让胜/受让平/受让负。
+    注意: 不能对 '受让负' 做 replace('让','') -> '受负' (会落到默认0=胜)。
+    让/受让 前缀不影响方向, 直接取末字 (胜/平/负) 映射。
+    """
     if not p_str:
         return 0
     parts = p_str.split('/')
     if len(parts) != 3:
         return 0
     dir_map = {'胜': 0, '平': 1, '负': 2}
-    idx = dir_map.get(direction.replace('让', ''), 0)
+    key = (direction or '').strip()
+    idx = dir_map.get(key[-1], 0) if key else 0
     try:
         return float(parts[idx].replace('%', ''))
     except:

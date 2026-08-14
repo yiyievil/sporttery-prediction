@@ -55,31 +55,43 @@ def fetch_today_matches(target_date=None):
     day_str = day.strftime("%Y-%m-%d")
 
     def _parse_calculator(data):
-        """解析 Calculator API 响应 (matchNum 为 4位如 '4001')"""
+        """解析 Calculator API 响应 (matchNum 为 4位如 '4001')
+
+        修复: 原实现遇到第一个匹配 businessDate 的分组即返回, 若当日有多个分组
+        (不同玩法/渠道拆分) 会漏掉后续场次; 改为汇总所有匹配分组的 numbers。
+        """
+        all_numbers = set()
+        weekday = ''
         for mi in (data.get("value") or {}).get("matchInfoList", []) or []:
             if mi.get("businessDate") != day_str:
                 continue
             subs = mi.get("subMatchList", []) or []
-            if not subs:
-                continue
             # Calculator API: matchNum 为 4位 (如 '4001'), 取后3位
-            numbers = sorted({str(s.get("matchNum", ""))[-3:] for s in subs if s.get("matchNum")})
-            if not numbers:
-                return None
-            return day.strftime("%y%m%d"), mi.get("weekday", ""), numbers, day_str
-        return None
+            for s in subs:
+                if s.get("matchNum"):
+                    all_numbers.add(str(s["matchNum"])[-3:])
+            if not weekday:
+                weekday = mi.get("weekday", "")
+        if not all_numbers:
+            return None
+        return day.strftime("%y%m%d"), weekday, sorted(all_numbers), day_str
 
     def _parse_matchlist(data):
         """解析 MatchList API 响应 (matchNum 为 3位如 '001')"""
+        all_numbers = set()
+        weekday = ''
         for mi in (data.get("value") or {}).get("matchInfoList", []) or []:
             if mi.get("businessDate") != day_str:
                 continue
             subs = mi.get("subMatchList", []) or []
-            numbers = sorted({str(s.get("matchNum", ""))[-3:] for s in subs if s.get("matchNum")})
-            if not numbers:
-                return None
-            return day.strftime("%y%m%d"), mi.get("weekday", ""), numbers, day_str
-        return None
+            for s in subs:
+                if s.get("matchNum"):
+                    all_numbers.add(str(s["matchNum"])[-3:])
+            if not weekday:
+                weekday = mi.get("weekday", "")
+        if not all_numbers:
+            return None
+        return day.strftime("%y%m%d"), weekday, sorted(all_numbers), day_str
 
     # 1) 主 API: Calculator API (不受 WAF 567)
     try:

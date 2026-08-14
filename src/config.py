@@ -161,8 +161,8 @@ class config:
     fbref_enabled = True      # FBref采集器 (proxy模式: 用historical_matches实际进球作xG代理)
     whoscored_enabled = False  # 已禁用
 
-    # 赛季列表 (Understat格式)
-    seasons = ["2023-2024", "2024-2025", "2025-2026"]
+    # 赛季列表 (Understat格式) — 元组不可变, 防止被意外修改影响全进程
+    seasons = ("2023-2024", "2024-2025", "2025-2026")
 
     # 缓存有效期 (秒) — 7天
     cache_max_age = 7 * 24 * 3600

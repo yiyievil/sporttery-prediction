@@ -214,7 +214,8 @@ def compute_cup_leg_penalty(match_num, league, home_name='', away_name=''):
         for k, v in manual_scores.items():
             mh = v.get('home_team', '')
             ma = v.get('away_team', '')
-            if (home_name and home_name in mh) or (away_name and away_name in ma):
+            # 修复: 原 OR 只匹配单队会复用错比赛的比分; 改为双方队名都命中
+            if (home_name and away_name and home_name in mh and away_name in ma):
                 first_leg_home = v.get('first_leg_home')
                 first_leg_away = v.get('first_leg_away')
                 source = 'manual_by_name'
@@ -231,7 +232,7 @@ def compute_cup_leg_penalty(match_num, league, home_name='', away_name=''):
                 for k, v in matches.items():
                     swot_home = v.get('home_name', '')
                     swot_away = v.get('away_name', '')
-                    if (home_name and home_name in swot_home) or (away_name and away_name in swot_away):
+                    if (home_name and away_name and home_name in swot_home and away_name in swot_away):
                         swot_entry = v
                         break
             if swot_entry:
@@ -255,6 +256,13 @@ def compute_cup_leg_penalty(match_num, league, home_name='', away_name=''):
 
     # 无首回合比分数据
     if first_leg_home is None or first_leg_away is None:
+        return None
+
+    # 修复: JSON 里比分可能是字符串, 先转 int (否则减法 TypeError 被上层吞掉静默失效)
+    try:
+        first_leg_home = int(first_leg_home)
+        first_leg_away = int(first_leg_away)
+    except (TypeError, ValueError):
         return None
 
     goal_diff = first_leg_away - first_leg_home  # 正=主队落后, 负=客队落后

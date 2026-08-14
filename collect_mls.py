@@ -172,35 +172,37 @@ def fetch_sporttery_mls_matches():
 def insert_into_db(matches):
     """将比赛数据插入 historical_matches 表"""
     conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
-    inserted = 0
-    skipped = 0
-    for m in matches:
-        try:
-            c.execute('''INSERT OR IGNORE INTO historical_matches
-                (match_date, league, season, home_team, away_team,
-                 home_score, away_score, half_home_score, half_away_score, result,
-                 sp_had_h, sp_had_d, sp_had_a, sp_goal_line, sp_match_num,
-                 source, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sporttery', ?)''',
-                (m['match_date'], m['league'], m['season'],
-                 m['home_team'], m['away_team'],
-                 m['home_score'], m['away_score'],
-                 m['half_home_score'], m['half_away_score'], m['result'],
-                 m['sp_had_h'], m['sp_had_d'], m['sp_had_a'],
-                 m['sp_goal_line'], m['sp_match_num'],
-                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-            if c.rowcount > 0:
-                inserted += 1
-            else:
+    try:
+        c = conn.cursor()
+
+        inserted = 0
+        skipped = 0
+        for m in matches:
+            try:
+                c.execute('''INSERT OR IGNORE INTO historical_matches
+                    (match_date, league, season, home_team, away_team,
+                     home_score, away_score, half_home_score, half_away_score, result,
+                     sp_had_h, sp_had_d, sp_had_a, sp_goal_line, sp_match_num,
+                     source, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sporttery', ?)''',
+                    (m['match_date'], m['league'], m['season'],
+                     m['home_team'], m['away_team'],
+                     m['home_score'], m['away_score'],
+                     m['half_home_score'], m['half_away_score'], m['result'],
+                     m['sp_had_h'], m['sp_had_d'], m['sp_had_a'],
+                     m['sp_goal_line'], m['sp_match_num'],
+                     datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+                if c.rowcount > 0:
+                    inserted += 1
+                else:
+                    skipped += 1
+            except Exception as e:
+                print(f"  INSERT error: {e}")
                 skipped += 1
-        except Exception as e:
-            print(f"  INSERT error: {e}")
-            skipped += 1
-    
-    conn.commit()
-    conn.close()
+
+        conn.commit()
+    finally:
+        conn.close()
     print(f"\n[DB] 插入: {inserted}, 跳过(已存在): {skipped}")
     return inserted
 

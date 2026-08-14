@@ -126,6 +126,14 @@ def main():
         if n <= 0:
             exit_code = 1
 
+    # 采集完成后重训数据驱动参数 (赔率校准/DC强度/平局窗口/置信度ECE)。
+    # 修复: train_all 此前无任何调用方(只能手动跑 model_upgrades.py); 样本不足时内部自动跳过。
+    try:
+        import model_upgrades
+        model_upgrades.train_all(verbose=True)
+    except Exception as e:
+        logger.warning("模型参数重训失败(不影响采集): %s", e)
+
     sys.exit(exit_code)
 
 

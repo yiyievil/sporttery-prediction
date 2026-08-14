@@ -71,17 +71,28 @@ FIRST_LEG = {
 }
 
 def main():
+    if not os.path.exists(PATH):
+        print(f'错误: {PATH} 不存在, 拒绝注入 (避免误覆盖)')
+        return
     with open(PATH, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
+    matches = data.setdefault('matches', {})
     for k, v in FIRST_LEG.items():
+        v = dict(v)
         v['trend'] = {}
         v['swot_url'] = ''
-        data['matches'][k] = v
+        # 修复: 原整体覆盖会清掉该场已存在的其它字段(leisu URL/统计等), 改为合并保留
+        merged = dict(matches.get(k, {}))
+        merged.update(v)
+        matches[k] = merged
 
     data['refreshed_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    with open(PATH, 'w', encoding='utf-8') as f:
+    # 修复: 原子写, 防止中断截断 swot_data_refreshed.json
+    tmp = PATH + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, PATH)
     print('injected:', list(FIRST_LEG.keys()))
 
 

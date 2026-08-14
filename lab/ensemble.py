@@ -135,8 +135,9 @@ class EnsemblePredictor:
 
         P(over 2.5) = 1 - Σ_{h + a ≤ 2} P(home=h) · P(away=a)
         """
-        if lam_home <= 0 or lam_away <= 0:
-            return 0.0
+        # 修复: 原实现 λ<=0 时直接返回 0.0, 但一队 λ=0 另一队 λ>0 时
+        # 真实 over 概率可能很高 (如 λ_home=0, λ_away=4 → P(away≥3)≈0.76)。
+        # _poisson_pmf 已正确处理 λ=0 (P(0;0)=1, P(k>0;0)=0), 无需提前 return。
         p_under = 0.0
         for h in range(3):            # h = 0, 1, 2
             for a in range(3 - h):    # a 取值使 h + a ≤ 2

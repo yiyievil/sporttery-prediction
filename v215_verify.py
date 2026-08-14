@@ -2878,6 +2878,9 @@ def get_historical_stats():
         FROM verify_stats ORDER BY created_at DESC LIMIT 10''')
     recent_cols = ['verify_date', 'total', 'has_pred', 'had_hits', 'hhad_hits', 'score_hits', 'had_rate']
     recent = [dict(zip(recent_cols, row)) for row in c.fetchall()]
+    # 修复: 查询是 created_at DESC(最新在前), 但 CUSUM 漂移检测与连续低命中判断
+    # 都要求时间正序(最旧→最新), 需反转; 否则漂移点被记到最新批、连续低命中查的是最旧3批
+    recent.reverse()
 
     conn.close()
 
@@ -2967,10 +2970,15 @@ def get_prediction_feedback(league=None, had_dir=None, conf_score=None, odds_ran
         hits, total, prior_alpha=1.0, prior_beta=1.0)
 
     # 2. 按联赛统计 (使用层次先验)
-    league_filter = f"AND league = '{league}'" if league else ""
-    c.execute(f'''SELECT league, COUNT(*), SUM(had_hit) FROM verify_history
-        WHERE pred_had_dir != '' AND pred_had_dir != '无预测' {league_filter}
-        GROUP BY league ORDER BY COUNT(*) DESC''')
+    # 修复: 原 f-string 拼接 league 存在 SQL 注入, 改为参数化查询
+    if league:
+        c.execute('''SELECT league, COUNT(*), SUM(had_hit) FROM verify_history
+            WHERE pred_had_dir != '' AND pred_had_dir != '无预测' AND league = ?
+            GROUP BY league ORDER BY COUNT(*) DESC''', (league,))
+    else:
+        c.execute('''SELECT league, COUNT(*), SUM(had_hit) FROM verify_history
+            WHERE pred_had_dir != '' AND pred_had_dir != '无预测'
+            GROUP BY league ORDER BY COUNT(*) DESC''')
     league_stats = {}
     for lg, cnt, ht in c.fetchall():
         freq = ht / cnt if cnt else 0
@@ -3650,8 +3658,13 @@ def show_sim_stats():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout=5000")
     c = conn.cursor()
-    c.execute("SELECT status, COUNT(*), SUM(stake), SUM(actual_payout), SUM(profit) FROM sim_bets GROUP BY status")
-    rows = c.fetchall()
+    try:
+        c.execute("SELECT status, COUNT(*), SUM(stake), SUM(actual_payout), SUM(profit) FROM sim_bets GROUP BY status")
+        rows = c.fetchall()
+    except sqlite3.OperationalError:
+        # 修复: sim_bets 表不存在(全新环境)时不应崩溃, 静默跳过
+        conn.close()
+        return
     conn.close()
 
     if not rows:

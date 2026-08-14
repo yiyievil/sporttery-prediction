@@ -27,7 +27,7 @@ import re
 import json
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 
 # ============================================================
@@ -371,7 +371,8 @@ def fetch_schedule_rendered(schedule_type='sc1'):
     if not rows:
         return None
 
-    date_str = (datetime.now() + timedelta(days=0 if schedule_type == 'sc1' else 1)).strftime('%Y-%m-%d')
+    # 修复: 用北京时间(UTC+8)算 sc1/sc2 日期, 否则云端(UTC)会错一天
+    date_str = (datetime.now(timezone(timedelta(hours=8))) + timedelta(days=0 if schedule_type == 'sc1' else 1)).strftime('%Y-%m-%d')
     matches = []
     for row in rows:
         cells = row.get('cells', [])
@@ -413,43 +414,53 @@ def _fetch_with_retry(url, max_retries=2, timeout=10):
     session = requests.Session()
     session.headers.update(NOWSCORE_HEADERS)
     direct_session = None  # 绕过系统代理的直连会话 (ProxyError时启用)
-    for attempt in range(max_retries):
-        try:
-            r = session.get(url, timeout=timeout, allow_redirects=True)
-            if r.status_code == 200:
-                # 检测404重定向页面 (www.nowscore.com失效端点)
-                if 'Path404' in r.url or '找不到页面' in r.text[:500]:
-                    return None
-                return r.text
-        except requests.exceptions.ProxyError:
-            # 代理阻止 (常见于live.nowscore.com/data/路径)
-            # Ultra-Opt: ProxyError时立即改用直连 (trust_env=False, 绕过系统代理)
-            # M12: 原 `if attempt >= max_retries - 2:` 在 max_retries=2 时恒真, 已删除该判断直接直连
+    try:
+        for attempt in range(max_retries):
             try:
-                if direct_session is None:
-                    direct_session = requests.Session()
-                    direct_session.headers.update(NOWSCORE_HEADERS)
-                    direct_session.trust_env = False
-                r = direct_session.get(url, timeout=timeout, allow_redirects=True)
+                r = session.get(url, timeout=timeout, allow_redirects=True)
                 if r.status_code == 200:
+                    # 检测404重定向页面 (www.nowscore.com失效端点)
                     if 'Path404' in r.url or '找不到页面' in r.text[:500]:
                         return None
                     return r.text
+            except requests.exceptions.ProxyError:
+                # 代理阻止 (常见于live.nowscore.com/data/路径)
+                try:
+                    if direct_session is None:
+                        direct_session = requests.Session()
+                        direct_session.headers.update(NOWSCORE_HEADERS)
+                        direct_session.trust_env = False
+                    r = direct_session.get(url, timeout=timeout, allow_redirects=True)
+                    if r.status_code == 200:
+                        if 'Path404' in r.url or '找不到页面' in r.text[:500]:
+                            return None
+                        return r.text
+                except Exception as e:
+                    print(f"  [WARN] {url} ProxyError后直连失败: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(1 * (attempt + 1))
+                else:
+                    return None
             except Exception as e:
-                print(f"  [WARN] {url} ProxyError后直连失败: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(1 * (attempt + 1))
-            else:
-                return None
-        except Exception as e:
-            # M12: 打印一次错误摘要 (最后一次尝试时输出), 不再完全静默
-            if attempt == max_retries - 1:
-                print(f"  [WARN] {url} 请求失败: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(1 * (attempt + 1))  # 指数退避
-            else:
-                return None
-    return None
+                # M12: 打印一次错误摘要 (最后一次尝试时输出), 不再完全静默
+                if attempt == max_retries - 1:
+                    print(f"  [WARN] {url} 请求失败: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(1 * (attempt + 1))  # 指数退避
+                else:
+                    return None
+        return None
+    finally:
+        # 修复: 关闭会话, 避免每次调用泄漏连接池 (ProxyError 分支另建的 direct_session 也一并关闭)
+        try:
+            session.close()
+        except Exception:
+            pass
+        if direct_session is not None:
+            try:
+                direct_session.close()
+            except Exception:
+                pass
 
 
 def fetch_schedule_bf():
@@ -896,8 +907,10 @@ def _parse_handicap(handicap_str):
         return -val if is_receive else val
     except ValueError:
         pass
-    
-    return 0.0
+
+    # 修复: 未收录盘口(如 "三球半"/"两球半/三球")原实现静默返回 0.0 会被当平手盘入库,
+    # 改为返回 None 让调用方跳过该段
+    return None
 
 
 # ============================================================
@@ -1147,34 +1160,36 @@ def convert_nowscore_to_500_format(nowscore_odds, match_id=None):
             
             latest_handicap = _parse_handicap(latest[3])
             init_handicap = _parse_handicap(initial[3])
-            
-            # M8: 亚盘水位float转换加保护, 失败则跳过该段
-            try:
-                result['yazhi'] = {
-                    'handicap': latest_handicap,
-                    'home_odds': float(latest[2]),
-                    'away_odds': float(latest[4]),
-                    'init_handicap': init_handicap,
-                    'init_home_odds': float(initial[2]),
-                    'init_away_odds': float(initial[4]),
-                    'count': len(data_rows),
-                }
-                
-                result['init_yazhi'] = {
-                    'instant': {
-                        'handicap_mode': latest_handicap,
-                        'over_avg': float(latest[2]),
-                        'under_avg': float(latest[4]),
-                    },
-                    'initial': {
-                        'handicap_mode': init_handicap,
-                        'over_avg': float(initial[2]),
-                        'under_avg': float(initial[4]),
-                    },
-                    'num_valid': len(data_rows),
-                }
-            except (TypeError, ValueError):
-                pass
+
+            # 修复: 盘口无法解析(如 "三球半"等未收录)时跳过该段, 而非静默按平手盘(0.0)入库
+            if latest_handicap is not None:
+                # M8: 亚盘水位float转换加保护, 失败则跳过该段
+                try:
+                    result['yazhi'] = {
+                        'handicap': latest_handicap,
+                        'home_odds': float(latest[2]),
+                        'away_odds': float(latest[4]),
+                        'init_handicap': init_handicap,
+                        'init_home_odds': float(initial[2]),
+                        'init_away_odds': float(initial[4]),
+                        'count': len(data_rows),
+                    }
+
+                    result['init_yazhi'] = {
+                        'instant': {
+                            'handicap_mode': latest_handicap,
+                            'over_avg': float(latest[2]),
+                            'under_avg': float(latest[4]),
+                        },
+                        'initial': {
+                            'handicap_mode': init_handicap,
+                            'over_avg': float(initial[2]),
+                            'under_avg': float(initial[4]),
+                        },
+                        'num_valid': len(data_rows),
+                    }
+                except (TypeError, ValueError):
+                    pass
     
     # ===== Over/Under (大小球) =====
     ou = nowscore_odds.get('overunder', [])
@@ -1202,10 +1217,24 @@ def convert_nowscore_to_500_format(nowscore_odds, match_id=None):
                 else:
                     init_goal_line = float(init_gl_str)
                 
+                # 修复: 2/2.5 应取平均 2.25 而非 split('/')[0]=2.0; 且逐行容错,
+                # 任一行盘口非数字只跳过该行, 不丢弃整个 daxiao 段
+                _all_gl = []
+                for _r in data_rows:
+                    try:
+                        _gs = str(_r[3])
+                        if '/' in _gs:
+                            _a, _b = _gs.split('/')
+                            _all_gl.append((float(_a) + float(_b)) / 2)
+                        else:
+                            _all_gl.append(float(_gs))
+                    except (ValueError, TypeError):
+                        continue
+
                 result['daxiao'] = {
                     'goal_line': goal_line,
                     'source': f'nowscore Crown(id={match_id})',
-                    'all_goal_lines': [float(r[3].split('/')[0]) if '/' in r[3] else float(r[3]) for r in data_rows],
+                    'all_goal_lines': _all_gl,
                     'num_bookmakers': len(data_rows),
                     'initial_goal_line': init_goal_line,
                     'over_odds': float(latest[2]),
@@ -1303,8 +1332,15 @@ def fetch_nowscore_match_data(home_name, away_name):
     with ThreadPoolExecutor(max_workers=2) as pool:
         fut_odds = pool.submit(fetch_3in1_odds, match_id)
         fut_ana = pool.submit(fetch_analysis_data, match_id)
-        odds = fut_odds.result()
-        ana = fut_ana.result()
+        # 修复: 加超时, 网络挂起时不永久阻塞整场任务
+        try:
+            odds = fut_odds.result(timeout=25)
+        except Exception:
+            odds = None
+        try:
+            ana = fut_ana.result(timeout=25)
+        except Exception:
+            ana = None
 
     if not odds:
         return None

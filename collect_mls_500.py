@@ -51,9 +51,11 @@ def rate_limited_get(url, **kwargs):
         _last_request_time[0] = time.time()
     try:
         r = requests.get(url, headers=HEADERS_500, timeout=15, **kwargs)
-        r.encoding = 'gb2312'
+        # 修复: 500.com 页面实际是 GBK 编码, gb2312 是 GBK 的子集, 遇扩展字符
+        # 会在 .text 解码时抛 UnicodeDecodeError; 改用 gb18030(GBK 超集) 更安全
+        r.encoding = 'gb18030'
         return r
-    except:
+    except requests.RequestException:
         return None
 
 
@@ -287,6 +289,53 @@ def fetch_ouzhi_odds(fid):
     }
 
 
+# 亚盘中文盘口 → 数值映射 ('受' 前缀 = 主队受让, 方向为负)
+_YAZHI_MAP = {
+    '平手': 0.0, '平/半': 0.25, '半球': 0.5, '半/一': 0.75, '一球': 1.0,
+    '一/球半': 1.25, '球半': 1.5, '球半/两': 1.75, '两球': 2.0,
+    '两/两半': 2.25, '两半': 2.5, '两半/三': 2.75, '三球': 3.0,
+    '三/三半': 3.25, '三半': 3.5, '三半/四': 3.75, '四球': 4.0,
+}
+
+
+def _parse_yazhi_text(text):
+    """解析亚盘中文盘口文本 → 带符号数值 ('受' 前缀 = 负方向), 无法解析返回 None
+
+    注意: 500.com 亚盘盘口用中文文本(受半球/平手等), 而水位(0.85/0.95)是纯数字。
+    因此这里只解析中文盘口, 不把纯数字当盘口 (否则又会把水位误当盘口)。
+    """
+    text = (text or '').strip()
+    if not text:
+        return None
+    is_receive = text.startswith('受')
+    clean = text.replace('受', '').replace('让', '').strip()
+    if clean in _YAZHI_MAP:
+        val = _YAZHI_MAP[clean]
+        return -val if is_receive else val
+    return None
+
+
+def _parse_daxiao_line(text):
+    """解析大小球盘口 (总进球线), 区分于水位(0.70-1.30); 兼容 "2.5/3" 拆线取平均。
+
+    返回: 盘口数值 (1.5~10), 非盘口(水位/文本)返回 None
+    """
+    text = (text or '').strip()
+    if not text:
+        return None
+    if re.match(r'^\d+(\.\d+)?$', text):
+        fv = float(text)
+        if 1.5 <= fv <= 10:
+            return fv
+        return None
+    if re.match(r'^\d+(\.\d+)?/\d+(\.\d+)?$', text):
+        a, b = text.split('/')
+        fv = (float(a) + float(b)) / 2
+        if 1.5 <= fv <= 10:
+            return fv
+    return None
+
+
 def fetch_yazhi_daxiao_odds(fid):
     """获取亚指和大小球初赔/终赔"""
     # 亚指
@@ -316,11 +365,15 @@ def fetch_yazhi_daxiao_odds(fid):
                         for ti, tr in enumerate(trs[:2]):
                             tds = re.findall(r'<td[^>]*>(.*?)</td>', tr, re.DOTALL)
                             clean = [re.sub(r'<[^>]+>', '', td).strip() for td in tds]
+                            # 修复: 原"取第一个数字单元格"会把水位(0.85/0.95)当盘口且丢方向;
+                            # 亚盘盘口是中文文本(受半球/平手等), 改为解析中文盘口并保留方向
                             for v in clean:
-                                v = v.strip()
-                                if re.match(r'^[+\-]?\d+(\.\d+)?$', v) and abs(float(v)) < 10:
-                                    if ti == 0: final_handicaps.append(float(v))
-                                    else: init_handicaps.append(float(v))
+                                hv = _parse_yazhi_text(v)
+                                if hv is not None:
+                                    if ti == 0:
+                                        final_handicaps.append(hv)
+                                    else:
+                                        init_handicaps.append(hv)
                                     break
                     break
         yazhi_init = round(sum(init_handicaps) / len(init_handicaps), 2) if init_handicaps else None
@@ -353,12 +406,16 @@ def fetch_yazhi_daxiao_odds(fid):
                         for ti, tr in enumerate(trs[:2]):
                             tds = re.findall(r'<td[^>]*>(.*?)</td>', tr, re.DOTALL)
                             clean = [re.sub(r'<[^>]+>', '', td).strip() for td in tds]
+                            # 修复: 原"取第一个数字单元格"会把大球水位(0.85)当盘口;
+                            # 大小球盘口(总进球线)>=1.5, 水位在[0.70,1.30], 按范围区分;
+                            # 并兼容 "2.5/3" 拆线盘口(取平均)
                             for v in clean:
-                                v = v.strip()
-                                # 大小球盘口: 2, 2.5, 3, 3.5 等
-                                if re.match(r'^\d+(\.\d+)?$', v) and 0.5 <= float(v) <= 10:
-                                    if ti == 0: final_lines.append(float(v))
-                                    else: init_lines.append(float(v))
+                                fv = _parse_daxiao_line(v)
+                                if fv is not None:
+                                    if ti == 0:
+                                        final_lines.append(fv)
+                                    else:
+                                        init_lines.append(fv)
                                     break
                     break
         daxiao_init = round(sum(init_lines) / len(init_lines), 2) if init_lines else None

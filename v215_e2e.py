@@ -30,6 +30,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 import sqlite3
 
+# Windows 控制台 GBK 编码兼容: 脚本输出含 emoji(⚠️/✅/★)与中文,
+# 默认 GBK 控制台会 UnicodeEncodeError; 强制 UTF-8 输出 (失败则忽略)
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 # 记忆系统 v2.0: 预测前自动召回铁律和相关记忆
 try:
     from memory import MemoryStore
@@ -2203,12 +2211,20 @@ def shin_method(odds_list):
     if N < 2:
         return [1.0] + [0.0] * (len(odds_list) - 1)
 
-    inv_odds = [1.0 / o for o in odds_list if o > 0]
-    if len(inv_odds) < N:
-        # 某些赔率为0或负, 回退到简单归一化 (补齐等长列表, 避免调用方越界)
-        s = sum(inv_odds)
-        probs = [io / s for io in inv_odds] if s > 0 else [1.0 / N] * N
-        return probs + [0.0] * (N - len(probs))
+    valid = [(i, 1.0 / o) for i, o in enumerate(odds_list) if o > 0]
+    if len(valid) < N:
+        # 某些赔率为0或负: 只在原位置保留有效赔率概率, 0/负赔率位置补0
+        # (修复: 原实现把0补到末尾, 会错位置换概率)
+        s = sum(io for _, io in valid)
+        if s > 0:
+            probs = [0.0] * N
+            for i, io in valid:
+                probs[i] = io / s
+            return probs
+        return [1.0 / N] * N
+
+    # 全部赔率有效, inv_odds 还原为浮点列表 (供下方 Shin 计算; 不能用元组否则 sum 报错)
+    inv_odds = [io for _, io in valid]
 
     # 计算Shin参数z
     sum_inv = sum(inv_odds)
@@ -2524,11 +2540,19 @@ def power_method(odds_list):
     N = len(odds_list)
     if N < 2:
         return [1.0] + [0.0] * (len(odds_list) - 1)
-    inv_odds = [1.0 / o for o in odds_list if o > 0]
-    if len(inv_odds) < N:
-        s = sum(inv_odds)
-        probs = [io / s for io in inv_odds] if s > 0 else [1.0 / N] * N
-        return probs + [0.0] * (N - len(probs))
+    valid = [(i, 1.0 / o) for i, o in enumerate(odds_list) if o > 0]
+    if len(valid) < N:
+        # 某些赔率为0或负: 只在原位置保留有效赔率概率, 0/负赔率位置补0
+        # (修复: 原实现把0补到末尾, 会错位置换概率)
+        s = sum(io for _, io in valid)
+        if s > 0:
+            probs = [0.0] * N
+            for i, io in valid:
+                probs[i] = io / s
+            return probs
+        return [1.0 / N] * N
+    # 全部赔率有效, inv_odds 还原为浮点列表
+    inv_odds = [io for _, io in valid]
     margin = sum(inv_odds) - 1.0
     beta = 1.0 / (1.0 + margin * 2.0) if margin > 0 else 1.0
     powered = [io ** beta for io in inv_odds]
@@ -2633,7 +2657,10 @@ def elo_probabilities(home_stats, away_stats, home_form_wr, away_form_wr, league
     p_win = p_win_raw * remaining / (p_win_raw + p_lose_raw) if (p_win_raw + p_lose_raw) > 0 else remaining / 2
     p_lose = remaining - p_win
 
-    return [max(0.05, p_win), max(0.05, p_draw), max(0.05, p_lose)]
+    # 修复: clamp 后可能和 > 1 (如 0.818+0.18+0.05=1.048), 需重新归一化
+    raw = [max(0.05, p_win), max(0.05, p_draw), max(0.05, p_lose)]
+    s = sum(raw)
+    return [x / s for x in raw]
 
 
 # ============================================================
@@ -3032,22 +3059,26 @@ def match_difficulty_score(had_probs, poisson_probs, data_quality, agreement):
 def _build_initial_summary(init_ouzhi, init_yazhi, init_daxiao):
     """构建初赔摘要 (精简, 节省token)"""
     s = {}
-    if init_ouzhi:
-        ai = init_ouzhi['avg_initial']
-        ai0 = init_ouzhi['avg_instant']
-        s['ouzhi_init'] = f"{ai[0]:.2f}/{ai[1]:.2f}/{ai[2]:.2f}"
-        s['ouzhi_now'] = f"{ai0[0]:.2f}/{ai0[1]:.2f}/{ai0[2]:.2f}"
-        s['ouzhi_n'] = init_ouzhi['num_valid']
-    if init_yazhi:
-        yi = init_yazhi['initial']
-        yn = init_yazhi['instant']
-        s['yazhi_init'] = f"{yi['handicap_mode']:+.2f}"
-        s['yazhi_now'] = f"{yn['handicap_mode']:+.2f}"
-    if init_daxiao:
-        di = init_daxiao['initial']
-        dn = init_daxiao['instant']
-        s['dx_init'] = f"{di['goal_line_mode']:+.2f}"
-        s['dx_now'] = f"{dn['goal_line_mode']:+.2f}"
+    try:
+        if init_ouzhi and init_ouzhi.get('avg_initial') and init_ouzhi.get('avg_instant') \
+                and len(init_ouzhi['avg_initial']) >= 3 and len(init_ouzhi['avg_instant']) >= 3:
+            ai = init_ouzhi['avg_initial']
+            ai0 = init_ouzhi['avg_instant']
+            s['ouzhi_init'] = f"{ai[0]:.2f}/{ai[1]:.2f}/{ai[2]:.2f}"
+            s['ouzhi_now'] = f"{ai0[0]:.2f}/{ai0[1]:.2f}/{ai0[2]:.2f}"
+            s['ouzhi_n'] = init_ouzhi.get('num_valid', 0)
+        if init_yazhi and init_yazhi.get('initial') and init_yazhi.get('instant'):
+            yi = init_yazhi['initial']
+            yn = init_yazhi['instant']
+            s['yazhi_init'] = f"{yi.get('handicap_mode', 0):+.2f}"
+            s['yazhi_now'] = f"{yn.get('handicap_mode', 0):+.2f}"
+        if init_daxiao and init_daxiao.get('initial') and init_daxiao.get('instant'):
+            di = init_daxiao['initial']
+            dn = init_daxiao['instant']
+            s['dx_init'] = f"{di.get('goal_line_mode', 0):+.2f}"
+            s['dx_now'] = f"{dn.get('goal_line_mode', 0):+.2f}"
+    except Exception:
+        return None
     return s if s else None
 
 # ============================================================
@@ -3764,7 +3795,7 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     #   仅新增一个"平局场次让球盘优先"的消费侧标记, 供PDF/JSON醒目展示。
     draw_window_hhad_priority = False
     # 升级9: 平局窗口 logistic 概率化 — 硬阈值(平P≥30%)一刀切,
-    # 模型用 [P平, top2差, |让球|, 联赛平局率] 输出HHAD判别力优于HAD的概率,
+    # 模型用 [P平, top2差] 输出HHAD判别力优于HAD的概率,
     # 回归库样本充足时按概率触发(P≥0.6), 缺参时自动回退下方硬规则。
     _dw_model_p = None
     if _MU and UPGRADES.get('draw_window_model') and _UPG_PARAMS.get('draw_window'):
@@ -3772,8 +3803,8 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
             _dwm = _MU.DrawWindowModel()
             _dwm.w = _UPG_PARAMS['draw_window']['w']
             _sp_sorted = sorted(had_probs, reverse=True)
-            _dw_x = [had_probs[1], _sp_sorted[0] - _sp_sorted[1],
-                     abs(handicap or 0), 0.25]
+            # 修复 train/serve 错位: 特征维数与训练一致 (仅 [P平, top2差])
+            _dw_x = [had_probs[1], _sp_sorted[0] - _sp_sorted[1]]
             _dw_model_p = _dwm.predict(_dw_x)
         except Exception:
             _dw_model_p = None
@@ -4002,7 +4033,10 @@ def _load_league_calibration():
         
         c.execute('''SELECT league, sp_had_h, sp_had_d, sp_had_a, result
                      FROM historical_matches
-                     WHERE sp_had_h IS NOT NULL AND sp_had_h > 1.0 AND result != '' ''')
+                     WHERE sp_had_h IS NOT NULL AND sp_had_h > 1.0
+                       AND sp_had_d IS NOT NULL AND sp_had_d > 1.0
+                       AND sp_had_a IS NOT NULL AND sp_had_a > 1.0
+                       AND result != '' ''')
         all_odds = c.fetchall()
         
         # 4列版本 (去除league列, 用于全局赔率区间标定)
@@ -4094,7 +4128,9 @@ def _load_league_calibration():
                          FROM historical_matches
                          WHERE sp_goal_line = ?
                            AND home_score IS NOT NULL AND away_score IS NOT NULL
-                           AND sp_had_h IS NOT NULL AND sp_had_h > 1.0''', (gl_str,))
+                           AND sp_had_h IS NOT NULL AND sp_had_h > 1.0
+                           AND sp_had_d IS NOT NULL AND sp_had_d > 1.0
+                           AND sp_had_a IS NOT NULL AND sp_had_a > 1.0''', (gl_str,))
             hcap_rows = c.fetchall()
 
             if not hcap_rows:
@@ -4590,6 +4626,7 @@ _DB_R = os.path.join(
     os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)),
     'predictions', 'historical_odds.db')
 if os.path.exists(_DB_R):
+    _conn_r = None
     try:
         _conn_r = sqlite3.connect(_DB_R)
         _c_r = _conn_r.cursor()
@@ -4627,7 +4664,6 @@ if os.path.exists(_DB_R):
                 _r_est = (_mu_r * _mu_r) / max(0.01, _var_r - _mu_r)
                 _r_clamped = max(4.0, min(20.0, _r_est))
                 _all_r_estimates[_lg_r] = (_r_clamped, _n_r)
-        _conn_r.close()
 
         if _all_r_estimates:
             # 计算全局加权平均r (用样本量加权)
@@ -4642,6 +4678,13 @@ if os.path.exists(_DB_R):
                 _LEAGUE_R_N[_lg_r] = _n_r
     except Exception:
         pass
+    finally:
+        # 修复: 异常时也关闭连接, 避免句柄泄漏
+        if _conn_r is not None:
+            try:
+                _conn_r.close()
+            except Exception:
+                pass
 
 # Ultra 9.3: 联赛特定半场进球比例 (从 historical_matches 数据驱动)
 # 替代固定 0.45/0.55 分拆, 用于 compute_half_full 半全场预测
@@ -4652,6 +4695,7 @@ _DB_HT = os.path.join(
     os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__)),
     'predictions', 'historical_odds.db')
 if os.path.exists(_DB_HT):
+    _conn_ht = None
     try:
         _conn_ht = sqlite3.connect(_DB_HT)
         _c_ht = _conn_ht.cursor()
@@ -4671,9 +4715,15 @@ if os.path.exists(_DB_HT):
             _lg_ht, _n_ht, _ratio_ht = _row_ht
             if _ratio_ht and 0.2 < _ratio_ht < 0.6:
                 LEAGUE_HT_RATIO[_lg_ht] = round(_ratio_ht, 3)
-        _conn_ht.close()
     except Exception:
         pass
+    finally:
+        # 修复: 异常时也关闭连接, 避免句柄泄漏
+        if _conn_ht is not None:
+            try:
+                _conn_ht.close()
+            except Exception:
+                pass
 
 
 # ============================================================
@@ -5432,7 +5482,8 @@ def apply_advanced_calibration(probs, sp, had, hhad):
             h_bias_info = team_bias.get('home', {}).get(home_team, {}).get(h_label) if h_label else None
             if h_bias_info and h_bias_info.get('sample', 0) >= 5:
                 bias = h_bias_info['bias']
-                pw += bias * 0.30
+                # 修复: 原 +0.30/-0.70/-0.30 概率质量不守恒(净-0.70b), 改为守恒
+                pw += bias
                 pl -= bias * 0.70
                 pd -= bias * 0.30
                 if abs(bias) > 0.05:
@@ -5444,7 +5495,8 @@ def apply_advanced_calibration(probs, sp, had, hhad):
             a_bias_info = team_bias.get('away', {}).get(away_team, {}).get(a_label) if a_label else None
             if a_bias_info and a_bias_info.get('sample', 0) >= 5:
                 bias = a_bias_info['bias']
-                pl += bias * 0.30
+                # 修复: 原 +0.30/-0.70/-0.30 概率质量不守恒(净-0.70b), 改为守恒
+                pl += bias
                 pw -= bias * 0.70
                 pd -= bias * 0.30
                 if abs(bias) > 0.05:
@@ -5458,7 +5510,7 @@ def apply_advanced_calibration(probs, sp, had, hhad):
         if home_odds > 1 and goal_line:
             try:
                 gl_val = int(goal_line)
-                raw = [1/had['h'], 1/had['d'], 1/had['a']]
+                raw = [1/o if o and o > 0 else 0.0 for o in (had['h'], had['d'], had['a'])]
                 s = sum(raw)
                 implied_h = raw[0] / s
                 home_fav_had = implied_h > 0.45
@@ -5475,7 +5527,7 @@ def apply_advanced_calibration(probs, sp, had, hhad):
                         pd -= (h_shift + a_shift) * 0.40
                         if abs(h_shift) > 0.03:
                             notes.append(f'跨市场矛盾: HAD与盘口不一致→主{h_shift*100:+.0f}pp')
-            except (ValueError, TypeError, KeyError):
+            except (ValueError, TypeError, KeyError, ZeroDivisionError):
                 pass
 
     # --- 5. 近期状态序列 ---
@@ -5703,8 +5755,10 @@ def post_fusion_draw_calibration(probs, had, league):
 
     # --- 6. 有界修正 ---
     # Ultra 8.0: 上调修正比例70%→80%, 上限12pp→15pp (29场回归: 平局低估仍严重)
-    if gap > 0 or is_competitive:
+    if gap > 0 or (is_competitive and gap >= -0.02):
         # 势均力敌接近比赛: 最小修正3pp (确保平局得到足够权重)
+        # 修复: 原 `gap > 0 or is_competitive` 在 gap<-0.02(模型已高估平局)时仍强制+3pp,
+        # 加剧高估; 改为仅当 gap 未显著为负时才施加最小上调
         base_correction = gap * 0.80 if gap > 0 else 0
         correction = min(0.15, base_correction)
         if is_competitive:
@@ -6070,7 +6124,7 @@ def apply_odds_change_analysis_calibration(probs, had, hhad, league, odds_change
       hhad_init: 体彩HHAD初赔dict {'h':, 'd':, 'a':} 或 None
     """
     if not _ODDS_CHANGE_ANALYSIS_CALIB:
-        return probs, []
+        return probs, [], 0.5  # 修复: 与其余返回路径一致的三元组 (原二元组会 ValueError)
     
     pw, pd, pl = probs
     notes = []
@@ -6221,6 +6275,10 @@ def apply_odds_change_analysis_calibration(probs, had, hhad, league, odds_change
             # 返回HHAD可靠度系数, 供HHAD侧使用
             hhad_reliability = entry.get('hhad_可靠度', 0.5)
             notes.append(f'矛盾信号: {diff_label} (HAD准确率{entry["had_accuracy"]}%, HHAD可靠度{hhad_reliability:.0%})')
+            # 修复: 原早退返回未归一化概率(前面有乘法调整), 补归一化
+            _s = pw + pd + pl
+            if _s > 0:
+                pw, pd, pl = pw / _s, pd / _s, pl / _s
             return [pw, pd, pl], notes, hhad_reliability
     
     # 归一化 + 边界保护
@@ -6455,9 +6513,9 @@ def predict_match(match_num, data):
     
     # ===== 市场盘口（goal line）— 优先使用初赔AJAX数据 =====
     league = sp.get('league', '')  # 提前获取联赛名 (盘口推断+标定均需要)
-    if init_daxiao and init_daxiao.get('instant'):
+    if init_daxiao and init_daxiao.get('instant', {}).get('goal_line_mode') is not None:
         market_goal_line = abs(init_daxiao['instant']['goal_line_mode'])
-        market_gl_source = f"500.com初赔({init_daxiao['num_valid']}家)"
+        market_gl_source = f"500.com初赔({init_daxiao.get('num_valid', 0)}家)"
         initial_goal_line = abs(init_daxiao['initial']['goal_line_mode']) if init_daxiao.get('initial') else market_goal_line
     else:
         market_goal_line = daxiao.get('goal_line', 2.5)
@@ -6556,7 +6614,7 @@ def predict_match(match_num, data):
     # Step 3-5: 修正+更新
     evidence = []
     # 优先使用初赔AJAX的赔率变化(基于真实赔率, 非返还率)
-    if init_ouzhi:
+    if init_ouzhi and init_ouzhi.get('change_w') is not None:
         ouzhi_change = init_ouzhi['change_w']
         ouzhi_change_str = f"{'↓' if ouzhi_change < 0 else '↑' if ouzhi_change > 0 else '→'}({abs(ouzhi_change):.2f})"
     else:
@@ -6648,7 +6706,7 @@ def predict_match(match_num, data):
     # 基于初赔→终赔变动方向与幅度, 按历史命中率精细修正
     _init_h_odds = None
     _final_h_odds = None
-    if init_ouzhi:
+    if init_ouzhi and init_ouzhi.get('avg_initial') and init_ouzhi.get('avg_instant'):
         _init_h_odds = init_ouzhi['avg_initial'][0]
         _final_h_odds = init_ouzhi['avg_instant'][0]
     elif ouzhi and not ouzhi_is_rr:
@@ -7670,7 +7728,8 @@ def predict_match(match_num, data):
         f"HHAD {hhad_str}→{hhad_dir}",
     ]
     if ouzhi or avg_odds or init_ouzhi:
-        if init_ouzhi:
+        if init_ouzhi and init_ouzhi.get('avg_initial') and init_ouzhi.get('avg_instant') \
+                and len(init_ouzhi['avg_initial']) >= 3 and len(init_ouzhi['avg_instant']) >= 3:
             ai = init_ouzhi['avg_initial']
             ai0 = init_ouzhi['avg_instant']
             ev_odds = f"{ai0[0]:.2f}/{ai0[1]:.2f}/{ai0[2]:.2f}"
@@ -7867,9 +7926,10 @@ def _fetch_one_nowscore(key, mi):
             for k, v in mi.items():
                 if k not in ns:
                     ns[k] = v
-            # 保留原始数据源 (sporttery), 不覆盖
-            if 'data_source' not in ns or ns.get('data_source') in ('nowscore', None):
-                ns['data_source'] = 'nowscore'
+            # 修复: nowscore 成功时统计增强源应标为 nowscore。原实现先 merge 复制了
+            # mi 的 data_source='sporttery', 再判断 'data_source' not in ns 恒为 False,
+            # 导致策略自检永远数到 nowscore 0 场。改为显式覆盖。
+            ns['data_source'] = 'nowscore'
             return key, ns, None
         else:
             # P1-4: 记录降级原因
@@ -8038,7 +8098,7 @@ def compare_and_adjust_for_update(prev_results, new_results):
                     _pred_pct = (_no - _po) / _po
                     # 预测方向赔率下降(概率上升) → 市场确认, 微升
                     if _pred_pct < -0.05 and cur_stars < 5 and cur_stars > 0:
-                        new_stars = min(cur_stars + 1, 5)
+                        new_stars = min(cur_stars + 0.5, 5)  # 修复: 文档说最多+0.5★, 原实现加1★
                         new_had['conf'] = format_stars(new_stars)
                         changes_for_key.append(f"HAD置信度微升: {cur_conf}→{new_had['conf']} (市场确认, 赔率{_pred_pct*100:+.1f}%)")
                     # 预测方向赔率上升(概率下降) → 市场分歧, 维持但标注
@@ -8195,9 +8255,9 @@ def main():
 
     # 🔒 数据源策略自检 (锁定策略: sporttery核心/nowscore主力/500仅降级)
     policy_violations = _check_data_source_policy(all_data)
-    results = {}  # 必须先初始化, 供下方 policy_violations 记录使用 (原顺序引用会 NameError)
-    if policy_violations:
-        results.setdefault('_policy_violations', policy_violations)
+    results = {}  # 必须先初始化, 供下方 predict_match 写入
+    # 修复: policy_violations 不再作为伪场次键混入 results (原实现会污染
+    # 下游遍历/更新逻辑, 被当成"新增场次"), 改为顶层字段 pred_data['policy_violations'] 输出。
     
     # ===== Phase 4: 七步预测 =====
     # Ultra 7.4: 清除杯赛首回合惩罚缓存 (每次运行使用最新SWOT数据)
@@ -8264,7 +8324,7 @@ def main():
             print(f"          {_tb.format_exc().splitlines()[-2:]}")
             results[key] = None
     # 过滤预测失败场次
-    results = {k: v for k, v in results.items() if v is not None}
+    results = {k: v for k, v in results.items() if v is not None and not k.startswith('_')}
     dt4 = time.time() - t4
     monitor.append(('Phase4-predict', dt4, 0, f"预测{len(results)}场"))
     
@@ -8441,6 +8501,7 @@ def main():
             'update_count': 0,  # 全新预测: 更新次数从0开始
             'meta': meta,
             'results': results,
+            'policy_violations': policy_violations,
             'cache': cache,
             'history': existing_history,
         }
@@ -8506,6 +8567,7 @@ def main():
             'update_count': update_count,  # 第N次更新
             'meta': meta,
             'results': results,
+            'policy_violations': policy_violations,
             'cache': cache,
             'history': existing_history,
             'update_changes': update_changes,

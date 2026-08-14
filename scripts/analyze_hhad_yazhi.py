@@ -17,12 +17,13 @@ from datetime import datetime
 from collections import defaultdict
 
 # ── 路径 ──────────────────────────────────────────────────────────
-DB_PATH = '/workspace/sporttery/predictions/historical_odds.db'
-OUTPUT_PATH = '/workspace/sporttery/predictions/hhad_yazhi_analysis.json'
+DB_PATH = os.path.join(_WORKSPACE, 'predictions', 'historical_odds.db')
+OUTPUT_PATH = os.path.join(_WORKSPACE, 'predictions', 'hhad_yazhi_analysis.json')
 
 # ── 导入 Shin method ──────────────────────────────────────────────
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from v215_e2e import shin_method
+_WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def log(msg):
@@ -56,28 +57,24 @@ def parse_goal_line(gl_str):
 def classify_hhad(home_score, away_score, goal_line):
     """根据赛果和让球线判断穿盘/走水/输盘
 
-    让球后主队得分 = home_score + goal_line  (goal_line<0 表示主队让球, 如 -1 主队让1球)
-    让球后客队得分 = away_score - goal_line  (goal_line>0 表示主队受让, 如 +1 主队受让1球)
+    让球规则 (单边调整, 与全库一致):
+      净胜球 margin = home_score - away_score
+      margin + goal_line > 0  -> 主队赢盘 (穿盘)
+      margin + goal_line == 0 -> 走水
+      margin + goal_line < 0  -> 主队输盘
 
-    例: 主让1球 (goal_line=-1), 比分 1-0:
-      adj_home = 1 + (-1) = 0
-      adj_away = 0 - (-1) = 1
-      adj_home(0) < adj_away(1) -> 输盘
-
-    例: 主让1球 (goal_line=-1), 比分 2-0:
-      adj_home = 2 + (-1) = 1
-      adj_away = 0 - (-1) = 1
-      adj_home(1) == adj_away(1) -> 走水
+    例: 主让1球 (goal_line=-1), 比分 2-0: margin=2, 2+(-1)=1 > 0 -> 穿盘
+    例: 主让1球 (goal_line=-1), 比分 1-0: margin=1, 1+(-1)=0 -> 走水
 
     返回: 'win' (主队穿盘/赢盘), 'push' (走水), 'loss' (主队输盘)
     """
     if goal_line is None:
         return None
-    adj_home = home_score + goal_line
-    adj_away = away_score - goal_line
-    if adj_home > adj_away:
+    # 单边调整: 净胜球 + 让球线 (与全库规范一致, 不能双侧各调一次)
+    adj = (home_score - away_score) + goal_line
+    if adj > 0:
         return 'win'
-    elif adj_home < adj_away:
+    elif adj < 0:
         return 'loss'
     else:
         return 'push'

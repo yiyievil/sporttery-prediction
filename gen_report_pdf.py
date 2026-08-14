@@ -10,6 +10,7 @@ v2: 手机阅读优化 — 放大字体、明亮高对比配色、宽行距
 import json
 import os
 import sys
+import html
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -117,14 +118,14 @@ def get_styles(cjk_font='CJK'):
 
 
 def normalize_text(text):
-    """规范化文本"""
+    """规范化文本 (并转义 HTML 实体, 防止队名含 &/< 时 Paragraph 解析崩溃)"""
     if not text:
         return ''
     replacements = {'\u2013': '-', '\u2014': '-', '\u2018': "'", '\u2019': "'",
                     '\u201c': '"', '\u201d': '"', '\u2212': '-'}
     for old, new in replacements.items():
         text = text.replace(old, new)
-    return str(text)
+    return html.escape(str(text))
 
 
 # ============ 背景色绘制 (明亮白底) ============
@@ -186,7 +187,10 @@ def build_summary_table(matches, styles):
 
         data.append(row)
 
-    col_widths = [28*mm, 16*mm, 24*mm, 24*mm, 32*mm, 12*mm, 32*mm, 12*mm, 18*mm]
+    # 修复: 原列宽和 198mm 超出内容框 CW(190mm), 报告默默溢出到右边距; 按比例缩放到 CW
+    _w = [28, 16, 24, 24, 32, 12, 32, 12, 18]
+    _s = sum(_w)
+    col_widths = [x * CW / _s for x in _w]
     table = LongTable(data, colWidths=col_widths, repeatRows=1)
 
     table.setStyle([

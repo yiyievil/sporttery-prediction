@@ -253,7 +253,7 @@ def parse_verify_html(html_path_or_content):
         data['advanced']['log_loss'] = rps_m.group(2)
 
     # 提取校准分析
-    cal_m = re.search(r'校准分析:</strong> 校准(.*?)\(ECE=([\d.]+\))', html)
+    cal_m = re.search(r'校准分析:</strong> 校准(.*?)\(ECE=([\d.]+)\)', html)
     if cal_m:
         data['calibration']['eval'] = cal_m.group(1).strip('，, ')
         data['calibration']['ece'] = cal_m.group(2)
@@ -715,6 +715,11 @@ def main():
     print("=" * 60)
     print("验证报告 PDF (手机阅读优化版)")
     print("=" * 60)
+
+    # 修复: 输入文件不存在时直接报错退出, 不再生成无数据的空报告
+    if not os.path.exists(VERIFY_HTML):
+        print(f"错误: 验证HTML文件不存在: {VERIFY_HTML}")
+        sys.exit(1)
 
     # 解析验证HTML
     data = parse_verify_html(VERIFY_HTML)

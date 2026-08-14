@@ -124,17 +124,30 @@ class MemoryStore:
         if os.path.exists(self.path):
             try:
                 with open(self.path, 'r', encoding='utf-8') as f:
-                    self._cache = json.load(f)
-            except (json.JSONDecodeError, IOError):
+                    data = json.load(f)
+                if not isinstance(data, dict) or not isinstance(data.get('memories'), list):
+                    raise ValueError('memory_store 结构非法')
+                self._cache = data
+            except (json.JSONDecodeError, IOError, ValueError):
+                # 损坏文件先备份为 .bad, 避免后续写入覆盖导致数据彻底丢失
+                try:
+                    os.replace(self.path, self.path + '.bad')
+                except OSError:
+                    pass
                 self._cache = {'memories': [], 'version': '1.0'}
         else:
             self._cache = {'memories': [], 'version': '1.0'}
         return self._cache
 
     def _save(self):
-        """保存记忆库"""
-        with open(self.path, 'w', encoding='utf-8') as f:
-            json.dump(self._cache, f, ensure_ascii=False, indent=2)
+        """保存记忆库 (原子写: 临时文件 + os.replace, 防止中断截断)"""
+        data = self._cache if self._cache is not None else self._load()
+        tmp = self.path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, self.path)
 
     def store(self, text, category='other', importance=0.7, scope='global', tags=None):
         """存储一条记忆
@@ -153,9 +166,10 @@ class MemoryStore:
             category = 'other'
 
         data = self._load()
-        # 生成 ID: 时间戳 + 序号
+        # 生成 ID: mem_ 前缀 + 时间戳十六进制后 8 位 (毫秒级唯一)
+        # 注意: 不能用 [-12:] (会截掉 mem_ 前缀导致 startswith 匹配失效)
         ts = int(time.time() * 1000)
-        mid = f"mem_{ts:x}"[-12:]
+        mid = "mem_" + f"{ts:x}"[-8:]
 
         entry = {
             'id': mid,
@@ -198,6 +212,10 @@ class MemoryStore:
             匹配的记忆列表
         """
         data = self._load()
+        query = (query or '').strip()
+        if not query:
+            # 空查询不返回任何记忆 (避免 '' in text 恒真导致全量"匹配")
+            return []
         query_lower = query.lower()
         query_terms = re.split(r'[\s,，、]+', query_lower)
 
@@ -262,17 +280,20 @@ class MemoryStore:
             'total': len(mems),
             'by_category': dict(cat_count),
             'avg_importance': round(avg_importance, 2),
-            'last_updated': mems[-1].get('created_at', 'N/A') if mems else 'N/A',
+            'last_updated': max(mems, key=_entry_ts_ms).get('created_at', 'N/A') if mems else 'N/A',
         }
 
     def forget(self, query=None, memory_id=None):
         """删除记忆 (按搜索词或ID)"""
+        if not memory_id and not (query and query.strip()):
+            # 空查询/空ID 时拒绝执行, 防止误删全部记忆
+            return 0
         data = self._load()
         before = len(data['memories'])
         if memory_id:
             data['memories'] = [m for m in data['memories'] if not m['id'].startswith(memory_id)]
-        elif query:
-            query_lower = query.lower()
+        else:
+            query_lower = query.strip().lower()
             data['memories'] = [
                 m for m in data['memories']
                 if query_lower not in m['text'].lower()

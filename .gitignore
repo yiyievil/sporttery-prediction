@@ -58,3 +58,35 @@ waf_script_*.js
 analysis_report_*.html
 renderData.json
 .wbtest_venv/
+
+# --- 生成报告与产物（HTML/PDF 报告、归档、分析输出，不入库）---
+# 顶层生成的投注指南 / 预测 PDF / 分析报告
+bet_guide_*.html
+pred_*.pdf
+prediction-analysis-*.html
+verify_analysis_*.html
+
+# 预测归档与 HTML 分析报告目录
+predictions/archive/
+predictions/draw-fix-*/
+predictions/*-review/
+predictions/*-result-review/
+predictions/*-guide-review/
+
+# 分析脚本输出（scripts/analyze_*.py → *_analysis.json）
+predictions/*_analysis.json
+
+# lab/数据采集管线输出 (lab/run_pipeline.py → 训练/回测产物)
+predictions/predictions.csv
+predictions/feature_importance.csv
+predictions/backtest_results.json
+
+# qiumiwu 前瞻赛程缓存 + 对比报告
+predictions/qiumiwu_schedule.json
+predictions/compare_*.md
+
+# 工具/AI 助手产出的审查报告与草稿（非项目代码）
+.workbuddy/
+.trae-html-share-packages/
+code-review-sporttery/
+deep-factor-analysis/

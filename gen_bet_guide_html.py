@@ -37,6 +37,16 @@ _CUP_KEYWORDS = ['欧冠', '欧罗巴', '欧联', '欧协联', '亚冠', '解放
                  '南美杯', '中北美冠', '非洲冠', '资格赛', '附', '淘汰赛',
                  '决赛', '冠军联赛', '欧洲联赛', '杯赛']
 
+# 周几排序 (修复: 原按中文字符 Unicode 排序会得到 一/三/二/五/六/四/日 的错误顺序)
+_WEEKDAY_ORDER = {'一': 0, '二': 1, '三': 2, '四': 3, '五': 4, '六': 5, '日': 6}
+
+
+def _match_sort_key(x):
+    """match_key 形如 '周四001' → 按 (周几, 编号) 排序"""
+    wd = x[1] if len(x) >= 2 and x[0] == '周' else ''
+    num = re.sub(r'\D', '', x)
+    return (_WEEKDAY_ORDER.get(wd, 99), int(num) if num else 0)
+
 
 def _is_cup_league(league):
     """判断是否为杯赛/淘汰赛 (含资格赛、解放者杯等)"""
@@ -50,9 +60,11 @@ def _is_cup_league(league):
 
 def _parse_probs(p_str):
     try:
-        return [float(x.replace('%', '')) for x in str(p_str).split('/')]
+        vals = [float(x.replace('%', '')) for x in str(p_str).split('/')]
     except Exception:
-        return [0.0, 0.0, 0.0]
+        vals = []
+    # 修复: 补齐/截断到 3 项, 避免调用方 w,dr,l 解包 2 元串时 ValueError
+    return (vals + [0.0, 0.0, 0.0])[:3]
 
 
 def classify(draw_p, argmax_p, win_p, loss_p, league=''):
@@ -129,14 +141,15 @@ def generate(pred_json=None):
         print(f'[错误] 预测文件不存在: {pred_json}')
         return None
 
-    d = json.load(open(pred_json, encoding='utf-8'))
+    with open(pred_json, encoding='utf-8') as f:
+        d = json.load(f)
     res = d.get('results', {})
     meta_all = d.get('meta', {})
     base = os.path.basename(pred_json).replace('pred_', '').replace('.json', '')
 
     cards = []
     n_single = n_cover = n_avoid = n_draw = n_draw_strike = 0
-    for key in sorted(res.keys(), key=lambda x: x.replace('周二', '').replace('周', '')):
+    for key in sorted(res.keys(), key=_match_sort_key):
         m = res[key]
         meta = meta_all.get(key, {})
         had, hh = m.get('HAD', {}), m.get('HHAD', {})
@@ -163,8 +176,13 @@ def generate(pred_json=None):
         elif level == 'cover':
             n_cover += 1
             # 覆盖项赔率: 用HHAD对应项; 概率取覆盖侧概率
-            hside = hh.get('p', '').split('/')
-            rec = f"{cover_side} @{hh.get('odds','')} (让球·覆盖平局)"
+            # 覆盖项赔率: 只有 cover_side 与 HHAD 主推方向一致时, hh.odds 才是该方向赔率;
+            # 不一致时不能拿主推赔率冒充该方向 (修复方向/赔率错配, 如让负却显示让胜的赔率)
+            cover_odds = hh.get('odds', '') if cover_side == hh.get('dir', '') else ''
+            if cover_odds:
+                rec = f"{cover_side} @{cover_odds} (让球·覆盖平局)"
+            else:
+                rec = f"{cover_side} (让球·覆盖平局, 赔率以盘口为准)"
             rec_cls, tag = 'cover', '⚠️ 双选兜底'
         else:
             n_avoid += 1

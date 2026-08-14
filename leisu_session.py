@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """leisu 会话工具 — WAF自动求解 + 页面获取 (供探索与生产共用)"""
-import requests, re, subprocess, os, shutil
+import requests, re, subprocess, os, threading
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
@@ -36,30 +36,36 @@ def _ensure_jsdom():
     _jsdom_checked = True
     return True
 
+# 多线程并发调用 solve_waf 时串行化, 避免固定文件名互相覆盖 (修复 cookie 竞态)
+_solve_lock = threading.Lock()
+
 def solve_waf(session, challenge_html):
     rd_m = re.search(r'<textarea[^>]*id="renderData"[^>]*>(.*?)</textarea>', challenge_html, re.DOTALL)
     if not rd_m:
         return False
-    rd_path = os.path.join(WORK_DIR, 'renderData.json')
-    with open(rd_path, 'w', encoding='utf-8') as f:
-        f.write(rd_m.group(1).replace('&quot;', '"'))
-    scripts = re.findall(r'<script[^>]*>(.*?)</script>', challenge_html, re.DOTALL)
-    paths = []
-    for i, sc in enumerate(scripts):
-        p = os.path.join(WORK_DIR, f'waf_script_{i}.js')
-        with open(p, 'w', encoding='utf-8') as f:
-            f.write(sc)
-        paths.append(p)
-    # 依赖自检: jsdom 缺失时自动恢复, 避免 WAF 求解静默失败
-    if not _ensure_jsdom():
-        return False
-    res = subprocess.run(['node', os.path.join(WORK_DIR, 'solve_waf_jsdom_v2.js'), rd_path] + paths,
-                         capture_output=True, text=True, timeout=30)
-    cookie = res.stdout.strip()
-    if 'acw_sc__v2=' not in cookie:
-        return False
-    session.cookies.set('acw_sc__v2', cookie.split('acw_sc__v2=')[1].split(';')[0])
-    return True
+    with _solve_lock:
+        # 修复: 原 3 线程并发写固定文件名会交错覆盖产生错配 cookie;
+        # 用锁串行化即可 (写工作区, 沙箱可写; 不能写 tempfile 临时目录——沙箱外会 Permission denied)
+        rd_path = os.path.join(WORK_DIR, 'renderData.json')
+        with open(rd_path, 'w', encoding='utf-8') as f:
+            f.write(rd_m.group(1).replace('&quot;', '"'))
+        scripts = re.findall(r'<script[^>]*>(.*?)</script>', challenge_html, re.DOTALL)
+        paths = []
+        for i, sc in enumerate(scripts):
+            p = os.path.join(WORK_DIR, f'waf_script_{i}.js')
+            with open(p, 'w', encoding='utf-8') as f:
+                f.write(sc)
+            paths.append(p)
+        # 依赖自检: jsdom 缺失时自动恢复, 避免 WAF 求解静默失败
+        if not _ensure_jsdom():
+            return False
+        res = subprocess.run(['node', os.path.join(WORK_DIR, 'solve_waf_jsdom_v2.js'), rd_path] + paths,
+                             capture_output=True, text=True, timeout=30)
+        cookie = res.stdout.strip()
+        if 'acw_sc__v2=' not in cookie:
+            return False
+        session.cookies.set('acw_sc__v2', cookie.split('acw_sc__v2=')[1].split(';')[0])
+        return True
 
 def leisu_get(session, url):
     """获取leisu页面, 自动过WAF. 返回 (html, ok)"""

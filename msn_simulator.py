@@ -176,14 +176,18 @@ def simulate_combo(bets, folds, unit=2.0):
 
 def main():
     # 解析 --top N 参数, 并剔除所有 -- 开头的参数, 剩下的才是预测文件
-    top_n = 10
+    # 修复: top_n 原解析后被忽略(死参数); 现在真正用于限制场次, 上限8关
+    top_n = 8
     positional = []
     argv = sys.argv[1:]
     i = 0
     while i < len(argv):
         a = argv[i]
         if a == '--top' and i + 1 < len(argv):
-            top_n = int(argv[i + 1])
+            try:
+                top_n = max(3, min(8, int(argv[i + 1])))
+            except ValueError:
+                pass
             i += 2
             continue
         if not a.startswith('--'):
@@ -205,10 +209,10 @@ def main():
     if M < 3:
         print("场次不足3场, M串N至少需3场")
         return
-    if M > 8:
-        print(f"⚠️ {M}场超过8关上限, 取置信度前8场")
-        bets = sorted(bets, key=lambda b: b['prob'], reverse=True)[:8]
-        M = 8
+    if M > top_n:
+        print(f"⚠️ {M}场超过{top_n}场上限, 取概率前{top_n}场")
+        bets = sorted(bets, key=lambda b: b['prob'], reverse=True)[:top_n]
+        M = top_n
 
     combos = COMBO_TABLE.get(M, {})
     print(f"\n{'=' * 78}")

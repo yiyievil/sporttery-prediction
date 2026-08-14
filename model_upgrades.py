@@ -24,6 +24,7 @@ model_upgrades.py — 预测模型十项升级 (Ultra 12.0)
 import json
 import math
 import os
+import re
 import sqlite3
 from datetime import datetime
 
@@ -64,7 +65,13 @@ def robust_goal_line(lines, weights=None):
 
     lines: [2.25, 2.5, 2.25, ...] 各公司盘口; weights: 公司可信度(缺省等权)
     """
-    vals = sorted((l, (weights[i] if weights else 1.0)) for i, l in enumerate(lines) if l)
+    # 修复: 原实现 `if l` 会误删合法盘口 0.0 (平手盘); 且 weights 短于 lines 时
+    # weights[i] 会 IndexError。改为 `is not None` 过滤 + 越界保护。
+    vals = sorted(
+        (l, (weights[i] if weights and i < len(weights) else 1.0))
+        for i, l in enumerate(lines)
+        if l is not None
+    )
     if not vals:
         return None
     total = sum(w for _, w in vals)
@@ -119,11 +126,11 @@ class Isotonic:
             return self.ys[0]
         if x >= self.xs[-1]:
             return self.ys[-1]
+        # PAV 拟合输出是阶梯函数: 每块内返回该块均值 (修复: 原实现误用线性插值)
         for i in range(len(self.xs) - 1):
-            if self.xs[i] <= x <= self.xs[i + 1]:
-                t = (x - self.xs[i]) / (self.xs[i + 1] - self.xs[i] + 1e-12)
-                return self.ys[i] + t * (self.ys[i + 1] - self.ys[i])
-        return x
+            if self.xs[i] <= x < self.xs[i + 1]:
+                return self.ys[i]
+        return self.ys[-1]
 
 
 def fit_odds_calibrator(db_path=HISTORY_DB, min_samples=None):
@@ -221,7 +228,14 @@ def _glicko2_volatility(phi, sigma, delta, v, tau):
     for _ in range(100):
         if abs(B - A) < 1e-6:
             break
-        C = A + (A - B) * fA / (fB - fA + 1e-300)  # regula falsi 内插 (防除零)
+        # 防退化: 端点函数值相等时 regula falsi 无意义 (原 +1e-300 会放大出天文数字,
+        # 导致后续 exp(C) 溢出), 退化为二分
+        denom = fB - fA
+        if abs(denom) < 1e-12:
+            C = (A + B) / 2.0
+        else:
+            C = A + (A - B) * fA / denom
+        C = max(-50.0, min(50.0, C))  # 防 exp 溢出
         fC = f(C)
         if fC * fB < 0:
             A, fA = B, fB          # 根在 (B,C): 区间右移
@@ -298,8 +312,12 @@ def dc_ratio_fit(db_path=HISTORY_DB, min_samples=None, decay_xi=0.0045, iters=30
     today = datetime.now().date()
     for dt, home, away, score in rows:
         try:
-            hs, as_ = score.replace(':', '-').split('-')[:2]
-            hs, as_ = int(hs), int(as_)
+            # 修复: 复合比分串(两回合如 "1-0(2-1)")原实现 int('0(2') 抛异常整场丢弃,
+            # 改用正则只取首个 "x-y" 比分, 忽略括号内加总。
+            m = re.match(r'\s*(\d+)\s*[-:]\s*(\d+)', str(score))
+            if not m:
+                continue
+            hs, as_ = int(m.group(1)), int(m.group(2))
             days = (today - datetime.strptime(dt, '%Y-%m-%d').date()).days
             games.append((home, away, hs, as_, math.exp(-decay_xi * max(0, days))))
         except Exception:
@@ -450,7 +468,7 @@ def hhad_from_matrix(mat, goal_line):
 # 升级9: 平局窗口 logistic 模型
 # ======================================================================
 class DrawWindowModel:
-    """输入特征 [P平, Δ, |handicap|, 联赛平局率], 输出 P(HHAD判别优于HAD)。
+    """输入特征 [P平, Δ], 输出 P(HHAD判别优于HAD)。
     样本不足时回退 None → 上游使用硬阈值规则。"""
 
     def __init__(self):
@@ -504,7 +522,9 @@ def build_draw_window_samples(db_path=REGRESSION_DB):
             if len(parts) != 3:
                 continue
             sp = sorted(parts, reverse=True)
-            X.append([parts[1], sp[0] - sp[1], 1.0, 0.25])  # handicap/联赛率用均值占位
+            # 修复 train/serve 错位: 训练样本无让球/联赛率字段, 原实现用常量占位,
+            # 导致推理时 abs(handicap) 注入从未学习的偏移。改为只用可训练的两维特征。
+            X.append([parts[1], sp[0] - sp[1]])
             Y.append(1.0 if (hhad_hit and not had_hit) else 0.0)
         except Exception:
             continue

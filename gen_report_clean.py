@@ -11,6 +11,7 @@
 import json
 import os
 import sys
+import html
 from datetime import datetime
 from reportlab.lib.pagesizes import A6
 from reportlab.lib.units import mm
@@ -114,7 +115,7 @@ def normalize_text(text):
                     '\u201c': '"', '\u201d': '"', '\u2212': '-'}
     for old, new in replacements.items():
         text = text.replace(old, new)
-    return str(text)
+    return html.escape(str(text))
 
 
 def draw_bg(canvas, doc):
