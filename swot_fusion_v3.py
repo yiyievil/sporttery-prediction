@@ -81,15 +81,15 @@ def determine_swot_lean_v3(swot_data):
                     bonus += 1.5
                 elif '下风' in item or '劣势' in item:
                     bonus -= 1.0
-            # 伤停信息
+            # 伤停信息 (Ultra 13.0: -1.0→-2.0, 核心球员缺阵直接改变进球预期, 场上最直接信号)
             elif '伤' in item or '缺阵' in item or '转会' in item or '流失' in item:
-                bonus -= 1.0
-            # 状态出色
+                bonus -= 2.0
+            # 状态出色 (Ultra 13.0: +1.0→+1.5, 状态火热直接影响攻防效率)
             elif '出色' in item or '回升' in item or '不败' in item:
-                bonus += 1.0
-            # 状态低迷
+                bonus += 1.5
+            # 状态低迷 (Ultra 13.0: -0.8→-1.5, 与状态出色对称)
             elif '低迷' in item or '下滑' in item or '一胜难求' in item:
-                bonus -= 0.8
+                bonus -= 1.5
         return bonus
     
     home_score += check_key_intel(home_s)
