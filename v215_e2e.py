@@ -2742,37 +2742,26 @@ def calibrate_probabilities(probs, source='poisson', lam_total=None, lam_h=None,
     #       ⑤ 杯赛目标上限从 0.36 提升至 0.40 (260814周四实测 44.4% 平局率)
     _is_cup = _is_cup_league(league) if league else False
     if _is_cup:
-        # ① 固定杯赛平局先验, 覆盖被数据库低值覆盖的情况
-        _cup_rate = max(CUP_DRAW_BASE, LEAGUE_DRAW_RATE.get(league, CUP_DRAW_BASE))
+        # 回测定参 (2026-08, 674场): 杯赛实际平局率 18.7% (两回合制 18.2%),
+        # 显著低于联赛 25.8%。原 0.32 固定先验 + 分级加成(+4/+2pp) + 淘汰赛加成(+3pp)
+        # 基于 260814 小样本(9场44.4%)过拟合, 方向反了。改为:
+        # ① 信任标定值(欧冠0.1832等), 缺失时用轻量先验兜底
+        # ② 仅势均力敌(λ差<0.40)时 +1pp 微调, 不再强加成
+        _cup_rate = LEAGUE_DRAW_RATE.get(league) or CUP_DRAW_BASE
         target_draw = 0.5 * target_draw + 0.5 * _cup_rate
-        # ② 分级平局加成 (杯赛整体倾向平局, 势均力敌更强)
-        if lam_h is not None and lam_a is not None:
-            _lam_diff_cup = abs(lam_h - lam_a)
-            if _lam_diff_cup < 0.40:
-                target_draw += 0.04
-            elif _lam_diff_cup < 0.80:
-                target_draw += 0.02
-        # ④ Ultra 12.0: 淘汰赛/资格赛次回合加成
-        # 检测: league名含"资格赛"、"附"、"淘汰赛"、"第.*回合"、"决赛"
-        # 或 league 在 cup_leg_penalty 中被识别为两回合制杯赛
-        _is_knockout = any(kw in str(league) for kw in
-                           ['资格赛', '附', '淘汰赛', '决赛', '回合', '欧冠', '欧罗巴', '欧联', '欧协联', '解放者杯'])
-        if _is_knockout:
-            target_draw += 0.03
+        if lam_h is not None and lam_a is not None and abs(lam_h - lam_a) < 0.40:
+            target_draw += 0.01
     # 平赔<3.4: 市场定价认为平局可能性高 → 目标+2pp
     # 平赔>4.0: 市场认为平局罕见 → 目标-1pp
-    # Ultra 12.0: 杯赛平赔信号放大 (杯赛平赔<3.5 时市场信号更强, 额外+1pp)
     if draw_odds and draw_odds > 1.5:
         if draw_odds < 3.4:
             target_draw += 0.02
-            if _is_cup and draw_odds < 3.5:
-                target_draw += 0.01  # 杯赛平赔信号放大
         elif draw_odds > 4.0:
             target_draw -= 0.01
     # Ultra 6.5: 平局偏差在线反馈 (verify_history 实际平局率 vs 预测均值, 有界±0.03)
     target_draw += query_draw_bias()
-    # Ultra 12.0: 杯赛目标上限 0.40 (原 0.36 不足以应对 44% 实测平局率)
-    _cap = 0.40 if _is_cup else 0.36
+    # 回测定参: 杯赛上限 0.40→0.28 (杯赛实际平局率低, 0.40 上限允许严重高估)
+    _cap = 0.28 if _is_cup else 0.36
     target_draw = max(0.18, min(_cap, target_draw))
 
     def _logit(p):
@@ -3138,6 +3127,28 @@ def _hhad_display_label(option, handicap):
     return option
 
 
+def _hhad_trap_note(option, handicap):
+    """HHAD 陷阱护栏 (回测 4412 场 2026-08)
+
+    数据: -1让胜/-2让胜/+1让负/+2让负/深盘 的历史 EV 深负(-17%~-44%),
+    即"需净胜2+球的一侧"和"深盘(让球>=2)"是庄家陷阱高发区。
+    返回陷阱提示文字, 非陷阱返回 None。
+    """
+    if not option or handicap is None:
+        return None
+    try:
+        h = float(handicap)
+    except (TypeError, ValueError):
+        return None
+    if abs(h) >= 2:
+        return f"深盘(让{h:+.1f})历史穿盘率仅36%,让球侧陷阱风险高"
+    if '让胜' in option and h <= -1:
+        return f"让{h:+.1f}需净胜2+球,历史该侧EV-18%,陷阱风险"
+    if '让负' in option and h >= 1:
+        return f"受让{h:+.1f}需净负2+球,历史该侧EV-18%,陷阱风险"
+    return None
+
+
 def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handicap, lam_h, lam_a, mode='prob', difficulty=None):
     """跨玩法价值分析 — 命中率优先, EV仅作参考
 
@@ -3353,6 +3364,12 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     if hhad_options:
         hhad_ranked = sorted(hhad_options, key=lambda x: x['prob'], reverse=True)
         hhad_primary_bet = hhad_ranked[0]
+        # D: HHAD 陷阱护栏 — 深盘/净胜2+球侧标记 trap_risk (回测: 该侧EV -17%~-44%)
+        _hhad_trap = _hhad_trap_note(hhad_primary_bet.get('option', ''), handicap)
+        if _hhad_trap:
+            hhad_primary_bet = dict(hhad_primary_bet)
+            hhad_primary_bet['trap_risk'] = True
+            hhad_primary_bet['trap_note'] = _hhad_trap
 
     # ===== 双选保险方案 (Pro 3.8) =====
     # 双选是3选2, 概率天然高, 不作为主推(主推代表方向判断)
@@ -3469,6 +3486,17 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                 double_recommend = sorted(_qualified, key=lambda x: x['odds'], reverse=True)[0]
             else:
                 double_recommend = sorted(all_doubles, key=lambda x: x['prob'], reverse=True)[0]
+
+    # D: HHAD 陷阱护栏 — 双选涉及深盘(让球>=2)时标记 trap_risk
+    if double_recommend and 'HHAD' in str(double_recommend.get('option', '')):
+        try:
+            _dh = abs(float(handicap)) if handicap is not None else 0
+        except (TypeError, ValueError):
+            _dh = 0
+        if _dh >= 2:
+            double_recommend = dict(double_recommend)
+            double_recommend['trap_risk'] = True
+            double_recommend['trap_note'] = f"深盘(让{float(handicap):+.1f})历史穿盘率仅36%,双选陷阱风险高"
 
     # ===== 纯方向判断 (Pro 3.9) =====
     # 从真单选中选概率最高的, 排除伪单选(打包两结果的)
@@ -3633,6 +3661,10 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
             insight_parts.append(f"双选并列主推{double_recommend['option']}@{double_recommend['odds']}(P={double_recommend['prob']}%,EV={double_recommend['ev_pct']}%,平局盲区覆盖)")
         else:
             insight_parts.append(f"双选保险{double_recommend['option']}@{double_recommend['odds']}(P={double_recommend['prob']}%,EV={double_recommend['ev_pct']}%)")
+        if double_recommend.get('trap_risk'):
+            insight_parts.append(f"⚠️ 让球陷阱: {double_recommend.get('trap_note', '深盘陷阱风险')}")
+    if hhad_primary_bet and hhad_primary_bet.get('trap_risk'):
+        insight_parts.append(f"⚠️ HHAD陷阱: {hhad_primary_bet.get('trap_note', '让球陷阱风险')}")
     if risk_assessment:
         insight_parts.append(risk_assessment.lstrip('。'))
     if pass_risk_level in ('高', '中'):
@@ -3762,9 +3794,13 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         _dar_p = had_probs[1]  # HAD平局融合概率
         _dar_odds = had_dict.get('d', 0) if had_dict else 0
         _primary_is_draw = (primary_bet or {}).get('option') == 'HAD平'
-        # 平局概率显著偏高(≥30%) 且 平局不是整体主推(避免重复)
-        if _dar_p >= 0.30 and not _primary_is_draw:
+        # 回测定参 (2026-08, 4449场): 平局≥30% 强信号; ≥26% 且 top2差≤10pp 为"平局价值单"
+        # (26-30%区间平局率33%, 虽低于argmax但EV优于热门方向, 值得并列提示而非藏进双选)
+        _dar_gap = max(had_probs[0], had_probs[2]) - _dar_p
+        _dar_trigger = _dar_p >= 0.30 or (_dar_p >= 0.26 and _dar_gap <= 0.10)
+        if _dar_trigger and not _primary_is_draw:
             _dar_ev = (_dar_p * _dar_odds - 1) if _dar_odds else 0
+            _dar_strong = _dar_p >= 0.30
             draw_attention = {
                 'market': 'HAD',
                 'option': 'HAD平',
@@ -3773,12 +3809,16 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                 'odds_detail': str(_dar_odds),
                 'ev_pct': round(_dar_ev * 100, 1),
                 'draw_attention': True,
+                'draw_value': _dar_strong,  # 强信号 vs 价值单
                 'direction': '平',
-                'desc': '平局关注: 平局概率显著高于基准(24.7%), 注意平局',
+                'desc': ('平局关注: 平局概率显著高于基准(24.7%), 注意平局'
+                         if _dar_strong else
+                         '平局价值单: P平≥26%且差≤10pp, 平局与热门方向接近, EV优于热门'),
             }
             insight_parts.append(
-                f"平局关注@{_dar_odds}(P={_dar_p*100:.0f}%,EV={_dar_ev*100:+.0f}%,"
-                f"历史平局率≈25%,平局概率显著偏高高发)"
+                f"平局{'关注' if _dar_strong else '价值单'}@{_dar_odds}(P={_dar_p*100:.0f}%,"
+                f"EV={_dar_ev*100:+.0f}%,差{_dar_gap*100:.0f}pp"
+                f"{'平局概率显著偏高高发' if _dar_strong else '平局与热门接近值得并列考虑'})"
             )
 
     # ===== Ultra 11.19: 平局窗口HHAD优先 (LRN-20260809-009) =====
@@ -3819,7 +3859,7 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
             _dw_ref = ("让球盘方向优先参考HHAD" if (hhad_dict or {}).get('h', 0) > 0
                        else "让球盘未开盘, 平局概率偏高注意提防")
         insight_parts.append(
-            f"平局窗口HHAD优先: HAD平局P={_dar_p*100:.0f}%≥30%,让球盘判别力更稳"
+            f"平局窗口HHAD优先: HAD平局P={_dar_p*100:.0f}%(差{_dar_gap*100:.0f}pp),让球盘判别力更稳"
             f",{_dw_ref}"
         )
     elif _dw_model_p is not None and _dw_model_p >= 0.6:
@@ -4581,15 +4621,11 @@ LEAGUE_DRAW_RATE = {
     'default': 0.25,
 }
 
-# Ultra 11.3 (回归分析 2026-08-05): 杯赛平局固定先验
-# 两回合制杯赛(欧冠/欧罗巴/欧协联资格赛)平局倾向实测 20%~25%, 取上沿 0.28
-# 需稳定高于主流联赛标定值(英超0.25/巴甲0.30), 否则加成被稀释
-# 不受 _CALIBRATION(sample>=20) 覆盖影响 — 杯赛主名如'欧冠'常被覆盖为低值(0.1832)
-# Ultra 12.0 (平局急救 2026-08-14): 上调至 0.32
-# 260814周四 9 场实测: 杯赛平局率 4/6=66.7%, 全场 4/9=44.4%
-# 资格赛次回合落后方保守/领先方留力, 平局率远超联赛均值
-# 原 0.28 在极端杯赛环境下仍不足以覆盖平局高发
-CUP_DRAW_BASE = 0.32
+# 杯赛平局先验 (回测定参 2026-08)
+# 674场杯赛实际平局率 18.7% (两回合制欧冠/欧罗巴/欧协联 18.2%), 低于联赛 25.8%。
+# 原 0.28→0.32 的"平局急救"基于 260814 小样本(9场44.4%)过拟合, 方向反了;
+# 现在先验仅作兜底(标定值缺失时), 杯赛平局目标主要由标定值(欧冠0.1832等)驱动。
+CUP_DRAW_BASE = 0.20
 
 # Ultra 6.6: 用历史标定值覆盖平局率
 if _CALIBRATION:
@@ -7238,18 +7274,21 @@ def predict_match(match_num, data):
         _draw_prob = p1_d
         _top_prob = fused_probs[had_min_idx]
         _top2_gap = _top_prob - _draw_prob
-        # 触发条件: 平局概率≥30% (强信号) 且 (top2差≤8pp 或 平局概率≥32%)
-        _draw_strong = _draw_prob >= 0.30
-        _draw_very_strong = _draw_prob >= 0.32
-        _gap_small = _top2_gap <= 0.08
+        # 触发条件 (回测定参 2026-08, 4449场): 联赛 平局≥30% 且 (top2差≤10pp 或 平局≥32%);
+        # 杯赛实际平局率低(18.7%), 阈值抬至 32%; 差阈值 8pp→10pp (35场平局率40%净增益+17.1%)
+        _is_cup_draw = _is_cup_league(league) if league else False
+        _draw_t = 0.32 if _is_cup_draw else 0.30
+        _draw_strong = _draw_prob >= _draw_t
+        _draw_very_strong = _draw_prob >= _draw_t + 0.02
+        _gap_small = _top2_gap <= 0.10
         # 排除极端热门(主赔<1.50, 强队碾压局平局概率虚高来自校准)
         _not_extreme_fav = _home_odds >= 1.50 or _home_odds == 0
         if _draw_strong and (_gap_small or _draw_very_strong) and _not_extreme_fav:
             had_min_idx = 1  # 覆盖为平局
             _draw_override = True
             _draw_override_reason = (
-                f"平局覆盖: P平={_draw_prob:.0%}≥30% top2差={_top2_gap:.0%}≤8pp "
-                f"主赔={_home_odds:.2f} (HAD argmax结构性盲区修复)"
+                f"平局覆盖: P平={_draw_prob:.0%}≥{_draw_t:.0%} top2差={_top2_gap:.0%}≤10pp "
+                f"主赔={_home_odds:.2f} (HAD argmax结构性盲区修复{'·杯赛' if _is_cup_draw else ''})"
             )
             v611_notes.append(_draw_override_reason)
             v611_flags['draw_override'] = True
