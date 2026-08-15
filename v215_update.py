@@ -175,22 +175,42 @@ def find_prediction_file(date_str, match_numbers):
 
     # Ultra 11.10: 同一日期可能生成多个周几文件(周X基于开盘日), 编号可能跨文件重复。
     # 必须选择"匹配场次最多"的文件, 不能返回第一个命中的 — 否则会把目标场次写进错误文件。
+    # Ultra 13.8: 同日期多周几文件防串档 — 编号重叠时"命中最多"会误中其他周几文件
+    # (实例: 2026-08-15 同时存在 pred_20260815_周五.json[周五003-017凌晨场] 与
+    #  pred_20260815_周六.json[周六001-016], 更新010-027时周五文件命中8场>周六7场,
+    #  导致周五已完赛场次被更新)。修复: 目标日期的日历周几与文件名周几一致的文件优先,
+    #  仅当无同周几文件时才回退到"命中最多"逻辑。
+    _scan_groups = []
+    try:
+        _dt = datetime.strptime(date_str, '%Y-%m-%d')
+        _wd_cn = ['一', '二', '三', '四', '五', '六', '日'][_dt.weekday()]
+        _pref = [f for f in candidates if f'周{_wd_cn}' in os.path.basename(f)]
+        if _pref:
+            _scan_groups.append(_pref)
+        if len(_pref) != len(candidates):
+            _scan_groups.append([f for f in candidates if f not in _pref])
+    except Exception:
+        _scan_groups = [candidates] if candidates else []
+
     best_hits = 0
     best_data = None
     best_file = None
     best_found = []
-    for pred_file in candidates:
-        try:
-            with open(pred_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            results = data.get('results', {})
-            # 按编号后3位匹配 (不做周几过滤, 因为体彩周几=开盘日≠比赛日)
-            found = [k for k in results if k[-3:] in match_numbers]
-            if len(found) > best_hits:
-                best_hits = len(found)
-                best_data, best_file, best_found = data, pred_file, found
-        except:
-            continue
+    for _group in _scan_groups:
+        for pred_file in _group:
+            try:
+                with open(pred_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                results = data.get('results', {})
+                # 按编号后3位匹配 (不做周几过滤, 因为体彩周几=开盘日≠比赛日)
+                found = [k for k in results if k[-3:] in match_numbers]
+                if len(found) > best_hits:
+                    best_hits = len(found)
+                    best_data, best_file, best_found = data, pred_file, found
+            except:
+                continue
+        if best_data is not None:
+            break  # 周几一致的组内已找到, 不再扫描其他周几文件
     if best_data is not None:
         print(f"  [匹配] 在 {os.path.basename(best_file)} 中找到 {len(best_found)} 场: {best_found}")
         return best_data, best_file, best_found
@@ -284,38 +304,39 @@ def compare_predictions(old_pred, new_pred, history=None):
                 'type': change_type,
             })
 
-    # HAD对比
-    old_had = old_pred.get('HAD', {})
-    new_had = new_pred.get('HAD', {})
+    # HAD对比 (Ultra 13.8: null 防护同 initial)
+    old_had = old_pred.get('HAD') or {}
+    new_had = new_pred.get('HAD') or {}
     add_change('HAD方向', old_had.get('dir', ''), new_had.get('dir', ''), '方向变化')
     add_change('HAD赔率', old_had.get('odds', ''), new_had.get('odds', ''), '赔率变化')
     add_change('HAD星级', old_had.get('conf', ''), new_had.get('conf', ''), '星级变化')
     add_change('HAD概率', old_had.get('p', ''), new_had.get('p', ''), '概率变化')
 
     # HHAD对比
-    old_hhad = old_pred.get('HHAD', {})
-    new_hhad = new_pred.get('HHAD', {})
+    old_hhad = old_pred.get('HHAD') or {}
+    new_hhad = new_pred.get('HHAD') or {}
     add_change('HHAD方向', old_hhad.get('dir', ''), new_hhad.get('dir', ''), '方向变化')
     add_change('HHAD赔率', old_hhad.get('odds', ''), new_hhad.get('odds', ''), '赔率变化')
     add_change('HHAD星级', old_hhad.get('conf', ''), new_hhad.get('conf', ''), '星级变化')
 
-    # 初赔对比
-    old_init = old_pred.get('initial', {})
-    new_init = new_pred.get('initial', {})
+    # 初赔对比 (Ultra 13.8: JSON null 防护 — initial/score 等字段存为 null 时
+    # .get(key, {}) 返回 None, 直接 .get() 崩溃; 500.com降级场次常见)
+    old_init = old_pred.get('initial') or {}
+    new_init = new_pred.get('initial') or {}
     add_change('欧指即时', old_init.get('ouzhi_now', ''), new_init.get('ouzhi_now', ''), '赔率变化')
     add_change('亚指即时', old_init.get('yazhi_now', ''), new_init.get('yazhi_now', ''), '盘口变化')
     add_change('大小即时', old_init.get('dx_now', ''), new_init.get('dx_now', ''), '盘口变化')
 
-    # 比分对比
-    old_score = old_pred.get('score', {})
-    new_score = new_pred.get('score', {})
-    add_change('比分Top3', old_score.get('top3', '')[:40], new_score.get('top3', '')[:40], '比分变化')
+    # 比分对比 (Ultra 13.8: null 防护 + top3 字符串防护)
+    old_score = old_pred.get('score') or {}
+    new_score = new_pred.get('score') or {}
+    add_change('比分Top3', str(old_score.get('top3', ''))[:40], str(new_score.get('top3', ''))[:40], '比分变化')
     add_change('大小方向', old_score.get('main_dir', ''), new_score.get('main_dir', ''), '方向变化')
     add_change('主盘口', old_score.get('market_gl_str', ''), new_score.get('market_gl_str', ''), '盘口变化')
 
     # 半全场对比 (Pro 3.2)
-    old_hf = old_pred.get('half_full', {})
-    new_hf = new_pred.get('half_full', {})
+    old_hf = old_pred.get('half_full') or {}
+    new_hf = new_pred.get('half_full') or {}
     add_change('半全场主推', old_hf.get('main', ''), new_hf.get('main', ''), '半全场变化')
 
     # 总进球数对比 (Pro 3.2)
@@ -515,6 +536,36 @@ def main():
         n_bonus = sum(1 for mi in sporttery_matches.values() if mi.get('sporttery_bonus'))
         if n_bonus:
             print(f"  [固定奖金] {n_bonus}/{len(sporttery_matches)}场获取成功")
+
+    # ===== Step 3.5: 新场次纳入更新范围 (Ultra 13.8) =====
+    # 体彩在售但预测文件中不存在的场次 (如周六017-025新上架), 构造meta并纳入
+    # found_keys, 使 update 可直接补测新场次而无需先跑完整 predict。
+    # 仅纳入与所选预测文件同周几的场次, 防止跨周几场次混入 (编号跨周几重复)。
+    _fn_wd = re.search(r'周[一二三四五六日]', os.path.basename(pred_file or ''))
+    added_new = []
+    if _fn_wd:
+        _file_wd = _fn_wd.group(0)  # 如 '周六'
+        for _key, _mi in sporttery_matches.items():
+            if not _key.startswith(_file_wd):
+                continue
+            if _key[-3:] not in match_numbers or _key in old_results:
+                continue
+            meta[_key] = {
+                'home': _mi.get('home', ''),
+                'away': _mi.get('away', ''),
+                'league': _mi.get('league', ''),
+                'match_date': _mi.get('match_date', ''),
+                'match_time': _mi.get('match_time', ''),
+                'weekday': _file_wd,
+                'fid': _mi.get('fixture_id', 0) or 0,
+                'data_source': 'sporttery(update补测)',
+                'betting_single': str(_mi.get('bettingSingle', '')),
+            }
+            found_keys.append(_key)
+            added_new.append(_key)
+        if added_new:
+            found_keys = sorted(set(found_keys))
+            print(f"  [新场次] 纳入 {len(added_new)} 场补测: {added_new}")
 
     # ===== Step 4: 获取500.com即时赔率 (跳过shuju) =====
     print(f"\n[Step4] 获取500.com即时赔率 (跳过历史数据)...")
