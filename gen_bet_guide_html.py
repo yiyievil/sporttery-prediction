@@ -32,6 +32,13 @@ import json
 import glob
 import re
 
+# Windows 控制台 GBK 编码兼容: 输出含 emoji 与中文, 强制 UTF-8 (失败则忽略)
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 _WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__))
 
 # Ultra 12.0: 杯赛识别关键词
@@ -159,7 +166,8 @@ def generate(pred_json=None):
     base = os.path.basename(pred_json).replace('pred_', '').replace('.json', '')
 
     cards = []
-    n_single = n_cover = n_avoid = n_draw = n_draw_strike = 0
+    n_single = n_cover = n_avoid = n_draw = n_draw_strike = n_draw_value = 0
+    n_primary_had = n_primary_hhad = 0
     for key in sorted(res.keys(), key=_match_sort_key):
         m = res[key]
         meta = meta_all.get(key, {})
@@ -168,9 +176,19 @@ def generate(pred_json=None):
         handicap = hh.get('handicap')
         league = meta.get('league', '')
 
+        # 首推补充 (命中率优先 = 预测PDF primary_bet, 仅参考不改四档主推)
+        pb = (m.get('cross_market') or {}).get('primary_bet') or {}
+        primary_opt = pb.get('option', '')
+        primary_odds = pb.get('odds', '')
+        primary_prob = pb.get('prob', '')
+        primary_market = pb.get('market', '')
+        if primary_market == 'HHAD':
+            n_primary_hhad += 1
+        elif primary_market == 'HAD':
+            n_primary_had += 1
+
+        # 四档主推 (原判定, 主推以四档为准)
         if not had_open:
-            # 修复: HAD未开盘时直接用HHAD主推 (体彩HAD停售, 只剩让球盘可选),
-            # 原实现把 had.p='未开盘' 解析成 0/0/0 后输出 "未开盘 @None (胜平负)"
             hh_dir = hh.get('dir', '')
             hh_odds = hh.get('odds', '')
             if hh_dir and hh_odds:
@@ -189,9 +207,7 @@ def generate(pred_json=None):
             draw_strike_reason = ''
             draw_value = False
             draw_value_reason = ''
-            # 概率列改用 HHAD 的胜平负分布 (HAD未开盘, 显示0/0/0会误导为无预测)
             w, dr, l = _parse_probs(hh.get('p', '0/0/0'))
-            cover_side = hh_dir
         else:
             w, dr, l = _parse_probs(had.get('p', '0/0/0'))
             argmax_p = max(w, dr, l)
@@ -213,8 +229,6 @@ def generate(pred_json=None):
                 rec_cls, tag = 'single', '✅ 单选'
             elif level == 'cover':
                 n_cover += 1
-                # 覆盖项赔率: 只有 cover_side 与 HHAD 主推方向一致时, hh.odds 才是该方向赔率;
-                # 不一致时不能拿主推赔率冒充该方向 (修复方向/赔率错配, 如让负却显示让胜的赔率)
                 cover_odds = hh.get('odds', '') if cover_side == hh.get('dir', '') else ''
                 if cover_odds:
                     rec = f"{cover_side} @{cover_odds} (让球·覆盖平局)"
@@ -228,8 +242,15 @@ def generate(pred_json=None):
 
         if draw_strike:
             n_draw_strike += 1
+        if draw_value:
+            n_draw_value += 1
 
         conf = hh.get('conf', '') if not had_open else had.get('conf', '')
+        # 首推参考行 (补充, 不改四档主推)
+        primary_note = ''
+        if primary_opt and primary_odds:
+            pct = f"P={primary_prob:.0f}%" if isinstance(primary_prob, (int, float)) else ''
+            primary_note = f'📌 首推参考(命中率优先): <b>{primary_opt} @{primary_odds}</b> {pct}'
         cards.append({
             'no': key, 'home': meta.get('home', '?'), 'away': meta.get('away', '?'),
             'level': level, 'tag': tag, 'rec': rec, 'reason': reason,
@@ -239,14 +260,14 @@ def generate(pred_json=None):
             'draw_strike': draw_strike, 'draw_strike_reason': draw_strike_reason,
             'draw_value': draw_value, 'draw_value_reason': draw_value_reason,
             'draw_odds': had.get('draw_odds', '3.00'),
+            'primary_note': primary_note,
         })
 
-    # 过关建议: 单选+平局直击场
+    # 过关建议: 四档主推 (单选+平局直击场)
     single_list = [c for c in cards if c['level'] == 'single']
     cover_list = [c for c in cards if c['level'] == 'cover']
     draw_list = [c for c in cards if c['level'] == 'draw']
     draw_value_list = [c for c in cards if c.get('draw_value')]
-    n_draw_value = len(draw_value_list)
 
     card_html = ''
     for c in cards:
@@ -256,11 +277,13 @@ def generate(pred_json=None):
         dv_html = ''
         if c.get('draw_value'):
             dv_html = f'<div class="mc-draw-value">💡 平局价值: <b>平 @{c.get("draw_odds","3.00")}</b> (胜平负·小注) — {c.get("draw_value_reason","")}</div>'
+        primary_html = f'<div class="mc-primary">{c["primary_note"]}</div>' if c.get('primary_note') else ''
         card_html += f'''<div class="mc {c['rec_cls']}">
   <div class="mc-top"><span class="mc-no">{c['no']}</span>
     <span class="mc-teams"><b>{c['home']}</b> vs {c['away']}</span>
     <span class="mc-tag {c['rec_cls']}">{c['tag']}</span></div>
   <div class="mc-rec">{c['rec']}</div>
+  {primary_html}
   {ds_html}
   {dv_html}
   <div class="mc-meta">概率 {c['probs']}% · {c['conf']} · 可预测性 {c['diff']} · 一致性 {c['agree']:.0%}</div>
@@ -287,6 +310,8 @@ def generate(pred_json=None):
             guide += f'<div class="ins draw">🎯 <b>平局直击 {len(draw_strike_list)} 场</b>：{picks}。平P紧贴argmax(≤10pp)，回测该档平局率40%、平局正EV，可博高赔平局。</div>'
     if n_avoid:
         guide += f'<div class="ins bad">🚫 <b>避开 {n_avoid} 场</b>：方向性误判高发，不买。</div>'
+    # 首推参考汇总 (补充, 不改四档主推)
+    guide += f'<div class="ins">📌 <b>首推参考(命中率优先)</b>：✅胜平负{n_primary_had}场 · 🎯让球{n_primary_hhad}场。首推=预测PDF「主推」，仅作补充参考，主推以四档为准。</div>'
 
     html = f'''<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>投注选择指南 {base}</title><style>
@@ -322,15 +347,16 @@ h1{{font-size:21px;font-weight:800}}
 .mc-draw-value b{{color:#0369a1}}
 .mc-meta{{font-size:11px;color:#94a3b8}}
 .mc-reason{{font-size:12px;color:#475569;margin-top:6px;line-height:1.6;background:#f8fafc;border-radius:8px;padding:8px 10px}}
+.mc-primary{{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#f0f9ff;border:1px dashed #93c5fd;color:#1d4ed8}}
 .sec{{font-size:15px;font-weight:800;margin:16px 0 4px}}
 .ins{{padding:11px 13px;border-radius:8px;font-size:12.5px;margin:8px 0;line-height:1.7;border-left:4px solid}}
 .ins.good{{background:#f0fdf4;border-color:#16a34a}} .ins.warn{{background:#fffbeb;border-color:#f59e0b}} .ins.bad{{background:#fef2f2;border-color:#dc2626}}
 .foot{{text-align:center;color:#94a3b8;font-size:11px;margin:18px 0}}
 </style></head><body>
 <h1>🎯 投注选择指南</h1>
-<div class="sub">{base} · {len(cards)} 场 · 四档显性化（照标注选场即可）</div>
+<div class="sub">{base} · {len(cards)} 场 · 四档主推 + 首推参考</div>
 
-<div class="card"><div class="sec" style="margin-top:0">📖 四档图例</div>
+<div class="card"><div class="sec" style="margin-top:0">📖 四档图例（主推）</div>
 <div class="legend">
   <div class="lg draw"><b>🎯 平局直击</b>平局为最高概率，直接买平局</div>
   <div class="lg single"><b>✅ 单选</b>方向明确，照主推买</div>
@@ -342,7 +368,9 @@ h1{{font-size:21px;font-weight:800}}
   <div class="st s1"><b>{n_single}</b><span>✅ 可单选</span></div>
   <div class="st s2"><b>{n_cover}</b><span>⚠️ 双选兜底</span></div>
   <div class="st s3"><b>{n_avoid}</b><span>🚫 避开</span></div>
-</div></div>
+</div>
+<div class="ins" style="margin-top:10px">📌 <b>首推参考（命中率优先，仅补充）</b>：✅胜平负 {n_primary_had} 场 · 🎯让球 {n_primary_hhad} 场。首推=预测PDF「主推」，与四档主推并存，仅供参考。</div>
+</div>
 
 <div class="card"><div class="sec" style="margin-top:0">🎯 投注建议</div>{guide}</div>
 
@@ -351,13 +379,15 @@ h1{{font-size:21px;font-weight:800}}
 
 <div class="card"><div class="sec" style="margin-top:0">📏 判定规则</div>
 <div class="ins warn" style="border-color:#94a3b8;background:#f8fafc">
-<b>🎯 平局直击</b>：平P为argmax（≥25%） — 模型最看好平局，直接买平局（赔率~3.0，收益远超HHAD覆盖项）<br>
-<b>🎯 平局紧贴</b>：联赛平P≥30%/杯赛≥32% 且距argmax≤10pp — 回测该档平局率40%、平局正EV，可博高赔平局<br>
-<b>💡 平局价值</b>：联赛平P≥26%/杯赛≥28% 且距argmax≤10pp — 回测该档平局率33%、优于热门方向EV，建议1/3本金小注<br>
-<b>✅ 单选</b>：方向P≥50 且非误判高发 · <b>⚠️ 双选兜底</b>：平P≥28(联赛)/≥30(杯赛) 且 方向P&lt;50（平局窗口，改买HHAD覆盖项） · <b>🚫 避开</b>：胜P≥60 且 平P≥25（强主场方向性误判黑天鹅）<br>
+<b>四档主推</b>：<br>
+· <b>🎯 平局直击</b>：平P为argmax（≥25%） — 模型最看好平局，直接买平局（赔率~3.0，收益远超HHAD覆盖项）<br>
+· <b>🎯 平局紧贴</b>：联赛平P≥30%/杯赛≥32% 且距argmax≤10pp — 回测该档平局率40%、平局正EV，可博高赔平局<br>
+· <b>💡 平局价值</b>：联赛平P≥26%/杯赛≥28% 且距argmax≤10pp — 回测该档平局率33%、优于热门方向EV，建议1/3本金小注<br>
+· <b>✅ 单选</b>：方向P≥50 且非误判高发 · <b>⚠️ 双选兜底</b>：平P≥28(联赛)/≥30(杯赛) 且 方向P&lt;50（平局窗口，改买HHAD覆盖项） · <b>🚫 避开</b>：胜P≥60 且 平P≥25（强主场方向性误判黑天鹅）<br>
 <b>杯赛策略</b>：杯赛实际平局率18.7%低于联赛25.8%（674场回测），故杯赛阈值高于联赛，不再单独下调。<br>
+<b>首推参考</b>：卡片上的「首推参考」=预测PDF「主推(命中率优先)」，仅作补充，不改变四档主推。<br>
 <b>过关</b>：优先 2-3 关，忌 6 场全选（容错为0）。命中率第一，宁缺毋滥。</div></div>
-<div class="foot">基于 {base} {len(cards)} 场预测 · 规则源自 260811 实测复盘 · 仅供研究学习，不构成投注建议</div>
+<div class="foot">基于 {base} {len(cards)} 场预测 · 四档主推 + 首推参考 · 仅供研究学习，不构成投注建议</div>
 </body></html>'''
 
     # 交付物输出到脚本所在目录 (/workspace/sporttery, 用户可见可打开)
@@ -365,7 +395,7 @@ h1{{font-size:21px;font-weight:800}}
     out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f'bet_guide_{base}.html')
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(html)
-    print(f'[指南] 已生成: {out_path} (🎯{n_draw} ✅{n_single} ⚠️{n_cover} 🚫{n_avoid})')
+    print(f'[指南] 已生成: {out_path} (四档: 🎯{n_draw} ✅{n_single} ⚠️{n_cover} 🚫{n_avoid} | 首推参考: ✅{n_primary_had} 🎯{n_primary_hhad})')
     return out_path
 
 

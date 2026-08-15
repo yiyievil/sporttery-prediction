@@ -32,6 +32,7 @@ import json, re, time, os, sys, sqlite3, math, html
 from datetime import datetime, timedelta
 import requests
 from v215_e2e import stars_to_score
+from gen_bet_guide_html import classify, _parse_probs
 
 # ============================================================
 # Phase 0: 用户输入
@@ -90,76 +91,83 @@ PREDICTIONS_DIR = os.path.join(_WORKSPACE, 'predictions')
 REPORT_DIR = os.environ.get('SPORTTERY_WORKSPACE') or _WORKSPACE
 DB_PATH = os.path.join(PREDICTIONS_DIR, 'regression.db')
 
+def _read_pred_keys(filepath, prefix):
+    """读取预测文件中以 prefix(如'周五') 开头的 match_key 列表(排序去重)"""
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except Exception:
+        return []
+    keys = set()
+    for container in (data.get('results'), data.get('meta')):
+        if isinstance(container, dict):
+            for k in container.keys():
+                if isinstance(k, str) and k.startswith(prefix):
+                    keys.add(k)
+    return sorted(keys)
+
+
+def _discover_keys_from_pred_files(prefix):
+    """从所有预测文件中收集以 prefix 开头的 match_key (跨文件去重排序)"""
+    if not os.path.exists(PREDICTIONS_DIR):
+        return []
+    pred_files = sorted([f for f in os.listdir(PREDICTIONS_DIR)
+                         if f.startswith('pred_') and f.endswith('.json')],
+                        reverse=True)
+    keys = set()
+    for pf in pred_files:
+        keys.update(_read_pred_keys(os.path.join(PREDICTIONS_DIR, pf), prefix))
+    return sorted(keys)
+
+
 def find_match_keys_by_date(target_date, target_nums):
-    """从预测文件中按比赛日期查找match_key
+    """从预测文件中按开盘日(businessDate)星期查找match_key (跨天修复)
 
-    体彩的match_key(如'周四001')基于开盘日(businessDate)星期,
-    但比赛实际日期(match_date)可能比开盘日晚1天。
-    例如: 260812(周三)体彩开盘, 比赛实际在8月13日进行,
-    预测文件名为 pred_20260813_周三.json, match_key=周三001。
-
-    搜索策略: target_date ±1天, 评分优先(匹配数>前缀一致),
-    避免"周三001"匹配到上周的周二003。
+    关键: matchNumStr(如'周五001')的星期 = 体彩开盘日(businessDate)的星期,
+    与比赛实际日期(matchDate)无关。比赛常在次日凌晨开赛(matchDate可+1天),
+    因此不能按 meta.match_date 匹配(会漏掉凌晨场次、或错配到相邻周几),
+    改为按 matchNumStr 的星期前缀精确匹配。
 
     Args:
-        target_date: 用户输入的日期 '2026-08-12' (通常是体彩开盘日)
-        target_nums: 比赛编号列表 ['001', '002', '003']
+        target_date: 体彩开盘日 '2026-08-14'
+        target_nums: 场次编号 ['001','002',...]
     Returns:
-        [match_key, ...] 按用户输入顺序, 或 None
+        [match_key,...] 按 target_nums 顺序, 或 None
     """
     if not os.path.exists(PREDICTIONS_DIR):
         return None
-
-    # 体彩开盘日与比赛实际日期可能差1天, 搜索 ±1 天
     try:
         dt = datetime.strptime(target_date, '%Y-%m-%d')
         weekday_cn = ['一', '二', '三', '四', '五', '六', '日']
-        expected_prefix = f"周{weekday_cn[dt.weekday()]}"
-        search_dates = [target_date,
-                        (dt + timedelta(days=1)).strftime('%Y-%m-%d'),
-                        (dt - timedelta(days=1)).strftime('%Y-%m-%d')]
+        prefix = f"周{weekday_cn[dt.weekday()]}"
     except Exception:
-        search_dates = [target_date]
-        expected_prefix = None
+        return None
 
+    code = dt.strftime('%Y%m%d')
     pred_files = sorted([f for f in os.listdir(PREDICTIONS_DIR)
                          if f.startswith('pred_') and f.endswith('.json')],
                         reverse=True)
 
-    best_matched = None
-    best_score = -1  # 评分: 匹配数 × 10 + 前缀一致数
-
+    best = []
+    # 优先: 文件名日期与开盘日一致 (pred_{yyyymmdd}_{星期}.json)
     for pf in pred_files:
-        filepath = os.path.join(PREDICTIONS_DIR, pf)
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        except Exception:
-            continue
-        meta = data.get('meta', {})
+        if pf.startswith(f'pred_{code}') and f'_{weekday_cn[dt.weekday()]}' in pf:
+            best = _read_pred_keys(os.path.join(PREDICTIONS_DIR, pf), prefix)
+            if best:
+                break
+    # 次选: 任意预测文件中含该星期前缀的key (按文件名倒序)
+    if not best:
+        for pf in pred_files:
+            best = _read_pred_keys(os.path.join(PREDICTIONS_DIR, pf), prefix)
+            if best:
+                break
+    if not best:
+        return None
 
-        for search_date in search_dates:
-            matched = {}
-            prefix_ok = 0
-            for key, m in meta.items():
-                if m.get('match_date', '') != search_date:
-                    continue
-                num_m = re.search(r'(\d{3})$', key)
-                if num_m and num_m.group(1) in target_nums:
-                    matched[num_m.group(1)] = key
-                    if expected_prefix and key.startswith(expected_prefix):
-                        prefix_ok += 1
-
-            if matched:
-                # 评分: 匹配数权重更高, 前缀一致作为加分项
-                score = len(matched) * 10 + prefix_ok
-                if score > best_score:
-                    best_score = score
-                    best_matched = matched
-
-    if best_matched:
-        return [best_matched[n] for n in target_nums if n in best_matched]
-    return None
+    by_num = {re.search(r'(\d{3})$', k).group(1): k for k in best
+              if re.search(r'(\d{3})$', k)}
+    result = [by_num[n] for n in target_nums if n in by_num]
+    return result or None
 
 
 def expand_range(input_str):
@@ -195,11 +203,50 @@ def parse_input(input_str):
     本函数优先从预测文件按比赛日期反查, 确保key正确。
     """
     input_str = input_str.strip()
+    # ★ 触发词识别: 剥离 "验证"/"赛果" 前缀 (如 "验证 260814" → "260814", "验证260814" → "260814")
+    _trig = re.match(r'^\s*(?:验证|赛果)\s*[:：]?\s*(.*)$', input_str)
+    if _trig:
+        print("  [触发词] 检测到关键词'验证' → 进入赛果验证流程")
+        input_str = _trig.group(1).strip()
     weekdays_map = {'一': 0, '二': 1, '三': 2, '四': 3, '五': 4, '六': 5, '日': 6}
     weekday_cn = ['一', '二', '三', '四', '五', '六', '日']
 
     # 先展开范围表示法
     input_str = expand_range(input_str)
+
+    # 格式4: 纯日期(无编号) — 验证该开盘日全部场次 (如 '260814'/'20260814'/'2026-08-14')
+    bare = re.match(r'^(\d{6})$', input_str) or re.match(r'^(\d{8})$', input_str) \
+        or re.match(r'^(\d{4}-\d{2}-\d{2})$', input_str)
+    if bare:
+        g = bare.group(1)
+        try:
+            if len(g) == 6:
+                dt = datetime.strptime(g, '%y%m%d')
+            elif len(g) == 8:
+                dt = datetime.strptime(g, '%Y%m%d')
+            else:
+                dt = datetime.strptime(g, '%Y-%m-%d')
+        except Exception:
+            dt = None
+        if dt:
+            full_date = dt.strftime('%Y-%m-%d')
+            prefix = f"周{weekday_cn[dt.weekday()]}"
+            date_range = ((dt - timedelta(days=3)).strftime('%Y-%m-%d'),
+                          (dt + timedelta(days=3)).strftime('%Y-%m-%d'))
+            # 1) 从预测文件反查该开盘日全部场次
+            keys = _discover_keys_from_pred_files(prefix)
+            # 2) 兜底: 从赛果API反查(比赛实际日期可能+1天, 范围放宽到±3天)
+            if not keys:
+                try:
+                    all_res = fetch_match_results(date_range)
+                    keys = sorted(k for k in all_res.keys() if k.startswith(prefix))
+                except Exception:
+                    keys = []
+            if keys:
+                print(f"  [日期反查] 开盘日 {full_date}({prefix}) 解析到 {len(keys)} 场")
+                return keys, date_range
+            print(f"  [日期反查] 开盘日 {full_date}({prefix}) 未找到任何场次")
+            return [], date_range
 
     # 格式2: 日期+编号 (日期=体彩开盘日)
     date_match = re.match(r'(\d{4}-\d{2}-\d{2})\s+(.+)', input_str)
@@ -1024,6 +1071,80 @@ def verify_prediction(pred_data, result_data):
     # Pro 3.0: 计算单场投注ROI
     result['roi'] = calculate_roi(result)
     return result
+
+
+def verify_bet_guide(pred_data, result_data):
+    """验证投注指南命中 — 四档(主推) + 首推(补充, PDF primary_bet)
+
+    四档主推 (复刻 gen_bet_guide_html 原四档判定):
+      🎯 draw   → 买 HAD 平局
+      ✅ single → 买 HAD 主推方向
+      ⚠️ cover  → 买 HHAD 覆盖项(让负/受让胜)
+      🚫 avoid  → 不买 (hit=None, 不计入分母)
+    首推补充 (命中率优先 = 预测PDF primary_bet):
+      market=HAD  → 买 HAD 胜/平/负
+      market=HHAD → 买 HHAD 让胜/让负/受让胜/...
+
+    返回 {level, bet, hit, primary_market, primary_bet, primary_hit}
+    """
+    pred = pred_data.get('prediction', {})
+    meta = pred_data.get('meta', {})
+    had = pred.get('HAD', {})
+    hh = pred.get('HHAD', {})
+    league = meta.get('league', '')
+    handicap = hh.get('handicap')
+    had_open = had.get('had_open', True)
+
+    actual_had = result_data.get('had_result', '')
+    actual_hhad = result_data.get('hhad_result', '')
+
+    # ===== 四档主推 =====
+    if not had_open:
+        hh_dir = hh.get('dir', '')
+        if hh_dir:
+            level, bet = 'single', hh_dir
+            hit = (hh_dir == actual_hhad) if actual_hhad else False
+        else:
+            level, bet, hit = 'avoid', '', None
+    else:
+        w, dr, l = _parse_probs(had.get('p', '0/0/0'))
+        argmax_p = max(w, dr, l)
+        level, _reason, _ds, _dsr, _dv, _dvr = classify(dr, argmax_p, w, l, league)
+        if level == 'draw':
+            bet = '平'
+            hit = (actual_had == '平') if actual_had else False
+        elif level == 'single':
+            bet = had.get('dir', '')
+            hit = (bet == actual_had) if bet and actual_had else False
+        elif level == 'cover':
+            if handicap is not None:
+                try:
+                    bet = '受让胜' if float(handicap) > 0 else '让负'
+                except Exception:
+                    bet = hh.get('dir', '')
+            else:
+                bet = hh.get('dir', '')
+            hit = (bet == actual_hhad) if bet and actual_hhad else False
+        else:  # avoid
+            bet = ''
+            hit = None
+
+    # ===== 首推补充 (PDF primary_bet, 命中率优先) =====
+    cmb = pred.get('cross_market') or {}
+    pb = cmb.get('primary_bet') or {}
+    primary_market = pb.get('market', '')
+    primary_opt = pb.get('option', '')
+    if primary_market == 'HAD':
+        primary_bet = primary_opt.replace('HAD', '')
+        primary_hit = (primary_bet == actual_had) if actual_had else False
+    elif primary_market == 'HHAD':
+        primary_bet = primary_opt.replace('HHAD', '')
+        primary_hit = (primary_bet == actual_hhad) if actual_hhad else False
+    else:
+        primary_bet, primary_hit = '', None
+
+    return {'level': level, 'bet': bet, 'hit': hit,
+            'primary_market': primary_market, 'primary_bet': primary_bet, 'primary_hit': primary_hit}
 
 
 # ============================================================
@@ -2651,6 +2772,20 @@ def init_db():
     safe_alter(conn, 'verify_history', 'model_agreement', 'REAL')
     safe_alter(conn, 'verify_stats', 'avg_ece', 'REAL')
     safe_alter(conn, 'verify_stats', 'calibration_reliable', 'INTEGER')
+    # Ultra 12.x: 投注指南验证列
+    safe_alter(conn, 'verify_history', 'guide_level', 'TEXT')
+    safe_alter(conn, 'verify_history', 'guide_market', 'TEXT')
+    safe_alter(conn, 'verify_history', 'guide_bet', 'TEXT')
+    safe_alter(conn, 'verify_history', 'guide_hit', 'INTEGER')
+    safe_alter(conn, 'verify_history', 'primary_market', 'TEXT')
+    safe_alter(conn, 'verify_history', 'primary_bet', 'TEXT')
+    safe_alter(conn, 'verify_history', 'primary_hit', 'INTEGER')
+    safe_alter(conn, 'verify_stats', 'guide_bets', 'INTEGER')
+    safe_alter(conn, 'verify_stats', 'guide_hits', 'INTEGER')
+    safe_alter(conn, 'verify_stats', 'guide_rate', 'REAL')
+    safe_alter(conn, 'verify_stats', 'primary_bets', 'INTEGER')
+    safe_alter(conn, 'verify_stats', 'primary_hits', 'INTEGER')
+    safe_alter(conn, 'verify_stats', 'primary_rate', 'REAL')
     conn.commit()
     conn.close()
 
@@ -2750,6 +2885,18 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
                      WHERE verify_date=? AND match_key=?''',
                   (v.get('pred_tg_main', ''), v.get('actual_tg', ''),
                    1 if v.get('tg_hit') else 0, date_str, v['key']))
+        # Ultra 12.x: 投注指南验证数据 (四档主推 + 首推补充; hit 可为 NULL)
+        _gh = v.get('guide_hit')
+        _ph = v.get('primary_hit')
+        c.execute('''UPDATE verify_history SET guide_level=?, guide_market=?, guide_bet=?, guide_hit=?,
+                     primary_market=?, primary_bet=?, primary_hit=?
+                     WHERE verify_date=? AND match_key=?''',
+                  (v.get('guide_level', ''), v.get('primary_market', ''),
+                   v.get('guide_bet', ''),
+                   None if _gh is None else (1 if _gh else 0),
+                   v.get('primary_market', ''), v.get('primary_bet', ''),
+                   None if _ph is None else (1 if _ph else 0),
+                   date_str, v['key']))
 
     # 保存汇总统计
     total = stats.get('total', 0)
@@ -2813,6 +2960,20 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
     c.execute('''UPDATE verify_stats SET avg_ece=?, calibration_reliable=?
                  WHERE verify_date=?''',
               (ece_val, cal_reliable, date_str))
+    # Ultra 12.x: 投注指南统计
+    guide_bets_val = stats.get('guide_bets', 0)
+    guide_hits_val = stats.get('guide_hits', 0)
+    guide_rate_val = (guide_hits_val / guide_bets_val * 100) if guide_bets_val else 0
+    c.execute('''UPDATE verify_stats SET guide_bets=?, guide_hits=?, guide_rate=?
+                 WHERE verify_date=?''',
+              (guide_bets_val, guide_hits_val, guide_rate_val, date_str))
+    # Ultra 12.x: 首推补充统计
+    primary_bets_val = stats.get('primary_bets', 0)
+    primary_hits_val = stats.get('primary_hits', 0)
+    primary_rate_val = (primary_hits_val / primary_bets_val * 100) if primary_bets_val else 0
+    c.execute('''UPDATE verify_stats SET primary_bets=?, primary_hits=?, primary_rate=?
+                 WHERE verify_date=?''',
+              (primary_bets_val, primary_hits_val, primary_rate_val, date_str))
 
     conn.commit()
     conn.close()
@@ -3306,12 +3467,30 @@ def main():
             v = verify_prediction(predictions[key], result)
             v['key'] = key
             v['source'] = result.get('source', 'sporttery')
+            # ★ 投注指南验证: 四档(主推) + 首推(补充=PDF主推)
+            g = verify_bet_guide(predictions[key], result)
+            v['guide_level'] = g['level']            # 四档
+            v['guide_market'] = g['primary_market']  # 首推市场 (存库用)
+            v['guide_bet'] = g['bet']                # 四档方向
+            v['guide_hit'] = g['hit']                # 四档命中
+            v['primary_market'] = g['primary_market']
+            v['primary_bet'] = g['primary_bet']
+            v['primary_hit'] = g['primary_hit']
             verified_matches.append(v)
             had_str = '✓' if v['had_hit'] else '✗'
             hhad_str = '✓' if v['hhad_hit'] else '✗'
+            if g['hit'] is None:
+                guide_str = '🚫不买'
+            else:
+                guide_str = ('✓' if g['hit'] else '✗') + f" {g['bet']}"
+            if g['primary_hit'] is None:
+                prim_str = '无'
+            else:
+                prim_str = ('✓' if g['primary_hit'] else '✗') + f" {g['primary_bet']}"
             print(f"  {key} {v['home']} {v['actual_score']} {v['away']} | "
                   f"HAD:{v['pred_had_dir']}→{v['actual_had']} {had_str} | "
-                  f"HHAD:{v['pred_hhad_dir']}→{v['actual_hhad']} {hhad_str}")
+                  f"HHAD:{v['pred_hhad_dir']}→{v['actual_hhad']} {hhad_str} | "
+                  f"四档[{g['level']}]{guide_str} | 首推[{g['primary_market']}]{prim_str}")
         else:
             print(f"  {key} {result['home']} {result['home_score']}-{result['away_score']} {result['away']} | ⚠️ 无预测数据")
             verified_matches.append({
@@ -3368,6 +3547,27 @@ def main():
     score_hits = sum(1 for v in has_pred if v['score_hit'])
     hf_hits = sum(1 for v in has_pred if v.get('hf_hit'))
     tg_hits = sum(1 for v in has_pred if v.get('tg_hit'))
+    # ★ 投注指南统计: 四档(主推) + 首推(补充=PDF主推)
+    guide_bets = [v for v in has_pred if v.get('guide_hit') is not None]  # 四档有推荐(非avoid)
+    guide_hits = sum(1 for v in guide_bets if v['guide_hit'])
+    guide_by_level = {}
+    for v in guide_bets:
+        lv = v.get('guide_level', '?')
+        d = guide_by_level.setdefault(lv, {'n': 0, 'hit': 0})
+        d['n'] += 1
+        if v['guide_hit']:
+            d['hit'] += 1
+    n_avoid = sum(1 for v in has_pred if v.get('guide_hit') is None)
+    # 首推补充统计
+    primary_bets = [v for v in has_pred if v.get('primary_hit') is not None]
+    primary_hits = sum(1 for v in primary_bets if v['primary_hit'])
+    primary_by_market = {}
+    for v in primary_bets:
+        mk = v.get('primary_market', '?')
+        d = primary_by_market.setdefault(mk, {'n': 0, 'hit': 0})
+        d['n'] += 1
+        if v['primary_hit']:
+            d['hit'] += 1
     stats = {
         'total': total,
         'has_pred': len(has_pred),
@@ -3376,9 +3576,34 @@ def main():
         'score_hits': score_hits,
         'hf_hits': hf_hits,
         'tg_hits': tg_hits,
+        'guide_bets': len(guide_bets),
+        'guide_hits': guide_hits,
+        'guide_avoid': n_avoid,
+        'guide_by_level': guide_by_level,
+        'primary_bets': len(primary_bets),
+        'primary_hits': primary_hits,
+        'primary_by_market': primary_by_market,
     }
 
     print(f"\n  统计: 有预测{len(has_pred)}/{total}, HAD命中{had_hits}, HHAD命中{hhad_hits}, 比分命中{score_hits}, 半全场命中{hf_hits}, 总进球命中{tg_hits}")
+    if guide_bets:
+        _lv_zh = {'draw': '🎯平局直击', 'single': '✅单选', 'cover': '⚠️双选兜底', 'avoid': '🚫避开'}
+        _lv_parts = []
+        for lv in ('draw', 'single', 'cover'):
+            d = guide_by_level.get(lv)
+            if d:
+                _lv_parts.append(f"{_lv_zh.get(lv, lv)}{d['hit']}/{d['n']}")
+        print(f"  🎯 四档主推: 命中{guide_hits}/{len(guide_bets)} ({guide_hits/len(guide_bets)*100:.1f}%, 另有🚫避开{n_avoid}场) | " + " ".join(_lv_parts))
+    else:
+        print(f"  🎯 四档主推: 无可验证场次(避开{n_avoid}场)")
+    if primary_bets:
+        _pm_zh = {'HAD': '✅胜平负', 'HHAD': '🎯让球'}
+        _pm_parts = []
+        for mk in ('HAD', 'HHAD'):
+            d = primary_by_market.get(mk)
+            if d:
+                _pm_parts.append(f"{_pm_zh.get(mk, mk)}{d['hit']}/{d['n']}")
+        print(f"  📌 首推参考(PDF主推): 命中{primary_hits}/{len(primary_bets)} ({primary_hits/len(primary_bets)*100:.1f}%) | " + " ".join(_pm_parts))
 
     # Pro 3.0: 高级指标 (计算一次, 供终端输出/HTML报告/数据库复用, 避免三重计算)
     brier_out = calculate_brier_score(verified_matches)
