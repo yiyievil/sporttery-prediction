@@ -107,16 +107,35 @@ def _read_pred_keys(filepath, prefix):
     return sorted(keys)
 
 
-def _discover_keys_from_pred_files(prefix):
-    """从所有预测文件中收集以 prefix 开头的 match_key (跨文件去重排序)"""
+def _discover_keys_from_pred_files(prefix, target_date=None):
+    """从所有预测文件中收集以 prefix 开头的 match_key (跨文件去重排序)
+
+    target_date: 若提供, 优先匹配文件名日期一致的预测文件 (pred_{yyyymmdd}_{星期}.json),
+                 避免跨周收集历史场次 (如验证 260815 时误收 260808 周六的场次)。
+    """
     if not os.path.exists(PREDICTIONS_DIR):
         return []
     pred_files = sorted([f for f in os.listdir(PREDICTIONS_DIR)
                          if f.startswith('pred_') and f.endswith('.json')],
                         reverse=True)
     keys = set()
-    for pf in pred_files:
-        keys.update(_read_pred_keys(os.path.join(PREDICTIONS_DIR, pf), prefix))
+    # 优先: 文件名日期与目标日期一致 (pred_{yyyymmdd}_{星期}.json)
+    if target_date:
+        try:
+            dt = datetime.strptime(target_date, '%Y-%m-%d')
+            weekday_cn = ['一', '二', '三', '四', '五', '六', '日']
+            code = dt.strftime('%Y%m%d')
+            wd = weekday_cn[dt.weekday()]
+            for pf in pred_files:
+                if pf.startswith(f'pred_{code}') and f'周{wd}' in pf:
+                    keys.update(_read_pred_keys(os.path.join(PREDICTIONS_DIR, pf), prefix))
+                    break
+        except Exception:
+            pass
+    # 回退: 扫描所有文件
+    if not keys:
+        for pf in pred_files:
+            keys.update(_read_pred_keys(os.path.join(PREDICTIONS_DIR, pf), prefix))
     return sorted(keys)
 
 
@@ -151,7 +170,7 @@ def find_match_keys_by_date(target_date, target_nums):
     best = []
     # 优先: 文件名日期与开盘日一致 (pred_{yyyymmdd}_{星期}.json)
     for pf in pred_files:
-        if pf.startswith(f'pred_{code}') and f'_{weekday_cn[dt.weekday()]}' in pf:
+        if pf.startswith(f'pred_{code}') and f'周{weekday_cn[dt.weekday()]}' in pf:
             best = _read_pred_keys(os.path.join(PREDICTIONS_DIR, pf), prefix)
             if best:
                 break
@@ -186,6 +205,11 @@ def expand_range(input_str):
         dc = m.group(1)
         start, end = int(m.group(2)), int(m.group(3))
         return ','.join(f"{dc}{i:03d}" for i in range(start, end + 1))
+    # 裸范围 001-003 (配合日期/周X前缀使用, 如 "2026-08-15 001-016")
+    m = re.match(r'^(\d{3})-(\d{3})$', input_str)
+    if m:
+        start, end = int(m.group(1)), int(m.group(2))
+        return ','.join(f"{i:03d}" for i in range(start, end + 1))
     return input_str
 
 
@@ -233,8 +257,8 @@ def parse_input(input_str):
             prefix = f"周{weekday_cn[dt.weekday()]}"
             date_range = ((dt - timedelta(days=3)).strftime('%Y-%m-%d'),
                           (dt + timedelta(days=3)).strftime('%Y-%m-%d'))
-            # 1) 从预测文件反查该开盘日全部场次
-            keys = _discover_keys_from_pred_files(prefix)
+            # 1) 从预测文件反查该开盘日全部场次 (优先按文件名日期+星期匹配, 避免跨周误收)
+            keys = _discover_keys_from_pred_files(prefix, target_date=full_date)
             # 2) 兜底: 从赛果API反查(比赛实际日期可能+1天, 范围放宽到±3天)
             if not keys:
                 try:
@@ -252,7 +276,9 @@ def parse_input(input_str):
     date_match = re.match(r'(\d{4}-\d{2}-\d{2})\s+(.+)', input_str)
     if date_match:
         business_date_str = date_match.group(1)
-        nums = re.findall(r'\d{3}', date_match.group(2))
+        # 先展开编号范围 (如 "001-016" → "001,002,...,016"), 再提取三位编号
+        num_part = expand_range(date_match.group(2).strip())
+        nums = re.findall(r'\d{3}', num_part)
         bd = datetime.strptime(business_date_str, '%Y-%m-%d')
         wd_cn = weekday_cn[bd.weekday()]
         match_keys = [f"周{wd_cn}{num}" for num in nums]
@@ -650,6 +676,9 @@ def parse_result(match_data):
     # 500.com独立数据源: 字段已预解析 (含home_score等字段)
     if source == '500.com' and 'home_score' in match_data:
         total_goals = match_data['home_score'] + match_data['away_score']
+        # ★ Ultra 13.6: 未结束比赛(完场=False)标记 data_available=False, 跳过验证
+        # (500.com对未开赛/进行中比赛会返回日期如"8-15"而非比分, 误解析为8:15会污染验证)
+        _finished = bool(match_data.get('finished', True))
         return {
             'home': match_data.get('homeTeam', ''),
             'away': match_data.get('awayTeam', ''),
@@ -663,8 +692,9 @@ def parse_result(match_data):
             'goal_line': match_data['goal_line'],
             'had_odds': {'h': 0, 'd': 0, 'a': 0},
             'total_goals': total_goals,
-            'match_status': '完' if match_data.get('finished') else '',
+            'match_status': '完' if _finished else '',
             'win_flag': '',
+            'data_available': _finished,
             'source': '500.com',
         }
 
@@ -871,40 +901,59 @@ def load_predictions(match_keys, results_data):
 
     # 若找到匹配基名, 到归档中取"最后一个完整版"
     if _query_base:
+        # ★ Ultra 13.6: 主文件完整覆盖时优先用主文件(最新版), 仅部分覆盖才回退归档
+        # (此前无条件用归档旧版, 导致验证基于 v1 首次预测而非最新 update 版)
+        _main_file = os.path.join(PREDICTIONS_DIR, _query_base + '.json')
+        _main_covered = 0
         try:
-            from version_archive import find_last_complete
-            _v, _vfile = find_last_complete(PREDICTIONS_DIR, _query_base, expected_keys=sorted(_target_last3))
-            if _v and _v.get('snapshot'):
-                _snap = _v['snapshot']
-                _snap_results = _snap.get('results', {}) or {}
-                _snap_meta = _snap.get('meta', {}) or {}
-                _covered_all = [k for k in match_keys if k in _snap_results or k[-3:] in [kk[-3:] for kk in _snap_results]]
-                if len(_covered_all) >= len(match_keys):
-                    for key in match_keys:
-                        _sk = next((k for k in _snap_results if k == key or k[-3:] == key[-3:]), None)
-                        if _sk:
-                            # Ultra 13.5: 跨周污染防护 (归档快照同样可能来自其他周)
-                            if not _pred_teams_match(results_data, key, _snap_meta.get(_sk, {})):
-                                continue
-                            predictions[key] = {
-                                'prediction': _snap_results[_sk],
-                                'meta': _snap_meta.get(_sk, {}),
-                                'file': os.path.basename(_vfile),
-                                'update_count': _v.get('update_count', 0),
-                                'version_seq': _v.get('seq'),
-                                'is_version_snapshot': True,
-                            }
-                            key_updates[key] = (_v.get('update_count', 0), os.path.basename(_vfile))
-                    _complete_loaded = True
-                    print(f"  [版本锚定] 用最后完整版 v{_v.get('seq')}({len(_snap_results)}场) 作为验证基准: {os.path.basename(_vfile)}")
-        except Exception as _ve:
-            print(f"  [版本锚定] ⚠️ 归档读取失败, 回退主文件: {_ve}")
+            with open(_main_file, 'r', encoding='utf-8') as f:
+                _main_data = json.load(f)
+            _main_results = _main_data.get('results', {}) or {}
+            _main_covered = sum(1 for k in match_keys
+                                if k in _main_results or k[-3:] in [kk[-3:] for kk in _main_results])
+        except Exception:
+            pass
+        if _main_covered >= len(match_keys):
+            print(f"  [版本锚定] 主文件完整覆盖 {_main_covered}/{len(match_keys)} 场, 用主文件(最新版): {os.path.basename(_main_file)}")
+        else:
+            try:
+                from version_archive import find_last_complete
+                _v, _vfile = find_last_complete(PREDICTIONS_DIR, _query_base, expected_keys=sorted(_target_last3))
+                if _v and _v.get('snapshot'):
+                    _snap = _v['snapshot']
+                    _snap_results = _snap.get('results', {}) or {}
+                    _snap_meta = _snap.get('meta', {}) or {}
+                    _covered_all = [k for k in match_keys if k in _snap_results or k[-3:] in [kk[-3:] for kk in _snap_results]]
+                    if len(_covered_all) >= len(match_keys):
+                        for key in match_keys:
+                            _sk = next((k for k in _snap_results if k == key or k[-3:] == key[-3:]), None)
+                            if _sk:
+                                # Ultra 13.5: 跨周污染防护 (归档快照同样可能来自其他周)
+                                if not _pred_teams_match(results_data, key, _snap_meta.get(_sk, {})):
+                                    continue
+                                predictions[key] = {
+                                    'prediction': _snap_results[_sk],
+                                    'meta': _snap_meta.get(_sk, {}),
+                                    'file': os.path.basename(_vfile),
+                                    'update_count': _v.get('update_count', 0),
+                                    'version_seq': _v.get('seq'),
+                                    'is_version_snapshot': True,
+                                }
+                                key_updates[key] = (_v.get('update_count', 0), os.path.basename(_vfile))
+                        _complete_loaded = True
+                        print(f"  [版本锚定] 用最后完整版 v{_v.get('seq')}({len(_snap_results)}场) 作为验证基准: {os.path.basename(_vfile)}")
+            except Exception as _ve:
+                print(f"  [版本锚定] ⚠️ 归档读取失败, 回退主文件: {_ve}")
 
     # 若完整版已锚定全部目标场次, 直接返回 (不再被部分覆盖的最新文件污染)
     if _complete_loaded and len(predictions) >= len(match_keys):
         return predictions
 
-    # ===== 原有逻辑: 主文件按 update_count 取最大 =====
+    # ===== 原有逻辑: 主文件(目标日期一致)优先, 其余按 update_count 取最大 =====
+    # ★ Ultra 13.6: 跨文件 update_count 无比较意义(各文件独立计数), 历史文件(如
+    # pred_20260808_周六 uc=3)会覆盖主文件(uc=1), 导致验证用错周预测。改为:
+    #   主文件(_query_base 匹配)的场次一旦加载, 其他文件不得覆盖;
+    #   非主文件之间仍按 update_count 取最大(作为主文件缺失场次的回退)。
     for pf in pred_files:
         filepath = os.path.join(PREDICTIONS_DIR, pf)
         try:
@@ -917,6 +966,8 @@ def load_predictions(match_keys, results_data):
         results = data.get('results', {})
         # 该文件的更新次数 (predict=0, 每次update+1)
         uc = data.get('update_count', 0 if data.get('mode') == 'predict' else 1)
+        # 是否为主文件(文件名基名与目标日期一致)
+        is_main = bool(_query_base) and pf.replace('.json', '') == _query_base
 
         for key in match_keys:
             if key not in results:
@@ -924,8 +975,11 @@ def load_predictions(match_keys, results_data):
             # Ultra 13.5: 跨周污染防护 — 队名不匹配的场次禁止配对
             if not _pred_teams_match(results_data, key, meta.get(key, {})):
                 continue
-            # 只保留最后一次更新(update_count最大)的版本
-            if key not in key_updates or uc > key_updates[key][0]:
+            # 主文件优先: 主文件场次一旦加载, 其他文件不覆盖
+            if key in predictions and not is_main:
+                continue
+            # 非主文件之间按 update_count 取最大
+            if key not in key_updates or is_main or uc > key_updates[key][0]:
                 key_updates[key] = (uc, pf)
                 predictions[key] = {
                     'prediction': results[key],
