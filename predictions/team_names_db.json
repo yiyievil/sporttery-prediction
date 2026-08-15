@@ -1,0 +1,3624 @@
+{
+ "_meta": {
+  "canonical": "sporttery",
+  "version": 1,
+  "updated": "2026-08-15 11:25:44"
+ },
+ "teams": {
+  "金泉尚武": {
+   "aliases": [
+    "金泉"
+   ],
+   "sources": {
+    "nowscore": [
+     "金泉"
+    ]
+   }
+  },
+  "大田市民": {
+   "aliases": [
+    "大田"
+   ],
+   "sources": {
+    "nowscore": [
+     "大田"
+    ]
+   }
+  },
+  "浦项制铁": {
+   "aliases": [
+    "浦项"
+   ],
+   "sources": {
+    "nowscore": [
+     "浦项"
+    ]
+   }
+  },
+  "全北现代": {
+   "aliases": [
+    "全北"
+   ],
+   "sources": {
+    "nowscore": [
+     "全北"
+    ]
+   }
+  },
+  "光州FC": {
+   "aliases": [
+    "光州"
+   ],
+   "sources": {
+    "nowscore": [
+     "光州"
+    ]
+   }
+  },
+  "济州SK": {
+   "aliases": [
+    "济州联",
+    "济州"
+   ],
+   "sources": {
+    "nowscore": [
+     "济州联",
+     "济州"
+    ]
+   }
+  },
+  "安养FC": {
+   "aliases": [
+    "FC安养",
+    "安养"
+   ],
+   "sources": {
+    "nowscore": [
+     "FC安养",
+     "安养"
+    ]
+   }
+  },
+  "江原FC": {
+   "aliases": [
+    "江原"
+   ],
+   "sources": {
+    "nowscore": [
+     "江原"
+    ]
+   }
+  },
+  "首尔FC": {
+   "aliases": [
+    "FC首尔",
+    "首尔"
+   ],
+   "sources": {
+    "nowscore": [
+     "FC首尔",
+     "首尔"
+    ]
+   }
+  },
+  "蔚山现代": {
+   "aliases": [
+    "蔚山HD",
+    "蔚山"
+   ],
+   "sources": {
+    "nowscore": [
+     "蔚山HD",
+     "蔚山"
+    ]
+   }
+  },
+  "仁川联": {
+   "aliases": [
+    "仁川联队",
+    "仁川"
+   ],
+   "sources": {
+    "nowscore": [
+     "仁川联队",
+     "仁川"
+    ]
+   }
+  },
+  "富川FC": {
+   "aliases": [
+    "富川"
+   ],
+   "sources": {
+    "nowscore": [
+     "富川"
+    ]
+   }
+  },
+  "大邱FC": {
+   "aliases": [
+    "大邱"
+   ],
+   "sources": {
+    "nowscore": [
+     "大邱"
+    ]
+   }
+  },
+  "水原FC": {
+   "aliases": [
+    "水原"
+   ],
+   "sources": {
+    "nowscore": [
+     "水原"
+    ]
+   }
+  },
+  "水原三星": {
+   "aliases": [
+    "水原"
+   ],
+   "sources": {
+    "nowscore": [
+     "水原"
+    ]
+   }
+  },
+  "TPS图尔": {
+   "aliases": [
+    "TPS图尔库",
+    "TPS土尔库",
+    "TPS杜古",
+    "TPS Turku"
+   ],
+   "sources": {
+    "nowscore": [
+     "TPS图尔库",
+     "TPS土尔库",
+     "TPS杜古"
+    ],
+    "en": [
+     "TPS Turku"
+    ]
+   }
+  },
+  "赫尔辛基": {
+   "aliases": [
+    "赫爾辛基",
+    "HJK"
+   ],
+   "sources": {
+    "nowscore": [
+     "赫爾辛基"
+    ],
+    "en": [
+     "HJK"
+    ]
+   }
+  },
+  "国际图尔": {
+   "aliases": [
+    "国际土尔库",
+    "英特土尔库",
+    "Inter Turku"
+   ],
+   "sources": {
+    "nowscore": [
+     "国际土尔库",
+     "英特土尔库"
+    ],
+    "en": [
+     "Inter Turku"
+    ]
+   }
+  },
+  "坦山猫": {
+   "aliases": [
+    "坦佩雷山猫",
+    "Ilves"
+   ],
+   "sources": {
+    "nowscore": [
+     "坦佩雷山猫"
+    ],
+    "en": [
+     "Ilves"
+    ]
+   }
+  },
+  "横滨水手": {
+   "aliases": [
+    "横滨"
+   ],
+   "sources": {
+    "nowscore": [
+     "横滨"
+    ]
+   }
+  },
+  "川崎前锋": {
+   "aliases": [
+    "川崎"
+   ],
+   "sources": {
+    "nowscore": [
+     "川崎"
+    ]
+   }
+  },
+  "鹿岛鹿角": {
+   "aliases": [
+    "鹿岛"
+   ],
+   "sources": {
+    "nowscore": [
+     "鹿岛"
+    ]
+   }
+  },
+  "浦和红钻": {
+   "aliases": [
+    "浦和"
+   ],
+   "sources": {
+    "nowscore": [
+     "浦和"
+    ]
+   }
+  },
+  "大阪钢巴": {
+   "aliases": [
+    "钢巴"
+   ],
+   "sources": {
+    "nowscore": [
+     "钢巴"
+    ]
+   }
+  },
+  "大阪樱花": {
+   "aliases": [
+    "樱花"
+   ],
+   "sources": {
+    "nowscore": [
+     "樱花"
+    ]
+   }
+  },
+  "名古屋鲸": {
+   "aliases": [
+    "名古屋"
+   ],
+   "sources": {
+    "nowscore": [
+     "名古屋"
+    ]
+   }
+  },
+  "广岛三箭": {
+   "aliases": [
+    "广岛"
+   ],
+   "sources": {
+    "nowscore": [
+     "广岛"
+    ]
+   }
+  },
+  "札幌冈萨": {
+   "aliases": [
+    "札幌"
+   ],
+   "sources": {
+    "nowscore": [
+     "札幌"
+    ]
+   }
+  },
+  "福冈黄蜂": {
+   "aliases": [
+    "福冈"
+   ],
+   "sources": {
+    "nowscore": [
+     "福冈"
+    ]
+   }
+  },
+  "神户胜利船": {
+   "aliases": [
+    "神户"
+   ],
+   "sources": {
+    "nowscore": [
+     "神户"
+    ]
+   }
+  },
+  "东京FC": {
+   "aliases": [
+    "FC东京",
+    "东京"
+   ],
+   "sources": {
+    "nowscore": [
+     "FC东京",
+     "东京"
+    ]
+   }
+  },
+  "东京绿茵": {
+   "aliases": [
+    "绿茵"
+   ],
+   "sources": {
+    "nowscore": [
+     "绿茵"
+    ]
+   }
+  },
+  "曼城": {
+   "aliases": [
+    "曼彻斯特城",
+    "Manchester City"
+   ],
+   "sources": {
+    "nowscore": [
+     "曼彻斯特城"
+    ],
+    "en": [
+     "Manchester City"
+    ]
+   }
+  },
+  "利物浦": {
+   "aliases": [
+    "Liverpool"
+   ],
+   "sources": {
+    "en": [
+     "Liverpool"
+    ]
+   }
+  },
+  "阿森纳": {
+   "aliases": [
+    "阿仙奴",
+    "Arsenal"
+   ],
+   "sources": {
+    "nowscore": [
+     "阿仙奴"
+    ],
+    "en": [
+     "Arsenal"
+    ]
+   }
+  },
+  "切尔西": {
+   "aliases": [
+    "车路士",
+    "Chelsea"
+   ],
+   "sources": {
+    "nowscore": [
+     "车路士"
+    ],
+    "en": [
+     "Chelsea"
+    ]
+   }
+  },
+  "热刺": {
+   "aliases": [
+    "托特纳姆",
+    "Tottenham"
+   ],
+   "sources": {
+    "nowscore": [
+     "托特纳姆"
+    ],
+    "en": [
+     "Tottenham"
+    ]
+   }
+  },
+  "曼联": {
+   "aliases": [
+    "曼彻斯特联",
+    "Manchester United"
+   ],
+   "sources": {
+    "nowscore": [
+     "曼彻斯特联"
+    ],
+    "en": [
+     "Manchester United"
+    ]
+   }
+  },
+  "纽卡斯尔": {
+   "aliases": [
+    "纽卡素",
+    "Newcastle United"
+   ],
+   "sources": {
+    "nowscore": [
+     "纽卡素"
+    ],
+    "en": [
+     "Newcastle United"
+    ]
+   }
+  },
+  "布莱顿": {
+   "aliases": [
+    "白礼顿"
+   ],
+   "sources": {
+    "nowscore": [
+     "白礼顿"
+    ]
+   }
+  },
+  "西汉姆": {
+   "aliases": [
+    "韦斯咸"
+   ],
+   "sources": {
+    "nowscore": [
+     "韦斯咸"
+    ]
+   }
+  },
+  "维拉": {
+   "aliases": [
+    "阿斯顿维拉",
+    "Aston Villa"
+   ],
+   "sources": {
+    "nowscore": [
+     "阿斯顿维拉"
+    ],
+    "en": [
+     "Aston Villa"
+    ]
+   }
+  },
+  "埃弗顿": {
+   "aliases": [
+    "爱华顿",
+    "Everton"
+   ],
+   "sources": {
+    "nowscore": [
+     "爱华顿"
+    ],
+    "en": [
+     "Everton"
+    ]
+   }
+  },
+  "富勒姆": {
+   "aliases": [
+    "富咸",
+    "Fulham"
+   ],
+   "sources": {
+    "nowscore": [
+     "富咸"
+    ],
+    "en": [
+     "Fulham"
+    ]
+   }
+  },
+  "伯恩利": {
+   "aliases": [
+    "般尼",
+    "Burnley"
+   ],
+   "sources": {
+    "nowscore": [
+     "般尼"
+    ],
+    "en": [
+     "Burnley"
+    ]
+   }
+  },
+  "狼队": {
+   "aliases": [
+    "狼",
+    "Wolverhampton Wanderers"
+   ],
+   "sources": {
+    "nowscore": [
+     "狼"
+    ],
+    "en": [
+     "Wolverhampton Wanderers"
+    ]
+   }
+  },
+  "诺丁汉": {
+   "aliases": [
+    "诺定咸",
+    "Nottingham Forest"
+   ],
+   "sources": {
+    "nowscore": [
+     "诺定咸"
+    ],
+    "en": [
+     "Nottingham Forest"
+    ]
+   }
+  },
+  "水晶宫": {
+   "aliases": [
+    "水晶",
+    "Crystal Palace"
+   ],
+   "sources": {
+    "nowscore": [
+     "水晶"
+    ],
+    "en": [
+     "Crystal Palace"
+    ]
+   }
+  },
+  "伯恩茅斯": {
+   "aliases": [
+    "般尼茅夫",
+    "Bournemouth"
+   ],
+   "sources": {
+    "nowscore": [
+     "般尼茅夫"
+    ],
+    "en": [
+     "Bournemouth"
+    ]
+   }
+  },
+  "布伦特": {
+   "aliases": [
+    "宾福特",
+    "Brentford"
+   ],
+   "sources": {
+    "nowscore": [
+     "宾福特"
+    ],
+    "en": [
+     "Brentford"
+    ]
+   }
+  },
+  "卢顿": {
+   "aliases": [
+    "Luton"
+   ],
+   "sources": {
+    "en": [
+     "Luton"
+    ]
+   }
+  },
+  "谢菲联": {
+   "aliases": [
+    "锡菲联",
+    "Sheffield United"
+   ],
+   "sources": {
+    "nowscore": [
+     "锡菲联"
+    ],
+    "en": [
+     "Sheffield United"
+    ]
+   }
+  },
+  "皇马": {
+   "aliases": [
+    "皇家马德里",
+    "Real Madrid"
+   ],
+   "sources": {
+    "nowscore": [
+     "皇家马德里"
+    ],
+    "en": [
+     "Real Madrid"
+    ]
+   }
+  },
+  "巴萨": {
+   "aliases": [
+    "巴塞罗那",
+    "Barcelona"
+   ],
+   "sources": {
+    "nowscore": [
+     "巴塞罗那"
+    ],
+    "en": [
+     "Barcelona"
+    ]
+   }
+  },
+  "马竞": {
+   "aliases": [
+    "马德里竞技",
+    "Atletico Madrid"
+   ],
+   "sources": {
+    "nowscore": [
+     "马德里竞技"
+    ],
+    "en": [
+     "Atletico Madrid"
+    ]
+   }
+  },
+  "塞维利亚": {
+   "aliases": [
+    "Sevilla"
+   ],
+   "sources": {
+    "en": [
+     "Sevilla"
+    ]
+   }
+  },
+  "毕尔巴鄂": {
+   "aliases": [
+    "Athletic Club"
+   ],
+   "sources": {
+    "en": [
+     "Athletic Club"
+    ]
+   }
+  },
+  "皇家社会": {
+   "aliases": [
+    "Real Sociedad"
+   ],
+   "sources": {
+    "en": [
+     "Real Sociedad"
+    ]
+   }
+  },
+  "比利亚雷亚尔": {
+   "aliases": [
+    "维拉利尔"
+   ],
+   "sources": {
+    "nowscore": [
+     "维拉利尔"
+    ]
+   }
+  },
+  "瓦伦西亚": {
+   "aliases": [],
+   "sources": {}
+  },
+  "赫塔费": {
+   "aliases": [
+    "Getafe"
+   ],
+   "sources": {
+    "en": [
+     "Getafe"
+    ]
+   }
+  },
+  "奥萨苏纳": {
+   "aliases": [
+    "Osasuna"
+   ],
+   "sources": {
+    "en": [
+     "Osasuna"
+    ]
+   }
+  },
+  "拜仁": {
+   "aliases": [
+    "拜仁慕尼黑",
+    "Bayern Munich"
+   ],
+   "sources": {
+    "nowscore": [
+     "拜仁慕尼黑"
+    ],
+    "en": [
+     "Bayern Munich"
+    ]
+   }
+  },
+  "多特蒙德": {
+   "aliases": [
+    "多蒙特",
+    "Borussia Dortmund"
+   ],
+   "sources": {
+    "nowscore": [
+     "多蒙特"
+    ],
+    "en": [
+     "Borussia Dortmund"
+    ]
+   }
+  },
+  "莱比锡": {
+   "aliases": [
+    "莱比锡红牛"
+   ],
+   "sources": {
+    "nowscore": [
+     "莱比锡红牛"
+    ]
+   }
+  },
+  "勒沃库森": {
+   "aliases": [
+    "利华古逊",
+    "Bayer Leverkusen"
+   ],
+   "sources": {
+    "nowscore": [
+     "利华古逊"
+    ],
+    "en": [
+     "Bayer Leverkusen"
+    ]
+   }
+  },
+  "法兰克福": {
+   "aliases": [
+    "Eintracht Frankfurt"
+   ],
+   "sources": {
+    "en": [
+     "Eintracht Frankfurt"
+    ]
+   }
+  },
+  "沃尔夫斯堡": {
+   "aliases": [
+    "禾夫斯堡"
+   ],
+   "sources": {
+    "nowscore": [
+     "禾夫斯堡"
+    ]
+   }
+  },
+  "门兴": {
+   "aliases": [
+    "门兴格拉德巴赫",
+    "Borussia M.Gladbach"
+   ],
+   "sources": {
+    "nowscore": [
+     "门兴格拉德巴赫"
+    ],
+    "en": [
+     "Borussia M.Gladbach"
+    ]
+   }
+  },
+  "弗赖堡": {
+   "aliases": [
+    "费雷堡",
+    "Freiburg"
+   ],
+   "sources": {
+    "nowscore": [
+     "费雷堡"
+    ],
+    "en": [
+     "Freiburg"
+    ]
+   }
+  },
+  "霍芬海姆": {
+   "aliases": [
+    "贺芬咸",
+    "Hoffenheim"
+   ],
+   "sources": {
+    "nowscore": [
+     "贺芬咸"
+    ],
+    "en": [
+     "Hoffenheim"
+    ]
+   }
+  },
+  "国米": {
+   "aliases": [
+    "国际米兰"
+   ],
+   "sources": {
+    "nowscore": [
+     "国际米兰"
+    ]
+   }
+  },
+  "米兰": {
+   "aliases": [
+    "AC米兰"
+   ],
+   "sources": {
+    "nowscore": [
+     "AC米兰"
+    ]
+   }
+  },
+  "尤文": {
+   "aliases": [
+    "尤文图斯"
+   ],
+   "sources": {
+    "nowscore": [
+     "尤文图斯"
+    ]
+   }
+  },
+  "那不勒斯": {
+   "aliases": [
+    "拿坡里",
+    "Napoli"
+   ],
+   "sources": {
+    "nowscore": [
+     "拿坡里"
+    ],
+    "en": [
+     "Napoli"
+    ]
+   }
+  },
+  "罗马": {
+   "aliases": [
+    "Roma"
+   ],
+   "sources": {
+    "en": [
+     "Roma"
+    ]
+   }
+  },
+  "拉齐奥": {
+   "aliases": [
+    "拉素",
+    "Lazio"
+   ],
+   "sources": {
+    "nowscore": [
+     "拉素"
+    ],
+    "en": [
+     "Lazio"
+    ]
+   }
+  },
+  "亚特兰大": {
+   "aliases": [
+    "阿特兰大",
+    "Atalanta"
+   ],
+   "sources": {
+    "nowscore": [
+     "阿特兰大"
+    ],
+    "en": [
+     "Atalanta"
+    ]
+   }
+  },
+  "佛罗伦萨": {
+   "aliases": [
+    "费伦天拿",
+    "Fiorentina"
+   ],
+   "sources": {
+    "nowscore": [
+     "费伦天拿"
+    ],
+    "en": [
+     "Fiorentina"
+    ]
+   }
+  },
+  "巴黎": {
+   "aliases": [
+    "巴黎圣日耳曼",
+    "PSG"
+   ],
+   "sources": {
+    "nowscore": [
+     "巴黎圣日耳曼"
+    ],
+    "en": [
+     "PSG"
+    ]
+   }
+  },
+  "摩纳哥": {
+   "aliases": [
+    "Monaco"
+   ],
+   "sources": {
+    "en": [
+     "Monaco"
+    ]
+   }
+  },
+  "马赛": {
+   "aliases": [
+    "Marseille"
+   ],
+   "sources": {
+    "en": [
+     "Marseille"
+    ]
+   }
+  },
+  "里昂": {
+   "aliases": [
+    "Lyon"
+   ],
+   "sources": {
+    "en": [
+     "Lyon"
+    ]
+   }
+  },
+  "里尔": {
+   "aliases": [
+    "Lille"
+   ],
+   "sources": {
+    "en": [
+     "Lille"
+    ]
+   }
+  },
+  "马尔默": {
+   "aliases": [
+    "Malmö",
+    "马模"
+   ],
+   "sources": {
+    "en": [
+     "Malmö"
+    ],
+    "nowscore": [
+     "马模"
+    ]
+   }
+  },
+  "哈马比": {
+   "aliases": [
+    "Hammarby"
+   ],
+   "sources": {
+    "en": [
+     "Hammarby"
+    ]
+   }
+  },
+  "佐加顿斯": {
+   "aliases": [
+    "Djurgårdens",
+    "佐加顿"
+   ],
+   "sources": {
+    "en": [
+     "Djurgårdens"
+    ],
+    "nowscore": [
+     "佐加顿"
+    ]
+   }
+  },
+  "索尔纳": {
+   "aliases": [
+    "AIK",
+    "AIK索尔纳"
+   ],
+   "sources": {
+    "en": [
+     "AIK"
+    ],
+    "short": [
+     "AIK索尔纳"
+    ]
+   }
+  },
+  "哥德堡": {
+   "aliases": [
+    "Göteborg"
+   ],
+   "sources": {
+    "en": [
+     "Göteborg"
+    ]
+   }
+  },
+  "赫根": {
+   "aliases": [
+    "Häcken",
+    "赫根堡"
+   ],
+   "sources": {
+    "en": [
+     "Häcken"
+    ],
+    "short": [
+     "赫根堡"
+    ]
+   }
+  },
+  "北雪平": {
+   "aliases": [
+    "Norrköping"
+   ],
+   "sources": {
+    "en": [
+     "Norrköping"
+    ]
+   }
+  },
+  "埃尔夫斯堡": {
+   "aliases": [
+    "Elfsborg"
+   ],
+   "sources": {
+    "en": [
+     "Elfsborg"
+    ]
+   }
+  },
+  "卡尔马": {
+   "aliases": [
+    "Kalmar"
+   ],
+   "sources": {
+    "en": [
+     "Kalmar"
+    ]
+   }
+  },
+  "米亚尔比": {
+   "aliases": [
+    "Mjällby",
+    "米亚尔比IF"
+   ],
+   "sources": {
+    "en": [
+     "Mjällby"
+    ],
+    "nowscore": [
+     "米亚尔比IF"
+    ]
+   }
+  },
+  "韦纳穆": {
+   "aliases": [
+    "Värnamo"
+   ],
+   "sources": {
+    "en": [
+     "Värnamo"
+    ]
+   }
+  },
+  "天狼星": {
+   "aliases": [
+    "Sirius"
+   ],
+   "sources": {
+    "en": [
+     "Sirius"
+    ]
+   }
+  },
+  "布洛马波": {
+   "aliases": [
+    "Brommapojkarna"
+   ],
+   "sources": {
+    "en": [
+     "Brommapojkarna"
+    ]
+   }
+  },
+  "瓦斯特拉": {
+   "aliases": [
+    "Västerås"
+   ],
+   "sources": {
+    "en": [
+     "Västerås"
+    ]
+   }
+  },
+  "博德闪耀": {
+   "aliases": [
+    "Bodø/Glimt",
+    "波杜基林特"
+   ],
+   "sources": {
+    "en": [
+     "Bodø/Glimt"
+    ],
+    "nowscore": [
+     "波杜基林特"
+    ]
+   }
+  },
+  "布兰": {
+   "aliases": [
+    "Brann"
+   ],
+   "sources": {
+    "en": [
+     "Brann"
+    ]
+   }
+  },
+  "莫尔德": {
+   "aliases": [
+    "Molde"
+   ],
+   "sources": {
+    "en": [
+     "Molde"
+    ]
+   }
+  },
+  "维京": {
+   "aliases": [
+    "Viking"
+   ],
+   "sources": {
+    "en": [
+     "Viking"
+    ]
+   }
+  },
+  "罗森博格": {
+   "aliases": [
+    "Rosenborg",
+    "洛辛堡"
+   ],
+   "sources": {
+    "en": [
+     "Rosenborg"
+    ],
+    "short": [
+     "洛辛堡"
+    ]
+   }
+  },
+  "萨普斯堡": {
+   "aliases": [
+    "Sarpsborg"
+   ],
+   "sources": {
+    "en": [
+     "Sarpsborg"
+    ]
+   }
+  },
+  "腓特烈": {
+   "aliases": [
+    "Fredrikstad",
+    "腓特烈斯塔",
+    "费德列斯达"
+   ],
+   "sources": {
+    "en": [
+     "Fredrikstad"
+    ],
+    "short": [
+     "腓特烈斯塔",
+     "费德列斯达"
+    ]
+   }
+  },
+  "克里斯蒂": {
+   "aliases": [
+    "Kristiansund"
+   ],
+   "sources": {
+    "en": [
+     "Kristiansund"
+    ]
+   }
+  },
+  "海于格松": {
+   "aliases": [
+    "Haugesund"
+   ],
+   "sources": {
+    "en": [
+     "Haugesund"
+    ]
+   }
+  },
+  "斯托姆加": {
+   "aliases": [
+    "Strømsgodset"
+   ],
+   "sources": {
+    "en": [
+     "Strømsgodset"
+    ]
+   }
+  },
+  "利勒斯特": {
+   "aliases": [
+    "Lillestrøm"
+   ],
+   "sources": {
+    "en": [
+     "Lillestrøm"
+    ]
+   }
+  },
+  "KFUM奥斯陆": {
+   "aliases": [
+    "KFUM Oslo"
+   ],
+   "sources": {
+    "en": [
+     "KFUM Oslo"
+    ]
+   }
+  },
+  "汉坎": {
+   "aliases": [
+    "HamKam"
+   ],
+   "sources": {
+    "en": [
+     "HamKam"
+    ]
+   }
+  },
+  "特罗姆瑟": {
+   "aliases": [
+    "Tromsø"
+   ],
+   "sources": {
+    "en": [
+     "Tromsø"
+    ]
+   }
+  },
+  "哥本哈根": {
+   "aliases": [
+    "København"
+   ],
+   "sources": {
+    "en": [
+     "København"
+    ]
+   }
+  },
+  "中日德兰": {
+   "aliases": [
+    "Midtjylland"
+   ],
+   "sources": {
+    "en": [
+     "Midtjylland"
+    ]
+   }
+  },
+  "布隆德比": {
+   "aliases": [
+    "Brøndby"
+   ],
+   "sources": {
+    "en": [
+     "Brøndby"
+    ]
+   }
+  },
+  "北西兰": {
+   "aliases": [
+    "Nordsjælland"
+   ],
+   "sources": {
+    "en": [
+     "Nordsjælland"
+    ]
+   }
+  },
+  "奥尔堡": {
+   "aliases": [
+    "AaB"
+   ],
+   "sources": {
+    "en": [
+     "AaB"
+    ]
+   }
+  },
+  "锡尔克堡": {
+   "aliases": [
+    "Silkeborg"
+   ],
+   "sources": {
+    "en": [
+     "Silkeborg"
+    ]
+   }
+  },
+  "欧登塞": {
+   "aliases": [
+    "Odense"
+   ],
+   "sources": {
+    "en": [
+     "Odense"
+    ]
+   }
+  },
+  "兰讷斯": {
+   "aliases": [
+    "Randers"
+   ],
+   "sources": {
+    "en": [
+     "Randers"
+    ]
+   }
+  },
+  "奥胡斯": {
+   "aliases": [
+    "AGF",
+    "阿晓斯"
+   ],
+   "sources": {
+    "en": [
+     "AGF"
+    ],
+    "short": [
+     "阿晓斯"
+    ]
+   }
+  },
+  "哈维德夫": {
+   "aliases": [
+    "Hvidovre"
+   ],
+   "sources": {
+    "en": [
+     "Hvidovre"
+    ]
+   }
+  },
+  "林比": {
+   "aliases": [
+    "Lyngby"
+   ],
+   "sources": {
+    "en": [
+     "Lyngby"
+    ]
+   }
+  },
+  "维堡": {
+   "aliases": [
+    "Viborg"
+   ],
+   "sources": {
+    "en": [
+     "Viborg"
+    ]
+   }
+  },
+  "帕尔梅拉斯": {
+   "aliases": [
+    "Palmeiras",
+    "帕梅拉斯"
+   ],
+   "sources": {
+    "en": [
+     "Palmeiras"
+    ],
+    "short": [
+     "帕梅拉斯"
+    ]
+   }
+  },
+  "弗拉门戈": {
+   "aliases": [
+    "Flamengo",
+    "弗拉门戈RJ"
+   ],
+   "sources": {
+    "en": [
+     "Flamengo"
+    ],
+    "short": [
+     "弗拉门戈RJ"
+    ]
+   }
+  },
+  "米内罗竞技": {
+   "aliases": [
+    "Atlético Mineiro",
+    "米竞技"
+   ],
+   "sources": {
+    "en": [
+     "Atlético Mineiro"
+    ],
+    "short": [
+     "米竞技"
+    ]
+   }
+  },
+  "博塔弗戈": {
+   "aliases": [
+    "Botafogo",
+    "博塔弗戈RJ"
+   ],
+   "sources": {
+    "en": [
+     "Botafogo"
+    ],
+    "short": [
+     "博塔弗戈RJ"
+    ]
+   }
+  },
+  "圣保罗": {
+   "aliases": [
+    "São Paulo",
+    "圣保罗SP"
+   ],
+   "sources": {
+    "en": [
+     "São Paulo"
+    ],
+    "short": [
+     "圣保罗SP"
+    ]
+   }
+  },
+  "格雷米奥": {
+   "aliases": [
+    "Grêmio",
+    "格雷米奥RS"
+   ],
+   "sources": {
+    "en": [
+     "Grêmio"
+    ],
+    "short": [
+     "格雷米奥RS"
+    ]
+   }
+  },
+  "弗鲁米嫩": {
+   "aliases": [
+    "Fluminense"
+   ],
+   "sources": {
+    "en": [
+     "Fluminense"
+    ]
+   }
+  },
+  "布拉甘蒂诺": {
+   "aliases": [
+    "Bragantino"
+   ],
+   "sources": {
+    "en": [
+     "Bragantino"
+    ]
+   }
+  },
+  "国际": {
+   "aliases": [
+    "Internacional"
+   ],
+   "sources": {
+    "en": [
+     "Internacional"
+    ]
+   }
+  },
+  "科林蒂安": {
+   "aliases": [
+    "Corinthians",
+    "科林蒂安SP"
+   ],
+   "sources": {
+    "en": [
+     "Corinthians"
+    ],
+    "short": [
+     "科林蒂安SP"
+    ]
+   }
+  },
+  "巴伊亚": {
+   "aliases": [
+    "Bahia",
+    "巴伊亚BA"
+   ],
+   "sources": {
+    "en": [
+     "Bahia"
+    ],
+    "short": [
+     "巴伊亚BA"
+    ]
+   }
+  },
+  "克鲁塞罗": {
+   "aliases": [
+    "Cruzeiro",
+    "克鲁塞罗MG"
+   ],
+   "sources": {
+    "en": [
+     "Cruzeiro"
+    ],
+    "short": [
+     "克鲁塞罗MG"
+    ]
+   }
+  },
+  "福塔雷萨": {
+   "aliases": [
+    "Fortaleza",
+    "福塔雷萨CE"
+   ],
+   "sources": {
+    "en": [
+     "Fortaleza"
+    ],
+    "short": [
+     "福塔雷萨CE"
+    ]
+   }
+  },
+  "维多利亚": {
+   "aliases": [
+    "Vitória",
+    "维多利亚BA"
+   ],
+   "sources": {
+    "en": [
+     "Vitória"
+    ],
+    "short": [
+     "维多利亚BA"
+    ]
+   }
+  },
+  "瓦斯科达": {
+   "aliases": [
+    "Vasco da Gama"
+   ],
+   "sources": {
+    "en": [
+     "Vasco da Gama"
+    ]
+   }
+  },
+  "尤文图德": {
+   "aliases": [
+    "Juventude",
+    "尤文图德RS"
+   ],
+   "sources": {
+    "en": [
+     "Juventude"
+    ],
+    "short": [
+     "尤文图德RS"
+    ]
+   }
+  },
+  "库亚巴": {
+   "aliases": [
+    "Cuiabá"
+   ],
+   "sources": {
+    "en": [
+     "Cuiabá"
+    ]
+   }
+  },
+  "米美洲": {
+   "aliases": [
+    "América Mineiro"
+   ],
+   "sources": {
+    "en": [
+     "América Mineiro"
+    ]
+   }
+  },
+  "桑托斯": {
+   "aliases": [
+    "Santos",
+    "桑托斯SP"
+   ],
+   "sources": {
+    "en": [
+     "Santos"
+    ],
+    "short": [
+     "桑托斯SP"
+    ]
+   }
+  },
+  "里莫": {
+   "aliases": [
+    "雷莫",
+    "Remo",
+    "雷莫队"
+   ],
+   "sources": {
+    "nowscore": [
+     "雷莫",
+     "雷莫队"
+    ],
+    "en": [
+     "Remo"
+    ]
+   }
+  },
+  "布斯巴达": {
+   "aliases": [
+    "布拉格斯巴达",
+    "Sparta Prague",
+    "斯巴达布拉格"
+   ],
+   "sources": {
+    "nowscore": [
+     "布拉格斯巴达",
+     "斯巴达布拉格"
+    ],
+    "en": [
+     "Sparta Prague"
+    ]
+   }
+  },
+  "河床": {
+   "aliases": [
+    "River Plate"
+   ],
+   "sources": {
+    "en": [
+     "River Plate"
+    ]
+   }
+  },
+  "博卡青年": {
+   "aliases": [
+    "Boca Juniors",
+    "博卡"
+   ],
+   "sources": {
+    "en": [
+     "Boca Juniors"
+    ],
+    "nowscore": [
+     "博卡"
+    ]
+   }
+  },
+  "竞技": {
+   "aliases": [
+    "Racing Club"
+   ],
+   "sources": {
+    "en": [
+     "Racing Club"
+    ]
+   }
+  },
+  "圣洛伦索": {
+   "aliases": [
+    "San Lorenzo"
+   ],
+   "sources": {
+    "en": [
+     "San Lorenzo"
+    ]
+   }
+  },
+  "独立": {
+   "aliases": [
+    "Independiente"
+   ],
+   "sources": {
+    "en": [
+     "Independiente"
+    ]
+   }
+  },
+  "萨斯菲尔德": {
+   "aliases": [
+    "Vélez Sarsfield"
+   ],
+   "sources": {
+    "en": [
+     "Vélez Sarsfield"
+    ]
+   }
+  },
+  "纽维尔": {
+   "aliases": [
+    "Newell's Old Boys"
+   ],
+   "sources": {
+    "en": [
+     "Newell's Old Boys"
+    ]
+   }
+  },
+  "拉普拉塔": {
+   "aliases": [
+    "Estudiantes"
+   ],
+   "sources": {
+    "en": [
+     "Estudiantes"
+    ]
+   }
+  },
+  "班菲尔德": {
+   "aliases": [
+    "Banfield"
+   ],
+   "sources": {
+    "en": [
+     "Banfield"
+    ]
+   }
+  },
+  "科尔多瓦": {
+   "aliases": [
+    "Talleres"
+   ],
+   "sources": {
+    "en": [
+     "Talleres"
+    ]
+   }
+  },
+  "罗萨里奥": {
+   "aliases": [
+    "罗萨里奥中央",
+    "Rosario Central"
+   ],
+   "sources": {
+    "nowscore": [
+     "罗萨里奥中央"
+    ],
+    "en": [
+     "Rosario Central"
+    ]
+   }
+  },
+  "萨兰迪": {
+   "aliases": [
+    "Arsenal"
+   ],
+   "sources": {
+    "en": [
+     "Arsenal"
+    ]
+   }
+  },
+  "戈多伊": {
+   "aliases": [
+    "Godoy Cruz"
+   ],
+   "sources": {
+    "en": [
+     "Godoy Cruz"
+    ]
+   }
+  },
+  "巴拉卡斯": {
+   "aliases": [
+    "Barracas Central"
+   ],
+   "sources": {
+    "en": [
+     "Barracas Central"
+    ]
+   }
+  },
+  "防卫者": {
+   "aliases": [
+    "Defensa y Justicia"
+   ],
+   "sources": {
+    "en": [
+     "Defensa y Justicia"
+    ]
+   }
+  },
+  "飓风": {
+   "aliases": [
+    "Huracán"
+   ],
+   "sources": {
+    "en": [
+     "Huracán"
+    ]
+   }
+  },
+  "泽尼特": {
+   "aliases": [
+    "Zenit"
+   ],
+   "sources": {
+    "en": [
+     "Zenit"
+    ]
+   }
+  },
+  "中央陆军": {
+   "aliases": [
+    "CSKA"
+   ],
+   "sources": {
+    "en": [
+     "CSKA"
+    ]
+   }
+  },
+  "斯巴达": {
+   "aliases": [
+    "Spartak"
+   ],
+   "sources": {
+    "en": [
+     "Spartak"
+    ]
+   }
+  },
+  "迪纳摩": {
+   "aliases": [
+    "Dynamo"
+   ],
+   "sources": {
+    "en": [
+     "Dynamo"
+    ]
+   }
+  },
+  "火车头": {
+   "aliases": [
+    "Lokomotiv"
+   ],
+   "sources": {
+    "en": [
+     "Lokomotiv"
+    ]
+   }
+  },
+  "克拉斯诺": {
+   "aliases": [
+    "Krasnodar"
+   ],
+   "sources": {
+    "en": [
+     "Krasnodar"
+    ]
+   }
+  },
+  "索契": {
+   "aliases": [
+    "Sochi"
+   ],
+   "sources": {
+    "en": [
+     "Sochi"
+    ]
+   }
+  },
+  "喀山红宝石": {
+   "aliases": [
+    "Rubin"
+   ],
+   "sources": {
+    "en": [
+     "Rubin"
+    ]
+   }
+  },
+  "罗斯托夫": {
+   "aliases": [
+    "Rostov"
+   ],
+   "sources": {
+    "en": [
+     "Rostov"
+    ]
+   }
+  },
+  "奥伦堡": {
+   "aliases": [
+    "Orenburg"
+   ],
+   "sources": {
+    "en": [
+     "Orenburg"
+    ]
+   }
+  },
+  "沃罗涅日": {
+   "aliases": [
+    "Fakel"
+   ],
+   "sources": {
+    "en": [
+     "Fakel"
+    ]
+   }
+  },
+  "格罗兹尼": {
+   "aliases": [
+    "Akhmat"
+   ],
+   "sources": {
+    "en": [
+     "Akhmat"
+    ]
+   }
+  },
+  "希姆基": {
+   "aliases": [
+    "Khimki"
+   ],
+   "sources": {
+    "en": [
+     "Khimki"
+    ]
+   }
+  },
+  "乌拉尔": {
+   "aliases": [
+    "Ural"
+   ],
+   "sources": {
+    "en": [
+     "Ural"
+    ]
+   }
+  },
+  "下诺夫哥": {
+   "aliases": [
+    "Nizhny Novgorod"
+   ],
+   "sources": {
+    "en": [
+     "Nizhny Novgorod"
+    ]
+   }
+  },
+  "巴尔蒂卡": {
+   "aliases": [
+    "Baltika"
+   ],
+   "sources": {
+    "en": [
+     "Baltika"
+    ]
+   }
+  },
+  "迈阿密国际": {
+   "aliases": [
+    "Inter Miami"
+   ],
+   "sources": {
+    "en": [
+     "Inter Miami"
+    ]
+   }
+  },
+  "洛杉矶FC": {
+   "aliases": [
+    "Los Angeles FC"
+   ],
+   "sources": {
+    "en": [
+     "Los Angeles FC"
+    ]
+   }
+  },
+  "银河": {
+   "aliases": [
+    "LA Galaxy"
+   ],
+   "sources": {
+    "en": [
+     "LA Galaxy"
+    ]
+   }
+  },
+  "西雅图": {
+   "aliases": [
+    "Seattle Sounders"
+   ],
+   "sources": {
+    "en": [
+     "Seattle Sounders"
+    ]
+   }
+  },
+  "纽约城": {
+   "aliases": [
+    "New York City FC"
+   ],
+   "sources": {
+    "en": [
+     "New York City FC"
+    ]
+   }
+  },
+  "红牛": {
+   "aliases": [
+    "New York Red Bulls"
+   ],
+   "sources": {
+    "en": [
+     "New York Red Bulls"
+    ]
+   }
+  },
+  "哥伦布": {
+   "aliases": [
+    "Columbus Crew"
+   ],
+   "sources": {
+    "en": [
+     "Columbus Crew"
+    ]
+   }
+  },
+  "辛辛那提": {
+   "aliases": [
+    "Cincinnati"
+   ],
+   "sources": {
+    "en": [
+     "Cincinnati"
+    ]
+   }
+  },
+  "费城": {
+   "aliases": [
+    "Philadelphia Union"
+   ],
+   "sources": {
+    "en": [
+     "Philadelphia Union"
+    ]
+   }
+  },
+  "亚特兰大联": {
+   "aliases": [
+    "Atlanta United"
+   ],
+   "sources": {
+    "en": [
+     "Atlanta United"
+    ]
+   }
+  },
+  "纳什维尔": {
+   "aliases": [
+    "Nashville SC"
+   ],
+   "sources": {
+    "en": [
+     "Nashville SC"
+    ]
+   }
+  },
+  "夏洛特": {
+   "aliases": [
+    "Charlotte FC"
+   ],
+   "sources": {
+    "en": [
+     "Charlotte FC"
+    ]
+   }
+  },
+  "奥兰多": {
+   "aliases": [
+    "Orlando City"
+   ],
+   "sources": {
+    "en": [
+     "Orlando City"
+    ]
+   }
+  },
+  "华盛顿": {
+   "aliases": [
+    "D.C. United"
+   ],
+   "sources": {
+    "en": [
+     "D.C. United"
+    ]
+   }
+  },
+  "新英格兰": {
+   "aliases": [
+    "New England Revolution"
+   ],
+   "sources": {
+    "en": [
+     "New England Revolution"
+    ]
+   }
+  },
+  "蒙特利尔": {
+   "aliases": [
+    "Montréal"
+   ],
+   "sources": {
+    "en": [
+     "Montréal"
+    ]
+   }
+  },
+  "多伦多": {
+   "aliases": [
+    "Toronto FC"
+   ],
+   "sources": {
+    "en": [
+     "Toronto FC"
+    ]
+   }
+  },
+  "芝加哥": {
+   "aliases": [
+    "Chicago Fire"
+   ],
+   "sources": {
+    "en": [
+     "Chicago Fire"
+    ]
+   }
+  },
+  "堪萨斯城": {
+   "aliases": [
+    "Sporting KC"
+   ],
+   "sources": {
+    "en": [
+     "Sporting KC"
+    ]
+   }
+  },
+  "休斯敦": {
+   "aliases": [
+    "Houston Dynamo"
+   ],
+   "sources": {
+    "en": [
+     "Houston Dynamo"
+    ]
+   }
+  },
+  "达拉斯": {
+   "aliases": [
+    "FC Dallas"
+   ],
+   "sources": {
+    "en": [
+     "FC Dallas"
+    ]
+   }
+  },
+  "奥斯汀": {
+   "aliases": [
+    "Austin FC"
+   ],
+   "sources": {
+    "en": [
+     "Austin FC"
+    ]
+   }
+  },
+  "圣何塞": {
+   "aliases": [
+    "San Jose Earthquakes"
+   ],
+   "sources": {
+    "en": [
+     "San Jose Earthquakes"
+    ]
+   }
+  },
+  "波特兰": {
+   "aliases": [
+    "Portland Timbers"
+   ],
+   "sources": {
+    "en": [
+     "Portland Timbers"
+    ]
+   }
+  },
+  "盐湖城": {
+   "aliases": [
+    "Real Salt Lake"
+   ],
+   "sources": {
+    "en": [
+     "Real Salt Lake"
+    ]
+   }
+  },
+  "科罗拉多": {
+   "aliases": [
+    "Colorado Rapids"
+   ],
+   "sources": {
+    "en": [
+     "Colorado Rapids"
+    ]
+   }
+  },
+  "温哥华": {
+   "aliases": [
+    "Vancouver Whitecaps"
+   ],
+   "sources": {
+    "en": [
+     "Vancouver Whitecaps"
+    ]
+   }
+  },
+  "明尼苏达": {
+   "aliases": [
+    "Minnesota United"
+   ],
+   "sources": {
+    "en": [
+     "Minnesota United"
+    ]
+   }
+  },
+  "库奥皮奥": {
+   "aliases": [
+    "古比斯",
+    "KuPS",
+    "KuPs",
+    "Kuopio"
+   ],
+   "sources": {
+    "nowscore": [
+     "古比斯"
+    ],
+    "en": [
+     "KuPS",
+     "KuPs",
+     "Kuopio"
+    ]
+   }
+  },
+  "格风暴": {
+   "aliases": [
+    "格拉茨风暴",
+    "格拉茨",
+    "Sturm Graz"
+   ],
+   "sources": {
+    "nowscore": [
+     "格拉茨风暴",
+     "格拉茨"
+    ],
+    "en": [
+     "Sturm Graz"
+    ]
+   }
+  },
+  "萨格勒布迪纳摩": {
+   "aliases": [
+    "萨格勒布",
+    "戴拿模",
+    "Dinamo Zagreb"
+   ],
+   "sources": {
+    "nowscore": [
+     "萨格勒布",
+     "戴拿模"
+    ],
+    "en": [
+     "Dinamo Zagreb"
+    ]
+   }
+  },
+  "林肯红魔": {
+   "aliases": [
+    "林肯",
+    "Lincoln Red Imps"
+   ],
+   "sources": {
+    "nowscore": [
+     "林肯"
+    ],
+    "en": [
+     "Lincoln Red Imps"
+    ]
+   }
+  },
+  "图恩": {
+   "aliases": [
+    "杜安",
+    "Thun"
+   ],
+   "sources": {
+    "nowscore": [
+     "杜安"
+    ],
+    "en": [
+     "Thun"
+    ]
+   }
+  },
+  "采列": {
+   "aliases": [
+    "Celje"
+   ],
+   "sources": {
+    "en": [
+     "Celje"
+    ]
+   }
+  },
+  "埃格纳蒂亚": {
+   "aliases": [
+    "Egnatia"
+   ],
+   "sources": {
+    "en": [
+     "Egnatia"
+    ]
+   }
+  },
+  "沙姆洛克": {
+   "aliases": [
+    "沙姆洛克流浪",
+    "Shamrock Rovers"
+   ],
+   "sources": {
+    "nowscore": [
+     "沙姆洛克流浪"
+    ],
+    "en": [
+     "Shamrock Rovers"
+    ]
+   }
+  },
+  "阿拉特亚美尼亚": {
+   "aliases": [
+    "Alashkert"
+   ],
+   "sources": {
+    "en": [
+     "Alashkert"
+    ]
+   }
+  },
+  "加拉塔萨": {
+   "aliases": [
+    "加拉塔萨雷",
+    "Galatasaray"
+   ],
+   "sources": {
+    "nowscore": [
+     "加拉塔萨雷"
+    ],
+    "en": [
+     "Galatasaray"
+    ]
+   }
+  },
+  "埃因霍温": {
+   "aliases": [
+    "PSV",
+    "飞燕诺"
+   ],
+   "sources": {
+    "en": [
+     "PSV"
+    ],
+    "nowscore": [
+     "飞燕诺"
+    ]
+   }
+  },
+  "布鲁日": {
+   "aliases": [
+    "Club Brugge"
+   ],
+   "sources": {
+    "en": [
+     "Club Brugge"
+    ]
+   }
+  },
+  "圣吉联合": {
+   "aliases": [
+    "圣吉尔联合",
+    "圣吉罗斯",
+    "Union SG",
+    "Union Saint-Gilloise"
+   ],
+   "sources": {
+    "nowscore": [
+     "圣吉尔联合",
+     "圣吉罗斯"
+    ],
+    "en": [
+     "Union SG",
+     "Union Saint-Gilloise"
+    ]
+   }
+  },
+  "贝蒂斯": {
+   "aliases": [
+    "皇家贝蒂斯",
+    "Betis",
+    "Real Betis"
+   ],
+   "sources": {
+    "nowscore": [
+     "皇家贝蒂斯"
+    ],
+    "en": [
+     "Betis",
+     "Real Betis"
+    ]
+   }
+  },
+  "博莱斯拉": {
+   "aliases": [
+    "Boleslav"
+   ],
+   "sources": {
+    "en": [
+     "Boleslav"
+    ]
+   }
+  },
+  "西班牙人": {
+   "aliases": [
+    "Espanyol"
+   ],
+   "sources": {
+    "en": [
+     "Espanyol",
+     "Espanyol"
+    ]
+   }
+  },
+  "比利亚雷": {
+   "aliases": [
+    "比利亚雷亚尔",
+    "维拉利尔",
+    "Villarreal"
+   ],
+   "sources": {
+    "nowscore": [
+     "比利亚雷亚尔",
+     "维拉利尔"
+    ],
+    "en": [
+     "Villarreal"
+    ]
+   }
+  },
+  "拉斯决心": {
+   "aliases": [
+    "哈森姆",
+    "Al-Hazem"
+   ],
+   "sources": {
+    "nowscore": [
+     "哈森姆"
+    ],
+    "en": [
+     "Al-Hazem"
+    ]
+   }
+  },
+  "雷克维京": {
+   "aliases": [
+    "维京古",
+    "雷克雅未克维京",
+    "Vikingur Reykjavik"
+   ],
+   "sources": {
+    "nowscore": [
+     "维京古",
+     "雷克雅未克维京"
+    ],
+    "en": [
+     "Vikingur Reykjavik"
+    ]
+   }
+  },
+  "利雅青年": {
+   "aliases": [
+    "利雅得青年人",
+    "利雅得青年",
+    "利雅得沙巴布",
+    "Al Shabab"
+   ],
+   "sources": {
+    "nowscore": [
+     "利雅得青年人",
+     "利雅得青年",
+     "利雅得沙巴布"
+    ],
+    "en": [
+     "Al Shabab"
+    ]
+   }
+  },
+  "胡巴卡德": {
+   "aliases": [
+    "胡拜尔库迪西亚",
+    "卡迪西亚",
+    "Al Qadsiah"
+   ],
+   "sources": {
+    "nowscore": [
+     "胡拜尔库迪西亚",
+     "卡迪西亚"
+    ],
+    "en": [
+     "Al Qadsiah"
+    ]
+   }
+  },
+  "比亚韦": {
+   "aliases": [
+    "雅盖隆",
+    "乔治罗尼亚",
+    "比亚韦斯托克",
+    "Jagiellonia"
+   ],
+   "sources": {
+    "nowscore": [
+     "雅盖隆",
+     "乔治罗尼亚",
+     "比亚韦斯托克"
+    ],
+    "en": [
+     "Jagiellonia"
+    ]
+   }
+  },
+  "米拉索尔": {
+   "aliases": [
+    "米拉索",
+    "Mirassol"
+   ],
+   "sources": {
+    "nowscore": [
+     "米拉索"
+    ],
+    "en": [
+     "Mirassol"
+    ]
+   }
+  },
+  "基多体大": {
+   "aliases": [
+    "基多大学体育",
+    "基多大学",
+    "LDU Quito"
+   ],
+   "sources": {
+    "nowscore": [
+     "基多大学体育",
+     "基多大学"
+    ],
+    "en": [
+     "LDU Quito"
+    ]
+   }
+  },
+  "帕福斯": {
+   "aliases": [
+    "帕福斯FC",
+    "Pafos"
+   ],
+   "sources": {
+    "nowscore": [
+     "帕福斯FC"
+    ],
+    "en": [
+     "Pafos"
+    ]
+   }
+  },
+  "萨尔茨堡": {
+   "aliases": [
+    "萨尔茨堡红牛",
+    "RB Salzburg"
+   ],
+   "sources": {
+    "nowscore": [
+     "萨尔茨堡红牛"
+    ],
+    "en": [
+     "RB Salzburg"
+    ]
+   }
+  },
+  "安德莱": {
+   "aliases": [
+    "安德莱赫特",
+    "安德列治",
+    "Anderlecht"
+   ],
+   "sources": {
+    "nowscore": [
+     "安德莱赫特",
+     "安德列治"
+    ],
+    "en": [
+     "Anderlecht"
+    ]
+   }
+  },
+  "塞萨洛": {
+   "aliases": [
+    "塞萨洛尼基",
+    "PAOK"
+   ],
+   "sources": {
+    "nowscore": [
+     "塞萨洛尼基"
+    ],
+    "en": [
+     "PAOK"
+    ]
+   }
+  },
+  "克拉约瓦": {
+   "aliases": [
+    "克拉约瓦大学",
+    "CS Universitatea Craiova"
+   ],
+   "sources": {
+    "nowscore": [
+     "克拉约瓦大学"
+    ],
+    "en": [
+     "CS Universitatea Craiova"
+    ]
+   }
+  },
+  "弗鲁米嫩塞": {
+   "aliases": [
+    "弗鲁米嫩"
+   ],
+   "sources": {
+    "short": [
+     "弗鲁米嫩"
+    ]
+   }
+  },
+  "巴拉纳竞技": {
+   "aliases": [
+    "巴竞技"
+   ],
+   "sources": {
+    "short": [
+     "巴竞技"
+    ]
+   }
+  },
+  "布拉干蒂诺RB": {
+   "aliases": [
+    "布拉干RB"
+   ],
+   "sources": {
+    "short": [
+     "布拉干RB"
+    ]
+   }
+  },
+  "瓦斯科达伽马": {
+   "aliases": [
+    "达伽马"
+   ],
+   "sources": {
+    "short": [
+     "达伽马"
+    ]
+   }
+  },
+  "沙佩科恩斯": {
+   "aliases": [
+    "沙佩科"
+   ],
+   "sources": {
+    "short": [
+     "沙佩科"
+    ]
+   }
+  },
+  "巴西国际": {
+   "aliases": [
+    "国际RS"
+   ],
+   "sources": {
+    "short": [
+     "国际RS"
+    ]
+   }
+  },
+  "塞阿拉": {
+   "aliases": [
+    "塞阿拉SC"
+   ],
+   "sources": {
+    "short": [
+     "塞阿拉SC"
+    ]
+   }
+  },
+  "累西腓体育": {
+   "aliases": [
+    "累体育",
+    "累西腓"
+   ],
+   "sources": {
+    "short": [
+     "累体育",
+     "累西腓"
+    ]
+   }
+  },
+  "阿拉木图": {
+   "aliases": [
+    "阿拉木图凯拉特"
+   ],
+   "sources": {
+    "short": [
+     "阿拉木图凯拉特"
+    ]
+   }
+  },
+  "奥莫尼亚": {
+   "aliases": [
+    "奥摩尼亚"
+   ],
+   "sources": {
+    "short": [
+     "奥摩尼亚"
+    ]
+   }
+  },
+  "波兹南": {
+   "aliases": [
+    "波兹南莱赫"
+   ],
+   "sources": {
+    "short": [
+     "波兹南莱赫"
+    ]
+   }
+  },
+  "布赖顿": {
+   "aliases": [
+    "Brighton"
+   ],
+   "sources": {
+    "en": [
+     "Brighton"
+    ]
+   }
+  },
+  "伊普斯": {
+   "aliases": [
+    "Ipswich"
+   ],
+   "sources": {
+    "en": [
+     "Ipswich"
+    ]
+   }
+  },
+  "莱切斯特": {
+   "aliases": [
+    "Leicester"
+   ],
+   "sources": {
+    "en": [
+     "Leicester"
+    ]
+   }
+  },
+  "南安普敦": {
+   "aliases": [
+    "Southampton"
+   ],
+   "sources": {
+    "en": [
+     "Southampton"
+    ]
+   }
+  },
+  "西汉姆联": {
+   "aliases": [
+    "West Ham"
+   ],
+   "sources": {
+    "en": [
+     "West Ham"
+    ]
+   }
+  },
+  "利兹联": {
+   "aliases": [
+    "Leeds United"
+   ],
+   "sources": {
+    "en": [
+     "Leeds United"
+    ]
+   }
+  },
+  "桑德兰": {
+   "aliases": [
+    "Sunderland"
+   ],
+   "sources": {
+    "en": [
+     "Sunderland"
+    ]
+   }
+  },
+  "诺维奇": {
+   "aliases": [
+    "Norwich City"
+   ],
+   "sources": {
+    "en": [
+     "Norwich City"
+    ]
+   }
+  },
+  "沃特福德": {
+   "aliases": [
+    "Watford"
+   ],
+   "sources": {
+    "en": [
+     "Watford"
+    ]
+   }
+  },
+  "阿拉维斯": {
+   "aliases": [
+    "Alaves"
+   ],
+   "sources": {
+    "en": [
+     "Alaves"
+    ]
+   }
+  },
+  "塞尔塔": {
+   "aliases": [
+    "Celta Vigo"
+   ],
+   "sources": {
+    "en": [
+     "Celta Vigo"
+    ]
+   }
+  },
+  "赫罗纳": {
+   "aliases": [
+    "Girona"
+   ],
+   "sources": {
+    "en": [
+     "Girona"
+    ]
+   }
+  },
+  "拉帕马斯": {
+   "aliases": [
+    "Las Palmas"
+   ],
+   "sources": {
+    "en": [
+     "Las Palmas"
+    ]
+   }
+  },
+  "莱加内斯": {
+   "aliases": [
+    "Leganes"
+   ],
+   "sources": {
+    "en": [
+     "Leganes"
+    ]
+   }
+  },
+  "马洛卡": {
+   "aliases": [
+    "Mallorca"
+   ],
+   "sources": {
+    "en": [
+     "Mallorca"
+    ]
+   }
+  },
+  "巴列卡诺": {
+   "aliases": [
+    "Rayo Vallecano"
+   ],
+   "sources": {
+    "en": [
+     "Rayo Vallecano"
+    ]
+   }
+  },
+  "巴利亚多": {
+   "aliases": [
+    "Real Valladolid"
+   ],
+   "sources": {
+    "en": [
+     "Real Valladolid"
+    ]
+   }
+  },
+  "巴伦西亚": {
+   "aliases": [
+    "Valencia"
+   ],
+   "sources": {
+    "en": [
+     "Valencia"
+    ]
+   }
+  },
+  "奥维耶多": {
+   "aliases": [
+    "Real Oviedo"
+   ],
+   "sources": {
+    "en": [
+     "Real Oviedo"
+    ]
+   }
+  },
+  "埃尔切": {
+   "aliases": [
+    "Elche"
+   ],
+   "sources": {
+    "en": [
+     "Elche"
+    ]
+   }
+  },
+  "莱万特": {
+   "aliases": [
+    "Levante"
+   ],
+   "sources": {
+    "en": [
+     "Levante"
+    ]
+   }
+  },
+  "阿尔梅里亚": {
+   "aliases": [
+    "Almeria"
+   ],
+   "sources": {
+    "en": [
+     "Almeria"
+    ]
+   }
+  },
+  "加的斯": {
+   "aliases": [
+    "Cadiz"
+   ],
+   "sources": {
+    "en": [
+     "Cadiz"
+    ]
+   }
+  },
+  "格拉纳达": {
+   "aliases": [
+    "Granada"
+   ],
+   "sources": {
+    "en": [
+     "Granada"
+    ]
+   }
+  },
+  "奥格斯堡": {
+   "aliases": [
+    "Augsburg"
+   ],
+   "sources": {
+    "en": [
+     "Augsburg"
+    ]
+   }
+  },
+  "波鸿": {
+   "aliases": [
+    "Bochum"
+   ],
+   "sources": {
+    "en": [
+     "Bochum"
+    ]
+   }
+  },
+  "海登海姆": {
+   "aliases": [
+    "FC Heidenheim"
+   ],
+   "sources": {
+    "en": [
+     "FC Heidenheim"
+    ]
+   }
+  },
+  "基尔": {
+   "aliases": [
+    "Holstein Kiel"
+   ],
+   "sources": {
+    "en": [
+     "Holstein Kiel"
+    ]
+   }
+  },
+  "美因茨": {
+   "aliases": [
+    "Mainz 05"
+   ],
+   "sources": {
+    "en": [
+     "Mainz 05"
+    ]
+   }
+  },
+  "莱红牛": {
+   "aliases": [
+    "RasenBallsport Leipzig"
+   ],
+   "sources": {
+    "en": [
+     "RasenBallsport Leipzig"
+    ]
+   }
+  },
+  "圣保利": {
+   "aliases": [
+    "St. Pauli"
+   ],
+   "sources": {
+    "en": [
+     "St. Pauli"
+    ]
+   }
+  },
+  "柏林联合": {
+   "aliases": [
+    "Union Berlin"
+   ],
+   "sources": {
+    "en": [
+     "Union Berlin"
+    ]
+   }
+  },
+  "斯图加特": {
+   "aliases": [
+    "VfB Stuttgart"
+   ],
+   "sources": {
+    "en": [
+     "VfB Stuttgart"
+    ]
+   }
+  },
+  "不来梅": {
+   "aliases": [
+    "Werder Bremen"
+   ],
+   "sources": {
+    "en": [
+     "Werder Bremen"
+    ]
+   }
+  },
+  "沃夫斯堡": {
+   "aliases": [
+    "Wolfsburg"
+   ],
+   "sources": {
+    "en": [
+     "Wolfsburg"
+    ]
+   }
+  },
+  "科隆": {
+   "aliases": [
+    "FC Cologne"
+   ],
+   "sources": {
+    "en": [
+     "FC Cologne"
+    ]
+   }
+  },
+  "汉堡": {
+   "aliases": [
+    "Hamburger SV"
+   ],
+   "sources": {
+    "en": [
+     "Hamburger SV"
+    ]
+   }
+  },
+  "达姆施塔特": {
+   "aliases": [
+    "Darmstadt"
+   ],
+   "sources": {
+    "en": [
+     "Darmstadt"
+    ]
+   }
+  },
+  "埃沃斯堡": {
+   "aliases": [
+    "Elversberg"
+   ],
+   "sources": {
+    "en": [
+     "Elversberg"
+    ]
+   }
+  },
+  "AC米兰": {
+   "aliases": [
+    "AC Milan"
+   ],
+   "sources": {
+    "en": [
+     "AC Milan"
+    ]
+   }
+  },
+  "博洛尼亚": {
+   "aliases": [
+    "Bologna"
+   ],
+   "sources": {
+    "en": [
+     "Bologna"
+    ]
+   }
+  },
+  "卡利亚里": {
+   "aliases": [
+    "Cagliari"
+   ],
+   "sources": {
+    "en": [
+     "Cagliari"
+    ]
+   }
+  },
+  "科莫": {
+   "aliases": [
+    "Como"
+   ],
+   "sources": {
+    "en": [
+     "Como"
+    ]
+   }
+  },
+  "恩波利": {
+   "aliases": [
+    "Empoli"
+   ],
+   "sources": {
+    "en": [
+     "Empoli"
+    ]
+   }
+  },
+  "热那亚": {
+   "aliases": [
+    "Genoa"
+   ],
+   "sources": {
+    "en": [
+     "Genoa"
+    ]
+   }
+  },
+  "国际米兰": {
+   "aliases": [
+    "Inter"
+   ],
+   "sources": {
+    "en": [
+     "Inter"
+    ]
+   }
+  },
+  "尤文图斯": {
+   "aliases": [
+    "Juventus"
+   ],
+   "sources": {
+    "en": [
+     "Juventus"
+    ]
+   }
+  },
+  "莱切": {
+   "aliases": [
+    "Lecce"
+   ],
+   "sources": {
+    "en": [
+     "Lecce"
+    ]
+   }
+  },
+  "蒙扎": {
+   "aliases": [
+    "Monza"
+   ],
+   "sources": {
+    "en": [
+     "Monza"
+    ]
+   }
+  },
+  "帕尔马": {
+   "aliases": [
+    "Parma Calcio 1913"
+   ],
+   "sources": {
+    "en": [
+     "Parma Calcio 1913"
+    ]
+   }
+  },
+  "都灵": {
+   "aliases": [
+    "Torino"
+   ],
+   "sources": {
+    "en": [
+     "Torino"
+    ]
+   }
+  },
+  "乌迪内斯": {
+   "aliases": [
+    "Udinese"
+   ],
+   "sources": {
+    "en": [
+     "Udinese"
+    ]
+   }
+  },
+  "威尼斯": {
+   "aliases": [
+    "Venezia"
+   ],
+   "sources": {
+    "en": [
+     "Venezia"
+    ]
+   }
+  },
+  "维罗纳": {
+   "aliases": [
+    "Verona"
+   ],
+   "sources": {
+    "en": [
+     "Verona"
+    ]
+   }
+  },
+  "克雷莫纳": {
+   "aliases": [
+    "Cremonese"
+   ],
+   "sources": {
+    "en": [
+     "Cremonese"
+    ]
+   }
+  },
+  "萨索洛": {
+   "aliases": [
+    "Sassuolo"
+   ],
+   "sources": {
+    "en": [
+     "Sassuolo"
+    ]
+   }
+  },
+  "弗洛西诺内": {
+   "aliases": [
+    "Frosinone"
+   ],
+   "sources": {
+    "en": [
+     "Frosinone"
+    ]
+   }
+  },
+  "比萨": {
+   "aliases": [
+    "Pisa"
+   ],
+   "sources": {
+    "en": [
+     "Pisa"
+    ]
+   }
+  },
+  "萨勒尼塔纳": {
+   "aliases": [
+    "Salernitana"
+   ],
+   "sources": {
+    "en": [
+     "Salernitana"
+    ]
+   }
+  },
+  "昂热": {
+   "aliases": [
+    "Angers"
+   ],
+   "sources": {
+    "en": [
+     "Angers"
+    ]
+   }
+  },
+  "欧塞尔": {
+   "aliases": [
+    "Auxerre"
+   ],
+   "sources": {
+    "en": [
+     "Auxerre"
+    ]
+   }
+  },
+  "布雷斯特": {
+   "aliases": [
+    "Brest"
+   ],
+   "sources": {
+    "en": [
+     "Brest"
+    ]
+   }
+  },
+  "勒阿弗尔": {
+   "aliases": [
+    "Le Havre"
+   ],
+   "sources": {
+    "en": [
+     "Le Havre"
+    ]
+   }
+  },
+  "朗斯": {
+   "aliases": [
+    "Lens"
+   ],
+   "sources": {
+    "en": [
+     "Lens"
+    ]
+   }
+  },
+  "蒙彼利埃": {
+   "aliases": [
+    "Montpellier"
+   ],
+   "sources": {
+    "en": [
+     "Montpellier"
+    ]
+   }
+  },
+  "南特": {
+   "aliases": [
+    "Nantes"
+   ],
+   "sources": {
+    "en": [
+     "Nantes"
+    ]
+   }
+  },
+  "尼斯": {
+   "aliases": [
+    "Nice"
+   ],
+   "sources": {
+    "en": [
+     "Nice"
+    ]
+   }
+  },
+  "巴黎圣曼": {
+   "aliases": [
+    "Paris Saint Germain"
+   ],
+   "sources": {
+    "en": [
+     "Paris Saint Germain"
+    ]
+   }
+  },
+  "兰斯": {
+   "aliases": [
+    "Reims"
+   ],
+   "sources": {
+    "en": [
+     "Reims"
+    ]
+   }
+  },
+  "雷恩": {
+   "aliases": [
+    "Rennes"
+   ],
+   "sources": {
+    "en": [
+     "Rennes"
+    ]
+   }
+  },
+  "圣埃蒂安": {
+   "aliases": [
+    "Saint-Etienne"
+   ],
+   "sources": {
+    "en": [
+     "Saint-Etienne"
+    ]
+   }
+  },
+  "斯特拉斯": {
+   "aliases": [
+    "Strasbourg"
+   ],
+   "sources": {
+    "en": [
+     "Strasbourg"
+    ]
+   }
+  },
+  "图卢兹": {
+   "aliases": [
+    "Toulouse"
+   ],
+   "sources": {
+    "en": [
+     "Toulouse"
+    ]
+   }
+  },
+  "梅斯": {
+   "aliases": [
+    "Metz"
+   ],
+   "sources": {
+    "en": [
+     "Metz"
+    ]
+   }
+  },
+  "洛里昂": {
+   "aliases": [
+    "Lorient"
+   ],
+   "sources": {
+    "en": [
+     "Lorient"
+    ]
+   }
+  },
+  "圣旺红星": {
+   "aliases": [
+    "Red Star"
+   ],
+   "sources": {
+    "en": [
+     "Red Star"
+    ]
+   }
+  },
+  "巴黎FC": {
+   "aliases": [
+    "Paris FC"
+   ],
+   "sources": {
+    "en": [
+     "Paris FC"
+    ]
+   }
+  },
+  "克莱蒙": {
+   "aliases": [
+    "Clermont Foot"
+   ],
+   "sources": {
+    "en": [
+     "Clermont Foot"
+    ]
+   }
+  }
+ }
+}

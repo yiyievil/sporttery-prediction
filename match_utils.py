@@ -25,6 +25,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 import re
+from difflib import SequenceMatcher
+
+import team_names
 
 # ============================================================
 # 联赛别名表 — 跨站联赛名统一映射
@@ -157,13 +160,23 @@ def _team_name_similarity(a: str, b: str) -> float:
     """队名相似度 (0.0 ~ 1.0)
 
     策略:
+      0. 统一队名库精确判定 (反向索引 O(1), 最快最准)
       1. 别名表双向包含 → 1.0
       2. 原始名直接包含   → 0.9
+      2.5 SequenceMatcher → ≥0.8 (译名差异如 埃夫斯堡/埃尔夫斯堡)
       3. 字符重叠率       → 0.4~0.8
       4. 英文名匹配       → 0.9
     """
     if not a or not b:
         return 0.0
+
+    # L0: 统一队名库精确判定 (Ultra 13.6)
+    try:
+        exact = team_names.team_similarity(a, b)
+        if exact is not None:
+            return exact
+    except Exception:
+        pass
 
     # L1: 别名表
     aliases = TEAM_NAME_ALIASES.get(a, [a])
@@ -174,6 +187,14 @@ def _team_name_similarity(a: str, b: str) -> float:
     # L2: 原始名直接包含 (不需别名表)
     if a in b or b in a:
         return 0.9
+
+    # L2.5: SequenceMatcher 译名差异 (埃夫斯堡/埃尔夫斯堡 ≈0.89)
+    try:
+        seq = SequenceMatcher(None, a, b).ratio()
+    except Exception:
+        seq = 0.0
+    if seq >= 0.8:
+        return round(seq, 4)
 
     # L3: 字符重叠 (中文队名)
     set_a = set(a)
@@ -339,6 +360,95 @@ def find_best_match(target: MatchFingerprint, candidates: list[MatchFingerprint]
     if best_score >= threshold:
         return best_idx, best_score
     return None, 0.0
+
+
+# ============================================================
+# Ultra 13.6: 队名别名自动学习
+# ============================================================
+
+_LEARN_SOURCES = ('nowscore', '500', 'leisu', 'qiumiwu')
+
+
+def _learn_alias_pair(target: MatchFingerprint, cand: MatchFingerprint,
+                      source: str, reverse: bool = False) -> list[tuple]:
+    """把 sporttery 队名与来源队名的对应关系写入统一队名库
+
+    返回学习到的 [(标准名, 别名, source), ...] (仅含新增的)
+    """
+    if source not in _LEARN_SOURCES:
+        source = 'leisu'
+    if reverse:
+        pairs = [(target.home, cand.away), (target.away, cand.home)]
+    else:
+        pairs = [(target.home, cand.home), (target.away, cand.away)]
+
+    to_learn = []
+    for sp_name, src_name in pairs:
+        sp_name = (sp_name or '').strip()
+        src_name = (src_name or '').strip()
+        if not sp_name or not src_name or sp_name == src_name:
+            continue
+        # 仅当 sporttery 名为已知标准名或中文时学习 (避免把来源名当标准名)
+        if team_names.is_known(sp_name) or team_names._is_chinese(sp_name):
+            to_learn.append((sp_name, src_name, source))
+    if to_learn:
+        team_names.add_aliases_batch(to_learn)
+    return to_learn
+
+
+def find_best_match_with_learning(target: MatchFingerprint, candidates: list[MatchFingerprint],
+                                  source: str = 'leisu', threshold: float = 0.55,
+                                  learn: bool = True) -> tuple[int | None, float, list]:
+    """找最佳匹配 + 自动学习队名别名
+
+    1) 常规匹配 (队名+联赛+时间+日期): 命中则学习队名不同的别名对
+    2) 上下文强匹配 (联赛+时间, 日期若有则须匹配): 队名完全陌生但上下文唯一
+       命中时, 匹配并学习别名 — 解决"译名不同直接跳过导致学不到"的问题
+
+    返回: (index, score, learned_aliases)
+    """
+    learned: list = []
+
+    # 1) 常规匹配
+    best_idx, best_score = find_best_match(target, candidates, threshold=threshold)
+    if best_idx is not None:
+        if learn:
+            c = candidates[best_idx]
+            fwd = (_team_name_similarity(target.home, c.home)
+                   + _team_name_similarity(target.away, c.away))
+            rev = (_team_name_similarity(target.home, c.away)
+                   + _team_name_similarity(target.away, c.home))
+            learned = _learn_alias_pair(target, c, source, reverse=(rev > fwd))
+        return best_idx, best_score, learned
+
+    # 2) 上下文强匹配 (队名不同导致常规失败)
+    if not learn or not candidates:
+        return None, 0.0, learned
+
+    ctx_hits = []
+    for i, c in enumerate(candidates):
+        lg = _league_similarity(target.league, c.league)
+        tm = _time_similarity(target.match_time, c.match_time)
+        if lg < 0.8 or tm < 0.8:
+            continue
+        # 双方都有日期时须匹配(同天或±1天); 至少一方缺日期不否决
+        if target.match_date and c.match_date:
+            if _date_similarity(target.match_date, c.match_date) < 0.7:
+                continue
+        ctx_hits.append((i, lg, tm))
+
+    if len(ctx_hits) == 1:  # 唯一命中才学习, 防歧义
+        i, lg, tm = ctx_hits[0]
+        c = candidates[i]
+        fwd = (_team_name_similarity(target.home, c.home)
+               + _team_name_similarity(target.away, c.away))
+        rev = (_team_name_similarity(target.home, c.away)
+               + _team_name_similarity(target.away, c.home))
+        learned = _learn_alias_pair(target, c, source, reverse=(rev > fwd))
+        ctx_score = round(0.5 * lg + 0.5 * tm, 4)
+        return i, ctx_score, learned
+
+    return None, 0.0, learned
 
 
 # ============================================================

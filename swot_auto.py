@@ -24,8 +24,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from leisu_session import leisu_get, HEADERS as LEISU_HEADERS
 from match_utils import (
-    MatchFingerprint, match_score, find_best_match, team_match_bool,
-    LEAGUE_ALIASES,
+    MatchFingerprint, match_score, find_best_match, find_best_match_with_learning,
+    team_match_bool, LEAGUE_ALIASES,
 )
 
 _WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__))
@@ -104,16 +104,21 @@ def match_guides_to_sporttery(guides, matches):
     lei_fps = [MatchFingerprint.from_leisu(g) for g in guides]
 
     for key, sp_fp in sp_fps.items():
-        # 对每个 sporttery 场次, 找最佳 leisu 匹配
-        best_idx, best_score = find_best_match(sp_fp, lei_fps, threshold=0.55)
+        # 对每个 sporttery 场次, 找最佳 leisu 匹配 (Ultra 13.6: 匹配+自动学习别名)
+        best_idx, best_score, learned = find_best_match_with_learning(
+            sp_fp, lei_fps, source='leisu', threshold=0.55)
         if best_idx is not None:
-            # 额外验证: 队名信号必须 ≥ 0.4 (防止纯时间+联赛撞车)
+            # 额外验证: 队名信号必须 ≥ 0.4 (防止纯时间+联赛撞车);
+            # 上下文强匹配学到新别名时(learned非空)则放宽
             g = guides[best_idx]
             lei_fp = lei_fps[best_idx]
             name_score = match_score(sp_fp, lei_fp,
                                      weights={"team_name": 1.0, "league": 0.0, "time": 0.0, "date": 0.0})
-            if name_score >= 0.4:
+            if name_score >= 0.4 or learned:
                 result[key] = g
+                if learned:
+                    _pairs = ', '.join(f'{a}→{b}' for a, b, _ in learned)
+                    print(f"  [SWOT] 🧠 {key} 学习别名: {_pairs}")
                 if best_score < 0.8:  # 低于 0.8 的匹配打印评分供调试
                     print(f"  [SWOT] 🟡 {key} 匹配 {g['home']} vs {g['away']} "
                           f"(score={best_score:.2f}, name={name_score:.2f})")

@@ -32,7 +32,7 @@ from typing import Optional
 
 import requests
 
-from match_utils import MatchFingerprint, match_score, find_best_match
+from match_utils import MatchFingerprint, match_score, find_best_match, find_best_match_with_learning
 
 logger = logging.getLogger("qiumiwu")
 
@@ -645,14 +645,18 @@ def match_and_fetch(sp_matches: dict, schedule_html: str = None,
             match_date=m["date"],
         ))
 
-    # 3. 匹配 sporttery 场次
+    # 3. 匹配 sporttery 场次 (Ultra 13.6: 匹配+自动学习别名)
     result = {}
     for key, mi in sp_matches.items():
         sp_fp = MatchFingerprint.from_sporttery(mi)
-        best_idx, score = find_best_match(sp_fp, qm_fps, threshold=0.55)
+        best_idx, score, learned = find_best_match_with_learning(
+            sp_fp, qm_fps, source='qiumiwu', threshold=0.55)
         if best_idx is not None:
             qm = matches[best_idx]
             gid = qm["game_id"]
+            if learned:
+                _pairs = ', '.join(f'{a}→{b}' for a, b, _ in learned)
+                logger.info(f"  qiumiwu 学习别名: {_pairs}")
             logger.info(f"  qiumiwu 匹配: {key} → {gid} (score={score:.2f})")
 
             # 4. 获取前瞻数据
