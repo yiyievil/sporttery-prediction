@@ -1,16 +1,16 @@
 {
   "version": "Ultra 13.5",
-  "generated_at": "2026-08-15 02:55:12",
-  "description": "模型校准偏差修正因子 — 漂移重标定版(清洁数据)。基于148场验证数据, 2026-08-09起样本×2.5权重。漂移点由 drift_state.json 提供 (CUSUM检出)",
+  "generated_at": "2026-08-15 03:14:36",
+  "description": "模型校准偏差修正因子 — 漂移重标定版(清洁数据)。基于150场验证数据, 2026-08-09起样本×2.5权重。漂移点由 drift_state.json 提供 (CUSUM检出)",
   "drift_recalibration": {
     "triggered_by": "CUSUM drift detection (v215_verify Ultra 8.0)",
     "drift_point": "2026-08-09",
     "recent_weight": 2.5,
-    "samples_total": 148,
+    "samples_total": 150,
     "data_note": "2026-08-15 跨周污染修复后重标定 (verify_history 001-010 重配)"
   },
   "overall": {
-    "model_hit_rate": 41.2
+    "model_hit_rate": 40.7
   },
   "probability_correction": {
     "25-35%": {

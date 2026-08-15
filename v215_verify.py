@@ -957,8 +957,15 @@ def verify_prediction(pred_data, result_data):
     actual_hhad = result_data['hhad_result']
 
     # 验证
-    had_hit = pred_had_dir == actual_had if pred_had_dir and actual_had else False
-    hhad_hit = pred_hhad_dir == actual_hhad if pred_hhad_dir and actual_hhad else False
+    # Ultra 13.5: HAD未开盘/无方向时 had_hit=None (不参与命中率统计, 避免误判为未命中)
+    _had_valid = pred_had_dir in ('胜', '平', '负')
+    had_hit = (pred_had_dir == actual_had) if (_had_valid and actual_had) else (None if not _had_valid else False)
+    # Ultra 13.5: HHAD方向归一化 — 受让胜/让胜→胜, 受让平/让平→平, 受让负/让负→负
+    # (受让盘(+1)与让盘(-1)的末字才是方向, 直接字符串比较会误判 007 受让胜=让胜)
+    _norm_hhad = lambda s: (s or '')[-1] if s else ''
+    _hhad_valid = _norm_hhad(pred_hhad_dir) in ('胜', '平', '负')
+    hhad_hit = (_norm_hhad(pred_hhad_dir) == _norm_hhad(actual_hhad)
+                if (_hhad_valid and actual_hhad) else (None if not _hhad_valid else False))
 
     # 比分预测验证 (top3)
     score_pred = pred.get('score', {})
@@ -2864,7 +2871,10 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
              v.get('pred_had_dir', ''), float(v.get('pred_had_odds') or 0),
              v.get('pred_hhad_dir', ''), float(v.get('pred_hhad_odds') or 0),
              v.get('pred_top3', ''), v.get('pred_score_main', ''),
-             1 if v.get('had_hit') else 0, 1 if v.get('hhad_hit') else 0, 1 if v.get('score_hit') else 0,
+             # Ultra 13.5: 无预测场次 had_hit=None → 入库NULL (不参与命中率统计)
+             None if v.get('had_hit') is None else (1 if v.get('had_hit') else 0),
+             None if v.get('hhad_hit') is None else (1 if v.get('hhad_hit') else 0),
+             None if v.get('score_hit') is None else (1 if v.get('score_hit') else 0),
              v.get('pred_file', ''), v.get('source', '500.com'), now, roi_return))
         # Ultra 6.0: 扩展数据 (概率向量/难度/一致性/RPS/主推)
         pred = v.get('prediction', {})
@@ -2913,12 +2923,12 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
         c.execute('''UPDATE verify_history SET pred_hf_combo=?, actual_hf=?, hf_hit=?
                      WHERE verify_date=? AND match_key=?''',
                   (v.get('pred_hf_combo', ''), v.get('actual_hf', ''),
-                   1 if v.get('hf_hit') else 0, date_str, v['key']))
+                   None if v.get('hf_hit') is None else (1 if v.get('hf_hit') else 0), date_str, v['key']))
         # Pro 3.2: 总进球数数据 (单独UPDATE, 兼容旧库)
         c.execute('''UPDATE verify_history SET pred_tg_main=?, actual_tg=?, tg_hit=?
                      WHERE verify_date=? AND match_key=?''',
                   (v.get('pred_tg_main', ''), v.get('actual_tg', ''),
-                   1 if v.get('tg_hit') else 0, date_str, v['key']))
+                   None if v.get('tg_hit') is None else (1 if v.get('tg_hit') else 0), date_str, v['key']))
         # Ultra 12.x: 投注指南验证数据 (四档主推 + 首推补充; hit 可为 NULL)
         _gh = v.get('guide_hit')
         _ph = v.get('primary_hit')
@@ -2938,8 +2948,11 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
     had_hits = stats.get('had_hits', 0)
     hhad_hits = stats.get('hhad_hits', 0)
     score_hits = stats.get('score_hits', 0)
-    had_rate = had_hits / has_pred * 100 if has_pred else 0
-    hhad_rate = hhad_hits / has_pred * 100 if has_pred else 0
+    # Ultra 13.5: 命中率分母用有效预测数 (未开盘/无方向场次不计入)
+    had_denom = stats.get('had_denom', has_pred)
+    hhad_denom = stats.get('hhad_denom', has_pred)
+    had_rate = had_hits / had_denom * 100 if had_denom else 0
+    hhad_rate = hhad_hits / hhad_denom * 100 if hhad_denom else 0
     score_rate = score_hits / has_pred * 100 if has_pred else 0
     # M13: 计算均值时同样排除赛果未获取的记录(total_goals=-1)
     valid_stats = [v for v in verified_matches
@@ -3490,7 +3503,7 @@ def main():
                 'pred_hhad_dir': '', 'pred_hhad_odds': '', 'pred_hhad_conf': '', 'pred_hhad_p': '',
                 'pred_top3': '', 'pred_score_main': '', 'pred_market_gl': '',
                 'pred_file': '有' if key in predictions else '无',
-                'had_hit': False, 'hhad_hit': False, 'score_hit': False, 'hf_hit': False, 'tg_hit': False,
+                'had_hit': None, 'hhad_hit': None, 'score_hit': None, 'hf_hit': None, 'tg_hit': None,
                 'pred_hf_combo': '', 'actual_hf': '', 'pred_tg_main': '',
                 'source': result.get('source', 'sporttery'),
                 'data_available': False,
@@ -3551,11 +3564,11 @@ def main():
                 'pred_score_main': '',
                 'pred_market_gl': '',
                 'pred_file': '无',
-                'had_hit': False,
-                'hhad_hit': False,
-                'score_hit': False,
-                'hf_hit': False,
-                'tg_hit': False,
+                'had_hit': None,
+                'hhad_hit': None,
+                'score_hit': None,
+                'hf_hit': None,
+                'tg_hit': None,
                 'pred_hf_combo': '',
                 'actual_hf': '',
                 'pred_tg_main': '',
@@ -3576,8 +3589,11 @@ def main():
     # 统计
     total = len(verified_matches)
     has_pred = [v for v in verified_matches if v['pred_file'] != '无']
-    had_hits = sum(1 for v in has_pred if v['had_hit'])
-    hhad_hits = sum(1 for v in has_pred if v['hhad_hit'])
+    # Ultra 13.5: 命中率分母按各玩法有效预测数 (had_hit=None 的未开盘/无方向场次不计入)
+    had_denom = [v for v in has_pred if v.get('had_hit') is not None]
+    hhad_denom = [v for v in has_pred if v.get('hhad_hit') is not None]
+    had_hits = sum(1 for v in had_denom if v['had_hit'])
+    hhad_hits = sum(1 for v in hhad_denom if v['hhad_hit'])
     score_hits = sum(1 for v in has_pred if v['score_hit'])
     hf_hits = sum(1 for v in has_pred if v.get('hf_hit'))
     tg_hits = sum(1 for v in has_pred if v.get('tg_hit'))
@@ -3605,6 +3621,8 @@ def main():
     stats = {
         'total': total,
         'has_pred': len(has_pred),
+        'had_denom': len(had_denom),      # Ultra 13.5: HAD有效预测数(分母)
+        'hhad_denom': len(hhad_denom),    # Ultra 13.5: HHAD有效预测数(分母)
         'had_hits': had_hits,
         'hhad_hits': hhad_hits,
         'score_hits': score_hits,
@@ -3619,7 +3637,9 @@ def main():
         'primary_by_market': primary_by_market,
     }
 
-    print(f"\n  统计: 有预测{len(has_pred)}/{total}, HAD命中{had_hits}, HHAD命中{hhad_hits}, 比分命中{score_hits}, 半全场命中{hf_hits}, 总进球命中{tg_hits}")
+    print(f"\n  统计: 有预测{len(has_pred)}/{total}, HAD命中{had_hits}/{len(had_denom)} ({had_hits/len(had_denom)*100:.0f}%), "
+          f"HHAD命中{hhad_hits}/{len(hhad_denom)} ({hhad_hits/len(hhad_denom)*100:.0f}%), "
+          f"比分命中{score_hits}, 半全场命中{hf_hits}, 总进球命中{tg_hits}")
     if guide_bets:
         _lv_zh = {'draw': '🎯平局直击', 'single': '✅单选', 'cover': '⚠️双选兜底', 'avoid': '🚫避开'}
         _lv_parts = []
