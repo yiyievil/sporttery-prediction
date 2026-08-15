@@ -103,10 +103,19 @@ def match_guides_to_sporttery(guides, matches):
     # 构建 leisu 指纹
     lei_fps = [MatchFingerprint.from_leisu(g) for g in guides]
 
+    # Ultra 13.6.1: 同联赛+同时刻的多场视为上下文歧义, 禁用上下文学习防误学
+    # (如周六020吉达联合 vs 周六021利雅胜利, 同为沙职02:00)
+    from collections import Counter
+    _tk = Counter((mi.get('league', ''), (mi.get('match_time', '') or ''))
+                  for mi in matches.values())
+
     for key, sp_fp in sp_fps.items():
         # 对每个 sporttery 场次, 找最佳 leisu 匹配 (Ultra 13.6: 匹配+自动学习别名)
+        mi = matches.get(key, {})
+        ambiguous = _tk[(mi.get('league', ''), (mi.get('match_time', '') or ''))] > 1
         best_idx, best_score, learned = find_best_match_with_learning(
-            sp_fp, lei_fps, source='leisu', threshold=0.55)
+            sp_fp, lei_fps, source='leisu', threshold=0.55,
+            allow_context=not ambiguous)
         if best_idx is not None:
             # 额外验证: 队名信号必须 ≥ 0.4 (防止纯时间+联赛撞车);
             # 上下文强匹配学到新别名时(learned非空)则放宽

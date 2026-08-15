@@ -2,7 +2,7 @@
  "_meta": {
   "canonical": "sporttery",
   "version": 1,
-  "updated": "2026-08-15 11:25:44"
+  "updated": "2026-08-15 21:49:25"
  },
  "teams": {
   "金泉尚武": {
@@ -612,7 +612,8 @@
   "谢菲联": {
    "aliases": [
     "锡菲联",
-    "Sheffield United"
+    "Sheffield United",
+    "谢菲尔德联"
    ],
    "sources": {
     "nowscore": [
@@ -620,6 +621,9 @@
     ],
     "en": [
      "Sheffield United"
+    ],
+    "qiumiwu": [
+     "谢菲尔德联"
     ]
    }
   },
@@ -711,11 +715,15 @@
   },
   "赫塔费": {
    "aliases": [
-    "Getafe"
+    "Getafe",
+    "赫塔菲"
    ],
    "sources": {
     "en": [
      "Getafe"
+    ],
+    "leisu": [
+     "赫塔菲"
     ]
    }
   },
@@ -1269,11 +1277,18 @@
   },
   "利勒斯特": {
    "aliases": [
-    "Lillestrøm"
+    "Lillestrøm",
+    "利勒斯特罗姆"
    ],
    "sources": {
     "en": [
      "Lillestrøm"
+    ],
+    "qiumiwu": [
+     "利勒斯特罗姆"
+    ],
+    "leisu": [
+     "利勒斯特罗姆"
     ]
    }
   },
@@ -1517,11 +1532,15 @@
   },
   "弗鲁米嫩": {
    "aliases": [
-    "Fluminense"
+    "Fluminense",
+    "弗鲁米嫩塞"
    ],
    "sources": {
     "en": [
      "Fluminense"
+    ],
+    "qiumiwu": [
+     "弗鲁米嫩塞"
     ]
    }
   },
@@ -2275,11 +2294,15 @@
   },
   "盐湖城": {
    "aliases": [
-    "Real Salt Lake"
+    "Real Salt Lake",
+    "皇家盐湖城"
    ],
    "sources": {
     "en": [
      "Real Salt Lake"
+    ],
+    "leisu": [
+     "皇家盐湖城"
     ]
    }
   },
@@ -2305,11 +2328,15 @@
   },
   "明尼苏达": {
    "aliases": [
-    "Minnesota United"
+    "Minnesota United",
+    "明尼苏达联"
    ],
    "sources": {
     "en": [
      "Minnesota United"
+    ],
+    "leisu": [
+     "明尼苏达联"
     ]
    }
   },
@@ -3617,6 +3644,145 @@
    "sources": {
     "en": [
      "Clermont Foot"
+    ]
+   }
+  },
+  "西布罗姆": {
+   "aliases": [
+    "西布罗姆维奇"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "西布罗姆维奇"
+    ],
+    "leisu": [
+     "西布罗姆维奇"
+    ]
+   }
+  },
+  "阿尔维卡": {
+   "aliases": [
+    "艾华卡"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "艾华卡"
+    ],
+    "leisu": [
+     "艾华卡"
+    ]
+   }
+  },
+  "阿马多拉": {
+   "aliases": [
+    "阿马多拉之星"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "阿马多拉之星"
+    ],
+    "leisu": [
+     "阿马多拉之星"
+    ]
+   }
+  },
+  "塞伊奈": {
+   "aliases": [
+    "塞那乔其"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "塞那乔其"
+    ],
+    "leisu": [
+     "塞那乔其"
+    ]
+   }
+  },
+  "布赖合作": {
+   "aliases": [
+    "布赖代合作"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "布赖代合作"
+    ]
+   }
+  },
+  "赛哈海湾": {
+   "aliases": [
+    "塞哈特海湾"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "塞哈特海湾"
+    ]
+   }
+  },
+  "拉斯永恒": {
+   "aliases": [
+    "科鲁德"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "科鲁德"
+    ],
+    "leisu": []
+   }
+  },
+  "利雅胜利": {
+   "aliases": [
+    "利雅得胜利"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "利雅得胜利"
+    ],
+    "leisu": [
+     "利雅得胜利"
+    ]
+   }
+  },
+  "穆拜征服": {
+   "aliases": [
+    "哈萨征服"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "哈萨征服"
+    ],
+    "leisu": [
+     "哈萨征服"
+    ]
+   }
+  },
+  "帕梅拉斯": {
+   "aliases": [
+    "帕尔梅拉斯"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "帕尔梅拉斯"
+    ]
+   }
+  },
+  "奥斯KFUM": {
+   "aliases": [
+    "KFUM奥斯陆"
+   ],
+   "sources": {
+    "leisu": [
+     "KFUM奥斯陆"
+    ]
+   }
+  },
+  "阿尔克马": {
+   "aliases": [
+    "阿尔克马尔"
+   ],
+   "sources": {
+    "leisu": [
+     "阿尔克马尔"
     ]
    }
   }

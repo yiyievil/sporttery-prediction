@@ -398,12 +398,13 @@ def _learn_alias_pair(target: MatchFingerprint, cand: MatchFingerprint,
 
 def find_best_match_with_learning(target: MatchFingerprint, candidates: list[MatchFingerprint],
                                   source: str = 'leisu', threshold: float = 0.55,
-                                  learn: bool = True) -> tuple[int | None, float, list]:
+                                  learn: bool = True, allow_context: bool = True) -> tuple[int | None, float, list]:
     """找最佳匹配 + 自动学习队名别名
 
     1) 常规匹配 (队名+联赛+时间+日期): 命中则学习队名不同的别名对
     2) 上下文强匹配 (联赛+时间, 日期若有则须匹配): 队名完全陌生但上下文唯一
        命中时, 匹配并学习别名 — 解决"译名不同直接跳过导致学不到"的问题
+       (仅当 allow_context=True 时启用; 同联赛同时刻多场时调用方应传 False 防误学)
 
     返回: (index, score, learned_aliases)
     """
@@ -422,7 +423,7 @@ def find_best_match_with_learning(target: MatchFingerprint, candidates: list[Mat
         return best_idx, best_score, learned
 
     # 2) 上下文强匹配 (队名不同导致常规失败)
-    if not learn or not candidates:
+    if not learn or not allow_context or not candidates:
         return None, 0.0, learned
 
     ctx_hits = []

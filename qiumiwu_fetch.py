@@ -646,11 +646,17 @@ def match_and_fetch(sp_matches: dict, schedule_html: str = None,
         ))
 
     # 3. 匹配 sporttery 场次 (Ultra 13.6: 匹配+自动学习别名)
+    # 同联赛+同时刻+同日期多场 → 上下文歧义, 禁用上下文学习防误学
+    from collections import Counter
+    _tk = Counter((mi.get('league', ''), (mi.get('match_time', '') or ''), (mi.get('match_date', '') or ''))
+                  for mi in sp_matches.values())
     result = {}
     for key, mi in sp_matches.items():
         sp_fp = MatchFingerprint.from_sporttery(mi)
+        ambiguous = _tk[(mi.get('league', ''), (mi.get('match_time', '') or ''), (mi.get('match_date', '') or ''))] > 1
         best_idx, score, learned = find_best_match_with_learning(
-            sp_fp, qm_fps, source='qiumiwu', threshold=0.55)
+            sp_fp, qm_fps, source='qiumiwu', threshold=0.55,
+            allow_context=not ambiguous)
         if best_idx is not None:
             qm = matches[best_idx]
             gid = qm["game_id"]
