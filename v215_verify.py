@@ -799,10 +799,11 @@ def _pred_teams_match(results_data, key, pred_meta):
     try:
         from difflib import SequenceMatcher
         rd = (results_data or {}).get(key) or {}
-        rh = str(rd.get('home', '') or '')
-        ra = str(rd.get('away', '') or '')
-        ph = str((pred_meta or {}).get('home', '') or '')
-        pa = str((pred_meta or {}).get('away', '') or '')
+        # 修复: 赛果字典字段为 homeTeam/awayTeam (zqbfzb/500.com/体彩API), 预测meta为 home/away
+        rh = str(rd.get('homeTeam', '') or rd.get('home', '') or '')
+        ra = str(rd.get('awayTeam', '') or rd.get('away', '') or '')
+        ph = str((pred_meta or {}).get('home', '') or (pred_meta or {}).get('homeTeam', '') or '')
+        pa = str((pred_meta or {}).get('away', '') or (pred_meta or {}).get('awayTeam', '') or '')
         if not (rh and ra and ph and pa):
             return True   # 任一侧队名缺失时不拦截 (保持旧行为)
         sim = min(SequenceMatcher(None, rh, ph).ratio(),
