@@ -2925,7 +2925,37 @@ def compute_fuse_weights(dq_score, market_probs=None, power_probs=None,
         if market_probs.index(max(market_probs)) == power_probs.index(max(power_probs)):
             power_w = max(power_w, 1.0)
 
+    # Ultra 13.4: CUSUM漂移响应 — 漂移期降权Power/Elo, 偏向市场赔率
+    # 依据: v215_verify CUSUM检测到2026-08-10起准确率显著下降 (42.9%→36.8%),
+    #       建议降权Power/Elo源。乘数由 predictions/drift_state.json 提供。
+    mult = _get_drift_multipliers()
+    if mult:
+        market_w *= mult.get('market', 1.0)
+        power_w *= mult.get('power', 1.0)
+        poisson_w *= mult.get('poisson', 1.0)
+        elo_w *= mult.get('elo', 1.0)
+
     return [round(market_w, 3), round(power_w, 3), round(poisson_w, 3), round(elo_w, 3)]
+
+
+# Ultra 13.4: 漂移乘数加载 (进程内缓存, drift_state.json 变更后需重启)
+_DRIFT_MULT_CACHE = {'loaded': False, 'data': None}
+
+def _get_drift_multipliers():
+    """读取漂移响应乘数; 未检测到漂移或文件缺失返回 None"""
+    if not _DRIFT_MULT_CACHE['loaded']:
+        _DRIFT_MULT_CACHE['loaded'] = True
+        try:
+            _p = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              'predictions', 'drift_state.json')
+            if os.path.exists(_p):
+                with open(_p, encoding='utf-8') as _f:
+                    _d = json.load(_f)
+                if _d.get('drift_detected'):
+                    _DRIFT_MULT_CACHE['data'] = _d.get('weight_multipliers')
+        except Exception:
+            _DRIFT_MULT_CACHE['data'] = None
+    return _DRIFT_MULT_CACHE['data']
 
 
 def infer_goal_line_from_had(had):
@@ -5648,8 +5678,9 @@ def apply_advanced_calibration(probs, sp, had, hhad):
             if bin_label and bin_label in mc:
                 entry = mc[bin_label]
                 bias_pp = entry.get('bias_pp', 0)
-                # 只对偏差>2pp的区间修正, 应用50%修正量 (保守)
-                if abs(bias_pp) > 2 and entry.get('n', 0) >= 50:
+                # Ultra 13.4: 门槛 50→8 (旧文件无n字段导致修正从未生效=死代码;
+                # 漂移重标定基于150场验证数据, 8场以上区间的偏差已可信)
+                if abs(bias_pp) > 2 and entry.get('n', 0) >= 8:
                     correction = bias_pp / 100.0 * 0.5
                     # 将最高概率向实际校准方向调整
                     if conf == pw:

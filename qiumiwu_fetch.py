@@ -692,11 +692,49 @@ def parse_rank_number(rank_str: str) -> tuple[int | None, int | None]:
         return None, None
 
 
+# Ultra 13.2 (排名阶梯缩放 2026-08-14): 联赛排名影响随轮次阶梯放大
+# 赛季初(第1轮)排名≈队名排序, 不代表真实实力; 随联赛进程逐步收敛到真实实力
+# 每5轮调一次: 1-5轮 0.05 → 6-10轮 0.25 → 11-15轮 0.50 → 16-20轮 0.70 → 21-25轮 0.85 → 26+轮 1.00
+ROUND_SCALE_STEPS = [0.05, 0.25, 0.50, 0.70, 0.85, 1.00]
+ROUND_STEP_SIZE = 5          # 每5轮上调一档
+RANK_MAX_IMPACT = 2.0        # 满权重最大影响: λ_h ×(1+2.0)=×3.0 (顶级球队应获充分加成)
+RANK_PENALTY_FLOOR = 0.30    # 弱队λ下限, 防止过度惩罚导致负值
+
+
+def extract_round_num(league_str: str) -> int:
+    """从联赛名提取轮次, 如 '沙特联第1轮 联赛' → 1, 失败返回0"""
+    if not league_str:
+        return 0
+    m = re.search(r'第(\d+)轮', str(league_str))
+    return int(m.group(1)) if m else 0
+
+
+def round_scale_factor(round_num: int) -> float:
+    """轮次缩放系数: 排名权重随轮次阶梯放大 (每5轮调一次)
+
+    第1-5轮   → 0.05 (排名≈队名排序, 几乎无信息量)
+    第6-10轮  → 0.25
+    第11-15轮 → 0.50
+    第16-20轮 → 0.70
+    第21-25轮 → 0.85
+    第26轮+   → 1.00 (满权重, 漫长联赛30+轮排名已稳定)
+    无轮次信息(round_num=0) → 1.00 (保守用满权重, 不因缺数据忽略排名)
+    """
+    if round_num <= 0:
+        return 1.0
+    step = (round_num - 1) // ROUND_STEP_SIZE
+    return ROUND_SCALE_STEPS[min(step, len(ROUND_SCALE_STEPS) - 1)]
+
+
 def compute_rank_boost(home_rank_str: str, away_rank_str: str,
-                       league_size: int = 16) -> dict:
+                       league_size: int = 16, round_num: int = 0) -> dict:
     """改进1: 排名差 → λ 调整因子
 
     排名差越大，实力差距越显著。使用 tanh 平滑函数避免极端值。
+
+    Ultra 13.2 (排名阶梯缩放): 排名差影响乘以轮次缩放系数。
+    赛季初排名≈队名排序, 随联赛进程每5轮阶梯放大至满权重。
+    满权重最大加成 λ_h ×3.0 (顶级球队赛季末获得充分加成)。
 
     返回:
       {
@@ -704,6 +742,8 @@ def compute_rank_boost(home_rank_str: str, away_rank_str: str,
         "rank_diff": int,  # 正=主队排名更高(实力更强)
         "boost_factor": float,  # λ_h 乘数
         "penalty_factor": float, # λ_a 乘数
+        "round_num": int,  # 联赛轮次
+        "round_scale": float,  # 轮次缩放系数
         "note": str,
       }
     """
@@ -713,6 +753,7 @@ def compute_rank_boost(home_rank_str: str, away_rank_str: str,
     result = {
         "home_rank": h_rank, "away_rank": a_rank,
         "rank_diff": 0, "boost_factor": 1.0, "penalty_factor": 1.0,
+        "round_num": round_num, "round_scale": 1.0,
         "note": "",
     }
 
@@ -726,19 +767,28 @@ def compute_rank_boost(home_rank_str: str, away_rank_str: str,
     if abs(rank_diff) < 2:
         return result
 
-    # tanh 平滑: 排名差 2→±1.5%, 5→±3.5%, 10→±5.5%, 15→±7%
+    # Ultra 13.1: 轮次缩放系数 (赛季初排名≈队名排序, 随轮次线性放大)
+    r_scale = round_scale_factor(round_num)
+    result["round_scale"] = r_scale
+
+    # Ultra 13.2: 排名影响提升至满权重λ_h×3.0 (顶级球队赛季末应获充分加成)
+    # tanh 平滑: 排名差 2→±37%, 5→±86%, 10→±135%, 15→±170% (×轮次阶梯缩放)
     norm_diff = rank_diff / league_size
-    impact = math.tanh(abs(norm_diff) * 3) * 0.12
+    impact = math.tanh(abs(norm_diff) * 3) * RANK_MAX_IMPACT * r_scale
 
     if rank_diff > 0:
         # 主队排名更高(实力更强)
         result["boost_factor"] = 1.0 + impact
-        result["penalty_factor"] = 1.0 - impact * 0.7
+        result["penalty_factor"] = max(RANK_PENALTY_FLOOR, 1.0 - impact * 0.7)
         result["note"] = f"排名差+{rank_diff}(主{h_rank}vs客{a_rank}), λ_h×{result['boost_factor']:.3f} λ_a×{result['penalty_factor']:.3f}"
+        if round_num > 0 and r_scale < 1.0:
+            result["note"] += f" [第{round_num}轮×{r_scale:.2f}缩放]"
     else:
-        result["boost_factor"] = 1.0 - impact * 0.7
+        result["boost_factor"] = max(RANK_PENALTY_FLOOR, 1.0 - impact * 0.7)
         result["penalty_factor"] = 1.0 + impact
         result["note"] = f"排名差{rank_diff}(主{h_rank}vs客{a_rank}), λ_h×{result['boost_factor']:.3f} λ_a×{result['penalty_factor']:.3f}"
+        if round_num > 0 and r_scale < 1.0:
+            result["note"] += f" [第{round_num}轮×{r_scale:.2f}缩放]"
 
     return result
 
@@ -1074,10 +1124,12 @@ def apply_qiumiwu_enhancements(qiumiwu_stats: dict,
 
     notes = []
 
-    # 1. 排名差
+    # 1. 排名差 (Ultra 13.1: 轮次线性缩放 — 赛季初排名≈队名排序, 随轮次放大)
+    round_num = extract_round_num((qiumiwu_preview or {}).get("league", ""))
     rank_boost = compute_rank_boost(
         qiumiwu_stats.get("home_rank", ""),
         qiumiwu_stats.get("away_rank", ""),
+        round_num=round_num,
     )
     if rank_boost["note"]:
         notes.append(rank_boost["note"])

@@ -788,6 +788,33 @@ def parse_result(match_data):
     }
 
 
+def _pred_teams_match(results_data, key, pred_meta):
+    """Ultra 13.5: 跨周场次污染防护 — 校验预测与赛果为同一场比赛
+
+    背景: load_predictions 按 match_key(周五003) 跨文件合并, 不同周的同编号
+    场次会错位配对 (260814 验证曾用 0807 周五文件的塞伊奈vs赫尔火花 配对
+    本周的基尔vs圣保利, had_hit 全错)。用队名相似度拦截:
+    同场比赛的不同译名 (埃夫斯堡/埃尔夫斯堡 ≈0.89) 远高于跨场次 (<0.25)。
+    """
+    try:
+        from difflib import SequenceMatcher
+        rd = (results_data or {}).get(key) or {}
+        rh = str(rd.get('home', '') or '')
+        ra = str(rd.get('away', '') or '')
+        ph = str((pred_meta or {}).get('home', '') or '')
+        pa = str((pred_meta or {}).get('away', '') or '')
+        if not (rh and ra and ph and pa):
+            return True   # 任一侧队名缺失时不拦截 (保持旧行为)
+        sim = min(SequenceMatcher(None, rh, ph).ratio(),
+                  SequenceMatcher(None, ra, pa).ratio())
+        if sim < 0.4:
+            print(f"  [跨周防护] {key} 队名不匹配, 跳过 {ph}vs{pa} (赛果: {rh}vs{ra}, sim={sim:.2f})")
+            return False
+        return True
+    except Exception:
+        return True
+
+
 def load_predictions(match_keys, results_data):
     """加载预测文件, 匹配场次
     返回 {match_key: prediction_data}
@@ -855,6 +882,9 @@ def load_predictions(match_keys, results_data):
                     for key in match_keys:
                         _sk = next((k for k in _snap_results if k == key or k[-3:] == key[-3:]), None)
                         if _sk:
+                            # Ultra 13.5: 跨周污染防护 (归档快照同样可能来自其他周)
+                            if not _pred_teams_match(results_data, key, _snap_meta.get(_sk, {})):
+                                continue
                             predictions[key] = {
                                 'prediction': _snap_results[_sk],
                                 'meta': _snap_meta.get(_sk, {}),
@@ -889,6 +919,9 @@ def load_predictions(match_keys, results_data):
 
         for key in match_keys:
             if key not in results:
+                continue
+            # Ultra 13.5: 跨周污染防护 — 队名不匹配的场次禁止配对
+            if not _pred_teams_match(results_data, key, meta.get(key, {})):
                 continue
             # 只保留最后一次更新(update_count最大)的版本
             if key not in key_updates or uc > key_updates[key][0]:

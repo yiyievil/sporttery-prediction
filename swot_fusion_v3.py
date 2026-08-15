@@ -20,8 +20,15 @@ SWOT_DATA_FILE = os.path.join(PREDICTIONS_DIR, 'swot_data_refreshed.json')
 # SWOT不再只调置信度, 而是直接在胜/负之间迁移概率质量, 平局不受影响
 # (本系统平局本就系统性低估, 不能让SWOT调整再侵蚀平局概率)
 SWOT_SHIFT_PER_POINT = 0.01   # 每评分点 → 概率迁移1pp
-SWOT_MAX_SHIFT = 0.12         # 迁移上限 ±12pp (联赛状态波动大, 8pp过于保守)
+SWOT_MAX_SHIFT = 0.20         # 迁移上限 ±20pp (联赛状态波动大, 12pp仍偏保守; 一蹶不振/触底反弹幅度大)
 SWOT_MIN_DIFF = 2.0           # 评分差低于此值不调整 (噪音区)
+
+# Ultra 13.3 (方向翻转 2026-08-14): SWOT作为最实时信息, 强信号时可翻转模型方向
+# xG/排名等是常规判断(滞后/统计性), SWOT(伤停/状态/走势)是当下最直接的信号
+# 当SWOT评分差足够大且方向与模型相反时, 直接翻转方向 — "该翻转时就翻转"
+SWOT_FLIP_DIFF = 6.0     # 评分差≥6 视为强信号, 允许方向翻转 (约10%场次)
+SWOT_FLIP_MARGIN = 0.05  # 翻转后反超安全余量 5pp
+SWOT_FLIP_MAX = 0.35     # 翻转迁移上限 35pp (防止过度极端)
 
 
 def _parse_pct(v):
@@ -153,12 +160,14 @@ def _parse_wdl_str(p_str):
 
 
 def apply_swot_prob_shift(wdl, home_score, away_score):
-    """SWOT评分差 → HAD概率迁移 (Ultra 9.1: 支持平局调整)
+    """SWOT评分差 → HAD概率迁移 (Ultra 13.3: 支持方向翻转)
 
     原理: 
       - 评分差大(>=MIN_DIFF): 胜/负之间直接转移概率质量 s, 平局概率固定不变
+      - 评分差极大(>=FLIP_DIFF)且方向相反: 翻转方向 — SWOT作为最实时信息
+        直接覆盖常规模型(xG/排名)的方向判断, "该翻转时就翻转"
       - 评分差小(<MIN_DIFF): SWOT指向平局, 从胜/负各抽一半概率给平局
-      - 有界(±12pp)、方向恒正确、概率和恒为1
+      - 有界(常规±20pp/翻转±35pp)、方向恒正确、概率和恒为1
 
     参数: wdl = [p_win, p_draw, p_lose]
     返回: (new_wdl, shift, applied)
@@ -176,8 +185,32 @@ def apply_swot_prob_shift(wdl, home_score, away_score):
         if boost >= 0.005:
             return [w - boost, d + 2 * boost, l - boost], boost, True
         return list(wdl), 0.0, False
-    shift = max(-SWOT_MAX_SHIFT, min(SWOT_MAX_SHIFT, diff * SWOT_SHIFT_PER_POINT))
+
     w, d, l = wdl
+
+    # Ultra 13.3: 强信号方向翻转 (评分差≥FLIP_DIFF 且 SWOT方向与当前主导相反)
+    if abs(diff) >= SWOT_FLIP_DIFF:
+        cur_dir = _wdl_dir(wdl)
+        swot_dir = '胜' if diff > 0 else '负'
+        if cur_dir != swot_dir:
+            # 从非SWOT方向的胜/负侧迁移, 使SWOT方向反超当前最大方向
+            # 平局概率d保持不变 (系统平局系统性低估, 翻转不侵蚀平局)
+            cur_max = max(w, d, l)
+            if swot_dir == '胜':
+                need = cur_max - w + SWOT_FLIP_MARGIN
+                shift = min(need, SWOT_FLIP_MAX, max(0.0, l - 0.02))
+            else:
+                need = cur_max - l + SWOT_FLIP_MARGIN
+                shift = min(need, SWOT_FLIP_MAX, max(0.0, w - 0.02))
+            if shift >= 0.005:
+                if swot_dir == '胜':
+                    return [w + shift, d, l - shift], shift, True
+                else:
+                    return [w - shift, d, l + shift], -shift, True
+            return list(wdl), 0.0, False
+
+    # 常规迁移 (评分差在 MIN_DIFF~FLIP_DIFF 之间, 或方向一致时)
+    shift = max(-SWOT_MAX_SHIFT, min(SWOT_MAX_SHIFT, diff * SWOT_SHIFT_PER_POINT))
     # 边界保护: 任一侧概率不低于2%
     # 注意: max(0.0, ...) 防止 w/l 已低于2% 时 -(w-0.02) 为正导致方向翻转 (M19)
     if shift > 0:
@@ -346,7 +379,14 @@ def fuse_swot_into_predictions(pred_file):
             swot_dir = '平'
         
         # 一致性判断 (对比调整前的原始模型方向, 避免"自己跟自己比")
-        if swot_dir == orig_model_dir:
+        # Ultra 13.3: 仅当评分差达到翻转阈值且方向翻转, 才标记"SWOT翻转"
+        # (平局提升分支也可能让方向微变, 但那是评分差小<FLIP_DIFF, 不算强信号翻转)
+        if (prob_adjust and prob_adjust.get('flipped')
+                and abs(home_score - away_score) >= SWOT_FLIP_DIFF):
+            consistency = 'SWOT翻转'
+            conf_adjust = '+1★'
+            fusion_advice = f'🔄 SWOT强信号翻转方向: 模型判{orig_model_dir}→SWOT判{swot_dir}, 置信度上调+1★'
+        elif swot_dir == orig_model_dir:
             consistency = '一致'
             # 信号强度
             diff = abs(home_score - away_score)
