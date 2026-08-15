@@ -33,6 +33,13 @@ import re
 import sys
 from difflib import SequenceMatcher
 
+# Windows 控制台 GBK 编码兼容: 强制 UTF-8 (失败则忽略)
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 WORKSPACE = os.environ.get('SPORTTERY_WORKSPACE') or os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(WORKSPACE, 'predictions', 'team_names_db.json')
 
