@@ -2,7 +2,7 @@
  "_meta": {
   "canonical": "sporttery",
   "version": 1,
-  "updated": "2026-08-16 07:34:11"
+  "updated": "2026-08-16 12:44:52"
  },
  "teams": {
   "金泉尚武": {
@@ -1258,16 +1258,23 @@
     "short": [
      "腓特烈斯塔",
      "费德列斯达"
+    ],
+    "leisu": [
+     "腓特烈斯塔"
     ]
    }
   },
   "克里斯蒂": {
    "aliases": [
-    "Kristiansund"
+    "Kristiansund",
+    "克里斯蒂安松"
    ],
    "sources": {
     "en": [
      "Kristiansund"
+    ],
+    "leisu": [
+     "克里斯蒂安松"
     ]
    }
   },
@@ -2154,11 +2161,15 @@
   },
   "费城": {
    "aliases": [
-    "Philadelphia Union"
+    "Philadelphia Union",
+    "费城联合"
    ],
    "sources": {
     "en": [
      "Philadelphia Union"
+    ],
+    "leisu": [
+     "费城联合"
     ]
    }
   },
@@ -2588,6 +2599,9 @@
     ],
     "en": [
      "Villarreal"
+    ],
+    "leisu": [
+     "比利亚雷亚尔"
     ]
    }
   },
@@ -3869,6 +3883,9 @@
    "sources": {
     "qiumiwu": [
      "桑坦德竞技"
+    ],
+    "leisu": [
+     "桑坦德竞技"
     ]
    }
   },
@@ -3888,6 +3905,9 @@
    ],
    "sources": {
     "qiumiwu": [
+     "瓦斯科达伽马"
+    ],
+    "leisu": [
      "瓦斯科达伽马"
     ]
    }
