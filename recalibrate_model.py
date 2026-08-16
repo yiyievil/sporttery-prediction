@@ -31,8 +31,11 @@ DRIFT_POINT = '2026-08-09'   # 兜底值 (drift_state.json 缺失/损坏时)
 try:
     with open(DRIFT_STATE_FILE, encoding='utf-8') as _f:
         _ds = json.load(_f)
-    if _ds.get('drift_detected') and _ds.get('drift_point'):
+    if _ds.get('drift_point'):
         DRIFT_POINT = _ds['drift_point']
+    elif _ds.get('cusum_drift_point'):
+        # Ultra 13.16: 实测无退化护栏解除权重响应后, 仍保留CUSUM检出点作近期加权锚
+        DRIFT_POINT = _ds['cusum_drift_point']
 except Exception:
     pass
 

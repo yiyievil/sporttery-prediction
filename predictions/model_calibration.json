@@ -1,49 +1,52 @@
 {
   "version": "Ultra 13.5",
-  "generated_at": "2026-08-15 03:14:36",
-  "description": "模型校准偏差修正因子 — 漂移重标定版(清洁数据)。基于150场验证数据, 2026-08-09起样本×2.5权重。漂移点由 drift_state.json 提供 (CUSUM检出)",
+  "generated_at": "2026-08-16 07:32:39",
+  "description": "模型校准偏差修正因子 — 漂移重标定版(清洁数据)。基于195场验证数据, 2026-08-10起样本×2.5权重。漂移点由 drift_state.json 提供 (CUSUM检出)",
   "drift_recalibration": {
     "triggered_by": "CUSUM drift detection (v215_verify Ultra 8.0)",
-    "drift_point": "2026-08-09",
+    "drift_point": "2026-08-10",
     "recent_weight": 2.5,
-    "samples_total": 150,
+    "samples_total": 195,
     "data_note": "2026-08-15 跨周污染修复后重标定 (verify_history 001-010 重配)"
   },
   "overall": {
-    "model_hit_rate": 40.7
+    "model_hit_rate": 35.9
   },
   "probability_correction": {
     "25-35%": {
-      "bias_pp": 6.6,
-      "correction_factor": 1.19
+      "n": 5,
+      "nominal_pct": 34.0,
+      "actual_pct": 15.4,
+      "bias_pp": -18.6,
+      "correction_factor": 0.452
     },
     "35-45%": {
-      "n": 51,
-      "nominal_pct": 39.8,
-      "actual_pct": 48.7,
-      "bias_pp": 8.9,
-      "correction_factor": 1.224
+      "n": 72,
+      "nominal_pct": 39.6,
+      "actual_pct": 40.1,
+      "bias_pp": 0.4,
+      "correction_factor": 1.011
     },
     "45-55%": {
-      "n": 31,
-      "nominal_pct": 49.5,
-      "actual_pct": 34.7,
-      "bias_pp": -14.7,
-      "correction_factor": 0.702
+      "n": 37,
+      "nominal_pct": 49.0,
+      "actual_pct": 47.9,
+      "bias_pp": -1.1,
+      "correction_factor": 0.978
     },
     "55-65%": {
       "n": 23,
-      "nominal_pct": 60.2,
-      "actual_pct": 49.4,
-      "bias_pp": -10.9,
-      "correction_factor": 0.819
+      "nominal_pct": 60.1,
+      "actual_pct": 44.3,
+      "bias_pp": -15.8,
+      "correction_factor": 0.738
     },
     "65-75%": {
-      "n": 18,
-      "nominal_pct": 68.5,
-      "actual_pct": 56.7,
-      "bias_pp": -11.8,
-      "correction_factor": 0.827
+      "n": 19,
+      "nominal_pct": 68.8,
+      "actual_pct": 51.6,
+      "bias_pp": -17.2,
+      "correction_factor": 0.75
     },
     "75-85%": {
       "bias_pp": -6.0,
@@ -52,94 +55,114 @@
   },
   "direction_correction": {
     "预测胜": {
-      "n": 138,
-      "hit_rate": 48.6,
-      "vs_overall_pp": 11.0,
-      "bias_pp": 3.6
+      "n": 143,
+      "hit_rate": 47.2,
+      "vs_overall_pp": 7.2,
+      "bias_pp": 2.2
     },
     "预测平": {
-      "n": 12,
-      "hit_rate": 16.0,
-      "vs_overall_pp": -21.5,
-      "bias_pp": -29.0
+      "n": 37,
+      "hit_rate": 12.2,
+      "vs_overall_pp": -27.8,
+      "bias_pp": -32.8
     },
     "预测负": {
-      "n": 48,
-      "hit_rate": 45.8,
-      "vs_overall_pp": 8.3,
-      "bias_pp": 0.8
+      "n": 68,
+      "hit_rate": 52.6,
+      "vs_overall_pp": 12.6,
+      "bias_pp": 7.6
     }
   },
   "league_correction": {
-    "挪超": {
-      "n": 22,
-      "hit_rate": 52.3,
-      "vs_overall_pp": 14.7
+    "欧冠": {
+      "n": 28,
+      "hit_rate": 52.7,
+      "vs_overall_pp": 12.8
     },
     "瑞超": {
-      "n": 18,
-      "hit_rate": 50.0,
-      "vs_overall_pp": 12.5
-    },
-    "芬超": {
-      "n": 17,
-      "hit_rate": 23.5,
-      "vs_overall_pp": -14.0
+      "n": 20,
+      "hit_rate": 35.0,
+      "vs_overall_pp": -5.0
     },
     "荷甲": {
+      "n": 18,
+      "hit_rate": 75.0,
+      "vs_overall_pp": 35.0
+    },
+    "挪超": {
       "n": 16,
-      "hit_rate": 42.4,
-      "vs_overall_pp": 4.9
+      "hit_rate": 48.5,
+      "vs_overall_pp": 8.5
     },
     "葡超": {
       "n": 16,
-      "hit_rate": 22.6,
-      "vs_overall_pp": -14.9
-    },
-    "法乙": {
-      "n": 10,
-      "hit_rate": 33.3,
-      "vs_overall_pp": -4.2
-    },
-    "德乙": {
-      "n": 10,
-      "hit_rate": 25.0,
-      "vs_overall_pp": -12.5
-    },
-    "解放者杯": {
-      "n": 10,
-      "hit_rate": 0.0,
-      "vs_overall_pp": -37.5
+      "hit_rate": 31.2,
+      "vs_overall_pp": -8.7
     },
     "欧罗巴": {
-      "n": 9,
-      "hit_rate": 33.3,
-      "vs_overall_pp": -4.2
+      "n": 16,
+      "hit_rate": 51.6,
+      "vs_overall_pp": 11.7
     },
     "韩职": {
-      "n": 9,
+      "n": 14,
+      "hit_rate": 21.4,
+      "vs_overall_pp": -18.5
+    },
+    "日职": {
+      "n": 14,
+      "hit_rate": 66.7,
+      "vs_overall_pp": 26.7
+    },
+    "沙职": {
+      "n": 14,
+      "hit_rate": 55.6,
+      "vs_overall_pp": 15.6
+    },
+    "芬超": {
+      "n": 12,
+      "hit_rate": 32.0,
+      "vs_overall_pp": -8.0
+    },
+    "解放者杯": {
+      "n": 12,
+      "hit_rate": 0.0,
+      "vs_overall_pp": -40.0
+    },
+    "德乙": {
+      "n": 12,
+      "hit_rate": 0.0,
+      "vs_overall_pp": -40.0
+    },
+    "英冠": {
+      "n": 10,
+      "hit_rate": 36.8,
+      "vs_overall_pp": -3.1
+    },
+    "法乙": {
+      "n": 8,
       "hit_rate": 33.3,
-      "vs_overall_pp": -4.2
+      "vs_overall_pp": -6.6
     },
-    "欧冠": {
-      "n": 8,
-      "hit_rate": 35.3,
-      "vs_overall_pp": -2.2
+    "巴西杯": {
+      "n": 7,
+      "hit_rate": 14.3,
+      "vs_overall_pp": -25.7
     },
-    "巴甲": {
-      "n": 8,
-      "hit_rate": 12.5,
-      "vs_overall_pp": -25.0
+    "荷乙": {
+      "n": 7,
+      "hit_rate": 64.3,
+      "vs_overall_pp": 24.3
     },
     "美职": {
       "n": 6,
       "hit_rate": 16.7,
-      "vs_overall_pp": -20.9
+      "vs_overall_pp": -23.3
     },
-    "日职": {
+    "西甲": {
       "n": 6,
-      "hit_rate": 16.7,
-      "vs_overall_pp": -20.9
+      "hit_rate": 58.3,
+      "vs_overall_pp": 18.4
     }
   }
 }

@@ -120,7 +120,7 @@ except ImportError:
 # Phase 0: 用户输入
 # ============================================================
 TARGET_DATE = None   # ← 不限日期(避免跨天分类问题)
-TARGET_WEEKDAY = "周四"  # ← 指定周几过滤(如"周四"), None=不过滤
+TARGET_WEEKDAY = None  # ← 指定周几过滤(如"周四"), None=不过滤(当前在售池)
 MATCH_NUMBERS = ["001","002","003","004","005","006","007","008","009","010"]  # ← 场次编号(后3位)
 TARGET_NUM_DATE = None  # ← Ultra 13.13: 编号/开盘日期(YYMMDD, 如'260816')。单传日期时启用,
                         #   按matchNumDate筛整个销售批次(不限周几/场次), MATCH_NUMBERS=None表示全量
@@ -7536,49 +7536,96 @@ def predict_match(match_num, data):
         p1_l += 0.015
 
     fused_probs = [p1_w, p1_d, p1_l]
-    
-    # 4. 重新确定HAD方向 (基于融合概率)
     had_dirs = ['胜', '平', '负']
-    had_min_idx = fused_probs.index(max(fused_probs))
 
-    # ===== Ultra 13.9: 平局方向覆盖收紧 (08-15复盘: 覆盖6中1, 4场覆盖掉本命中的argmax) =====
-    # 根因: HAD方向=argmax([p_w, p_d, p_l]), 平局概率即使校准到27-32%也永远排不进前二
-    # 回归实证 (155场实测校准, 2026-08-16):
-    #   模型P平 30-32% → 实际平局率31% (中性无优势, 原阈值30%把这些场次也覆盖了)
-    #   模型P平 33-35% → 实际平局率39% (真价值带, 唯一值得覆盖的区间)
-    #   模型P平 36-38% → 实际平局率14% (模型过度自信带, 禁止覆盖)
-    #   原 argmax胜/负方向近期命中51-56%, 覆盖成平=主动降命中 (平局实际率最高39%)
-    # 08-15实锤: 覆盖触发6次仅1中(神户), 其中001/006/018/024四场原argmax本会命中,
-    #   该轮HAD本可12/18(67%)而非8/18(44%) — 平局覆盖是CUSUM漂移主因之一
-    # 策略 (v13.9): 阈值30%→33%(杯赛32%→35%), 差距10pp→7pp, 加上限36%(杯赛38%),
-    #   只在真价值带覆盖; 平局投注建议仍由投注指南的🎯平局直击档承担
+    # ===== Ultra 13.16 (2026-08-16): 市场优先四策 — 45场官方核对赛果实测 =====
+    # 差距分解实证 (predictions 17文件去重137场, 可评估45场):
+    #   ①融合回测: 模型λ=1.0命中53.3%, λ=0.3-0.5达60.0% → 模型只作小幅tilt
+    #   ②与热门分歧时模型命中仅20%(1/5), 同场热门40% → 偏离需高门槛
+    #   ③平局作主推0/4全错, v13.9覆盖6场1中(4场毁掉本命中的argmax) → 主推禁平
+    #   ④≤2星档命中33.3% vs ≥3星68.9% → 低置信让位市场
+    # 结论: 方向命中率要接近/达到市场基准52.4%, 引擎必须"市场为基+模型tilt+选择性偏离"
     _draw_override = False
     _draw_override_reason = ""
-    if had_min_idx != 1:  # 平局不是当前argmax
-        _home_odds = had.get('h', 0) if had else 0
-        _draw_prob = p1_d
-        _top_prob = fused_probs[had_min_idx]
-        _top2_gap = _top_prob - _draw_prob
-        # 触发条件 (v13.9 实测校准 2026-08-16): 联赛 平局∈[33%,36%) 且 top2差≤7pp;
-        # 杯赛实际平局率低(18.7%), 带区抬至[35%,38%); 36%+为模型过度自信带禁止覆盖
-        _is_cup_draw = _is_cup_league(league) if league else False
-        _draw_t = 0.35 if _is_cup_draw else 0.33
-        _draw_cap = _draw_t + 0.03
-        _draw_strong = _draw_prob >= _draw_t
-        _draw_not_overconf = _draw_prob < _draw_cap
-        _draw_very_strong = _draw_prob >= _draw_t + 0.02
-        _gap_small = _top2_gap <= 0.07
-        # 排除极端热门(主赔<1.50, 强队碾压局平局概率虚高来自校准)
-        _not_extreme_fav = _home_odds >= 1.50 or _home_odds == 0
-        if _draw_strong and _draw_not_overconf and (_gap_small or _draw_very_strong) and _not_extreme_fav:
-            had_min_idx = 1  # 覆盖为平局
-            _draw_override = True
-            _draw_override_reason = (
-                f"平局覆盖: P平={_draw_prob:.0%}∈[{_draw_t:.0%},{_draw_cap:.0%}) top2差={_top2_gap:.0%}≤7pp "
-                f"主赔={_home_odds:.2f} (真价值带33-36%, 实测平局率39%{'·杯赛' if _is_cup_draw else ''})"
-            )
-            v611_notes.append(_draw_override_reason)
-            v611_flags['draw_override'] = True
+    _market_first = {'enabled': False, 'lambda_model': None, 'policies': [],
+                     'fav_dir': None, 'model_probs_pre': None}
+    _mkt_anchor = None
+    if had and all(had.get(k, 0) > 1.01 for k in ('h', 'd', 'a')):
+        try:
+            _mkt_anchor = shin_method([had['h'], had['d'], had['a']])
+        except Exception:
+            _mkt_anchor = None
+
+    if _mkt_anchor:
+        _market_first['enabled'] = True
+        _model_probs_pre = [p1_w, p1_d, p1_l]
+        _market_first['model_probs_pre'] = [round(x, 4) for x in _model_probs_pre]
+        # 改1: 市场优先融合 — 回测最优λ=0.3-0.5; dq越高模型信息越可信λ越大
+        _dq_s = dq.get('score', 55) if isinstance(dq, dict) else 55
+        _lam_m = 0.5 if _dq_s >= 75 else (0.4 if _dq_s >= 50 else 0.3)
+        _market_first['lambda_model'] = _lam_m
+        p1_w = _lam_m * p1_w + (1 - _lam_m) * _mkt_anchor[0]
+        p1_d = _lam_m * p1_d + (1 - _lam_m) * _mkt_anchor[1]
+        p1_l = _lam_m * p1_l + (1 - _lam_m) * _mkt_anchor[2]
+        _s = p1_w + p1_d + p1_l
+        p1_w, p1_d, p1_l = p1_w / _s, p1_d / _s, p1_l / _s
+        fused_probs = [p1_w, p1_d, p1_l]
+        had_min_idx = fused_probs.index(max(fused_probs))
+        _fav_i = _mkt_anchor.index(max(_mkt_anchor))
+        _market_first['fav_dir'] = had_dirs[_fav_i]
+        _market_first['policies'].append(f"市场锚λ={_lam_m}")
+        v611_flags['market_first'] = True
+
+        # 改3: 主推禁平 — 平局价值由投注指南🎯直击/覆盖档小注承担, 不占HAD主推
+        if had_min_idx == 1:
+            _draw_top = p1_d
+            had_min_idx = _fav_i
+            _market_first['policies'].append(f"平局不作主推(P平{_draw_top:.0%}→跟热门)")
+            v611_flags['draw_demoted'] = True
+            v611_notes.append(
+                f"主推禁平: 融合argmax=平({_draw_top:.0%}), 主推改跟热门{had_dirs[_fav_i]}"
+                f" (45场实测平局主推0/4, v13.9覆盖6中1 — 平局价值由指南🎯直击/覆盖小注承担)")
+
+        # 改2: 偏离门槛 — 模型方向≠热门时, 须领先该方向市场隐含≥15pp才允许偏离
+        if had_min_idx != _fav_i:
+            _model_pick_i = had_min_idx
+            _edge = _model_probs_pre[_model_pick_i] - _mkt_anchor[_model_pick_i]
+            if _edge < 0.15:
+                had_min_idx = _fav_i
+                _market_first['policies'].append(f"偏离不足{_edge * 100:.0f}pp<15pp→回跟热门")
+                v611_flags['deviation_gated'] = True
+                v611_notes.append(
+                    f"偏离门槛: 模型{had_dirs[_model_pick_i]}领先市场隐含仅{_edge * 100:.0f}pp(<15pp), "
+                    f"主推回跟热门{had_dirs[_fav_i]} (分歧场实测模型命中仅20%, 同场热门40%)")
+
+        # 改4: 低置信让位 — 校准命中<28%(≤2星档)且方向未获市场确认时跟热门
+        _p_pick = fused_probs[had_min_idx]
+        _p_cal = _p_pick * (0.66 if _p_pick >= 0.60 else 1.00 if _p_pick >= 0.50
+                            else 1.15 if _p_pick >= 0.40 else 1.30)
+        if _p_cal < 0.28 and had_min_idx != _fav_i:
+            had_min_idx = _fav_i
+            _market_first['policies'].append(f"低置信{_p_cal:.0%}→跟热门")
+            v611_flags['lowconf_fallback'] = True
+            v611_notes.append(
+                f"低置信让位: 校准命中{_p_cal:.0%}(≤2星档), 主推跟热门{had_dirs[_fav_i]} "
+                f"(≤2星实测33% vs ≥3星69%)")
+
+        # 平局价值窗标注 (不改方向, 供指南🎯直击参考): 沿用v13.9真价值带
+        _draw_t_band = 0.35 if (_is_cup_league(league) if league else False) else 0.33
+        if _draw_t_band <= p1_d < _draw_t_band + 0.03:
+            v611_notes.append(
+                f"平局价值窗: P平={p1_d:.0%}∈真价值带(实测平局率39%), 建议指南🎯直击小注, 不占主推")
+
+        if len(_market_first['policies']) > 1:
+            print(f"  [市场优先] λ={_lam_m} 策略: {'; '.join(_market_first['policies'][1:])}")
+    else:
+        # 无有效市场锚(HAD未开/赔率不全): 保留argmax, 但主推禁平仍生效(改3全局策略)
+        had_min_idx = fused_probs.index(max(fused_probs))
+        if had_min_idx == 1:
+            _alt_i = 0 if p1_w >= p1_l else 2
+            had_min_idx = _alt_i
+            _market_first['policies'].append(f"平局不作主推(无锚→次高{had_dirs[_alt_i]})")
+            v611_flags['draw_demoted'] = True
 
     # ===== Ultra 6.0: λ-赔率方向冲突校准 =====
     # 当λ统计模型的主客强弱方向与四源融合概率方向矛盾时
@@ -8195,10 +8242,14 @@ def predict_match(match_num, data):
             _mkt_p = [pw5 / _s5, pd5 / _s5, pl5 / _s5]
             _mkt_src = f'欧指锚({_euro_anchor_src})'
         if _mkt_p and had_probs:
-            _diffs_pp = [round((m - k) * 100, 1) for m, k in zip(had_probs, _mkt_p)]
+            # Ultra 13.16: 市场优先融合后 had_probs 已含市场锚, 直接对比会掩盖分歧;
+            # 改用融合前的纯模型概率做分歧检测 (无锚时回退 had_probs)
+            _div_probs = (_market_first.get('model_probs_pre')
+                          if _market_first.get('enabled') else None) or had_probs
+            _diffs_pp = [round((m - k) * 100, 1) for m, k in zip(_div_probs, _mkt_p)]
             _max_i = max(range(3), key=lambda i: abs(_diffs_pp[i]))
             _max_diff = abs(_diffs_pp[_max_i])
-            _model_i = had_min_idx if had_open else max(range(3), key=lambda i: had_probs[i])
+            _model_i = had_min_idx if had_open else max(range(3), key=lambda i: _div_probs[i])
             _mkt_i = max(range(3), key=lambda i: _mkt_p[i])
             _dir_conflict = (_model_i != _mkt_i)
             # Ultra 13.12: 动量维度 — 不只看市场"现在在哪", 还看资金"正在往哪走"
@@ -8213,7 +8264,7 @@ def predict_match(match_num, data):
             if _max_diff >= 15.0:
                 market_divergence = {
                     'flagged': True,
-                    'model_dir': had_dirs[_model_i], 'model_prob': round(had_probs[_model_i] * 100, 1),
+                    'model_dir': had_dirs[_model_i], 'model_prob': round(_div_probs[_model_i] * 100, 1),
                     'market_dir': had_dirs[_mkt_i], 'market_prob': round(_mkt_p[_mkt_i] * 100, 1),
                     'dir_conflict': _dir_conflict,
                     'max_diff_pp': round(_max_diff, 1),
@@ -8221,15 +8272,15 @@ def predict_match(match_num, data):
                     'diff_wdl_pp': _diffs_pp,
                     'market_source': _mkt_src,
                     # 措辞分三档: 方向相反 / 模型高估(比市场激进) / 模型低估(市场资金更看好)
-                    'note': (f"模型{had_dirs[_model_i]}{had_probs[_model_i]:.0%} vs 市场{had_dirs[_mkt_i]}{_mkt_p[_mkt_i]:.0%}"
+                    'note': (f"模型{had_dirs[_model_i]}{_div_probs[_model_i]:.0%} vs 市场{had_dirs[_mkt_i]}{_mkt_p[_mkt_i]:.0%}"
                              f"({_mkt_src}{_mom}), 最大分歧{_max_diff:.0f}pp({had_dirs[_max_i]}方向)"
                              + (" — 方向相反, 模型与市场资金显著相左, 谨慎参考或放弃" if _dir_conflict
-                                else (f" — 方向一致但模型高估{(had_probs[_model_i]-_mkt_p[_mkt_i])*100:.0f}pp, 比市场更激进, 注意回落风险"
-                                      if had_probs[_model_i] > _mkt_p[_mkt_i]
-                                      else f" — 方向一致但模型低估{(_mkt_p[_mkt_i]-had_probs[_model_i])*100:.0f}pp, 市场资金更看好, 信号偏正面"))),
+                                else (f" — 方向一致但模型高估{(_div_probs[_model_i]-_mkt_p[_mkt_i])*100:.0f}pp, 比市场更激进, 注意回落风险"
+                                      if _div_probs[_model_i] > _mkt_p[_mkt_i]
+                                      else f" — 方向一致但模型低估{(_mkt_p[_mkt_i]-_div_probs[_model_i])*100:.0f}pp, 市场资金更看好, 信号偏正面"))),
                 }
                 v611_flags['market_divergence'] = True
-                print(f"  [分歧] ⚠️ {match_num} 模型{had_dirs[_model_i]}{had_probs[_model_i]:.0%} vs "
+                print(f"  [分歧] ⚠️ {match_num} 模型{had_dirs[_model_i]}{_div_probs[_model_i]:.0%} vs "
                       f"市场{had_dirs[_mkt_i]}{_mkt_p[_mkt_i]:.0%}, 分歧{_max_diff:.0f}pp"
                       f"{'(方向相反)' if _dir_conflict else ''}")
     except Exception as _div_e:
@@ -8243,7 +8294,8 @@ def predict_match(match_num, data):
             'conf_hit_rate': round(had_hit_rate * 100, 1) if had_open else None,  # Ultra 12.1: 校准命中率%
             'p': f"{p1_w:.0%}/{p1_d:.0%}/{p1_l:.0%}" if had_open else '未开盘',
             'had_open': had_open,
-            'draw_override': _draw_override,  # Ultra 12.2: 平局方向覆盖标记
+            'draw_override': _draw_override,  # Ultra 12.2: 平局方向覆盖标记 (13.16起恒False, 平局只作指南小注)
+            'market_first': _market_first if had_open else None,  # Ultra 13.16: 市场优先四策详情
         },
         'HHAD': {
             'dir': hhad_dir,

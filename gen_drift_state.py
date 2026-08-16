@@ -86,8 +86,9 @@ def direction_weakness(point):
 
 
 def scaled_multipliers(drift_pp):
+    # Ultra 13.16: 统一返回 (mult, scale) 元组 — 原版 drift_pp<=0 分支只返回dict导致解包崩溃
     if drift_pp <= 0:
-        return {k: 1.0 for k in BASE_MULT}
+        return {k: 1.0 for k in BASE_MULT}, 0.0
     scale = min(SCALE_CAP, drift_pp / BASE_DRIFT_PP)
     mult = {}
     for k, base in BASE_MULT.items():
@@ -127,6 +128,31 @@ def main():
     print(f'  漂移前(<{point}): {pre_h}/{pre_n} = {pre_r*100:.1f}%')
     print(f'  漂移后(≥{point}): {post_h}/{post_n} = {post_r*100:.1f}%')
     print(f'  漂移幅度: {drift_pp:+.1f}pp')
+
+    # ===== Ultra 13.16: 实测无退化护栏 =====
+    # CUSUM是累积量, 检出点可能被早期亏损主导; 补录清洁赛果后若漂移后命中率
+    # 并未低于漂移前(drift_pp<=0, 如08-16补录后39.5%→40.3%), 说明无实际退化,
+    # 不应再对Power/Elo降权 — 写入全1.0乘数解除响应, 只保留检出记录供追溯。
+    MIN_DRIFT_PP = 2.0   # 实测退化<2pp视为噪音, 不触发权重响应
+    if drift_pp < MIN_DRIFT_PP:
+        state = {
+            'drift_detected': False,
+            'cusum_flagged': True,
+            'cusum_drift_point': point,
+            'weight_multipliers': {k: 1.0 for k in BASE_MULT},
+            'measured_drift_pp': round(drift_pp, 1),
+            'pre_hit_rate': round(pre_r, 3),
+            'post_hit_rate': round(post_r, 3),
+            'activated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'source': 'v215_verify.py CUSUM (Ultra 8.0)',
+            'note': (f'CUSUM累积量于{point}越限, 但实测漂移{drift_pp:+.1f}pp<{MIN_DRIFT_PP}pp'
+                     f'(补录清洁赛果后漂移后{post_r*100:.1f}% vs 漂移前{pre_r*100:.1f}%), '
+                     f'无实际退化 → 权重响应解除(全1.0)'),
+        }
+        with open(DRIFT_STATE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+        print(f'[漂移响应] 实测漂移{drift_pp:+.1f}pp<{MIN_DRIFT_PP}pp(无退化) → 已写入全1.0乘数 (响应解除)')
+        return
 
     # ===== 3. 方向失准 =====
     dw = direction_weakness(point)

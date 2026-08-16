@@ -334,6 +334,24 @@ def fuse_swot_into_predictions(pred_file):
         wdl = _parse_wdl_str(had.get('p', ''))
         if wdl:
             new_wdl, delta, applied = apply_swot_prob_shift(wdl, home_score, away_score)
+            # ===== Ultra 13.16 (2026-08-16): 市场优先护栏 — SWOT写回不得推翻四策主推 =====
+            # 45场官方核对实证: 与热门分歧且模型领先<15pp时命中仅20%(同场热门40%)。
+            # 四策可能把主推拉回热门(偏离门槛/禁平), 而融合P的argmax仍在原方向;
+            # SWOT写回时按P argmax重推dir会把主推重新翻离热门, 复活"低门槛偏离"失败模式。
+            # 规则: SWOT迁移后的argmax方向 ≠ 当前主推dir 时:
+            #   market_first启用 且 该方向≠热门 → 整体弃用(保留原P与dir), 标注拦截
+            #   否则(该方向=热门 或 无市场锚) → 照常写回
+            if applied:
+                _cur_dir = had.get('dir', '')
+                _new_d = _wdl_dir(new_wdl)
+                if _new_d != _cur_dir:
+                    _mf = had.get('market_first') or {}
+                    if _mf.get('enabled') and _new_d != _mf.get('fav_dir'):
+                        applied = False
+                        had['swot_flip_blocked'] = (
+                            f"SWOT后P_argmax={_new_d}≠主推{_cur_dir}且非热门{_mf.get('fav_dir')}"
+                            f"(λ={_mf.get('lambda_model')}), 按市场优先四策保留主推与原P")
+                        result.setdefault('v611_flags', {})['swot_flip_gated'] = True
             if applied:
                 old_dir = _wdl_dir(wdl)
                 new_dir = _wdl_dir(new_wdl)

@@ -2,7 +2,7 @@
  "_meta": {
   "canonical": "sporttery",
   "version": 1,
-  "updated": "2026-08-16 05:57:25"
+  "updated": "2026-08-16 06:55:52"
  },
  "teams": {
   "金泉尚武": {
@@ -220,7 +220,8 @@
   "坦山猫": {
    "aliases": [
     "坦佩雷山猫",
-    "Ilves"
+    "Ilves",
+    "埃尔维斯"
    ],
    "sources": {
     "nowscore": [
@@ -228,6 +229,9 @@
     ],
     "en": [
      "Ilves"
+    ],
+    "qiumiwu": [
+     "埃尔维斯"
     ]
    }
   },
@@ -1141,11 +1145,15 @@
   },
   "天狼星": {
    "aliases": [
-    "Sirius"
+    "Sirius",
+    "奥尔格里特"
    ],
    "sources": {
     "en": [
      "Sirius"
+    ],
+    "leisu": [
+     "奥尔格里特"
     ]
    }
   },
@@ -1704,7 +1712,8 @@
    "aliases": [
     "雷莫",
     "Remo",
-    "雷莫队"
+    "雷莫队",
+    "瑞模贝雷"
    ],
    "sources": {
     "nowscore": [
@@ -1713,6 +1722,9 @@
     ],
     "en": [
      "Remo"
+    ],
+    "qiumiwu": [
+     "瑞模贝雷"
     ]
    }
   },
@@ -3907,6 +3919,9 @@
    "sources": {
     "leisu": [
      "海牙"
+    ],
+    "qiumiwu": [
+     "海牙"
     ]
    }
   },
@@ -3916,6 +3931,9 @@
    ],
    "sources": {
     "leisu": [
+     "前进之鹰"
+    ],
+    "qiumiwu": [
      "前进之鹰"
     ]
    }
@@ -3927,6 +3945,69 @@
    "sources": {
     "leisu": [
      "布洛马波卡纳"
+    ]
+   }
+  },
+  "特尔斯达": {
+   "aliases": [
+    "费耶诺德"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "费耶诺德"
+    ],
+    "leisu": [
+     "费耶诺德"
+    ]
+   }
+  },
+  "阿贾克斯": {
+   "aliases": [
+    "特温特"
+   ],
+   "sources": {
+    "leisu": [
+     "特温特"
+    ]
+   }
+  },
+  "赫尔火花": {
+   "aliases": [
+    "格尼斯坦"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "格尼斯坦"
+    ]
+   }
+  },
+  "雷克斯": {
+   "aliases": [
+    "雷克瑟姆"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "雷克瑟姆"
+    ]
+   }
+  },
+  "拉科": {
+   "aliases": [
+    "拉科鲁尼亚"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "拉科鲁尼亚"
+    ]
+   }
+  },
+  "卡萨皮亚": {
+   "aliases": [
+    "卡萨比亚"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "卡萨比亚"
     ]
    }
   }
