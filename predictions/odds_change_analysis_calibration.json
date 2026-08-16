@@ -1,86 +1,182 @@
 {
-  "version": "Ultra 10.6",
-  "generated_at": "2026-07-31 16:03:19",
-  "total_had_sample": 3274,
-  "total_hhad_sample": 3285,
-  "total_conflict_sample": 3274,
-  "description": "体彩赔率变动特征 + 玩法矛盾信号校准因子",
-  "draw_change": {
-    "description": "平局赔率变动方向与赛果关系",
-    "base_draw_rate": 0.325,
-    "变动": {
-      "上升": {"n": 257, "draw_rate": 0.389, "home_rate": 0.300, "away_rate": 0.311},
-      "下降": {"n": 256, "draw_rate": 0.305, "home_rate": 0.441, "away_rate": 0.254},
-      "不变": {"n": 2761, "draw_rate": 0.325, "home_rate": 0.394, "away_rate": 0.281}
-    }
-  },
-  "conflict_signal": {
-    "description": "HAD/HHAD/亚盘三方向矛盾信号",
-    "conflict_distribution": {
-      "三方向一致": {"n": 631, "pct": 19.3, "had_accuracy": 55.9, "hhad_accuracy": 55.9},
-      "亚盘-HHAD vs HAD": {"n": 2497, "pct": 76.3, "had_accuracy": 44.3, "hhad_accuracy": 21.6},
-      "HAD-HHAD vs 亚盘": {"n": 100, "pct": 3.1, "had_accuracy": 59.0, "hhad_accuracy": 59.0},
-      "HAD-亚盘 vs HHAD": {"n": 46, "pct": 1.4, "had_accuracy": 56.5, "hhad_accuracy": 10.9}
-    },
-    "confidence_diff": {
-      "HAD自信度更高(>5pp)": {"n": 1565, "had_accuracy": 56.4, "hhad_accuracy": 33.5, "hhad_可靠度": 0.33},
-      "HAD略高(2~5pp)": {"n": 107, "had_accuracy": 50.5, "hhad_accuracy": 19.6, "hhad_可靠度": 0.39},
-      "HAD-HHAD接近(±2pp)": {"n": 185, "had_accuracy": 37.3, "hhad_accuracy": 22.7, "hhad_可靠度": 0.61},
-      "HHAD略高(-5~-2pp)": {"n": 138, "had_accuracy": 42.0, "hhad_accuracy": 15.9, "hhad_可靠度": 0.38},
-      "HHAD自信度更高(<-5pp)": {"n": 1279, "had_accuracy": 37.5, "hhad_accuracy": 27.1, "hhad_可靠度": 0.72}
-    },
-    "conflict_patterns": {
-      "HAD主胜, HHAD客胜": {"n": 1604, "had_accuracy": 45.6, "hhad_accuracy": 21.8},
-      "HAD客胜, HHAD主胜": {"n": 933, "had_accuracy": 42.7, "hhad_accuracy": 20.5},
-      "HAD平局, HHAD不平局": {"n": 6, "had_accuracy": 33.3, "hhad_accuracy": 66.7}
-    }
-  },
-  "had_hhad_linkage": {
-    "description": "HAD与HHAD赔率变动联动信号",
-    "both_up": {"n": 540, "home_rate": 0.459, "draw_rate": 0.304, "away_rate": 0.237},
-    "both_down": {"n": 743, "home_rate": 0.322, "draw_rate": 0.353, "away_rate": 0.326}
-  },
-  "had_change_detail": {
-    "description": "HAD赔率变动幅度分层信号(Shin概率)",
-    "direction": {
-      "上升(概率↑赔率↓)": {"n": 787, "home_rate": 0.451, "draw_rate": 0.318, "away_rate": 0.231},
-      "下降(概率↓赔率↑)": {"n": 893, "home_rate": 0.318, "draw_rate": 0.373, "away_rate": 0.309},
-      "不变": {"n": 1594, "home_rate": 0.401, "draw_rate": 0.309, "away_rate": 0.290}
-    },
-    "magnitude_bins": {
-      "<-5pp": {"n": 153, "home_rate": 0.320, "draw_rate": 0.359, "away_rate": 0.320},
-      "-5~-2pp": {"n": 643, "home_rate": 0.309, "draw_rate": 0.378, "away_rate": 0.313},
-      "-2~-0.5pp": {"n": 629, "home_rate": 0.364, "draw_rate": 0.297, "away_rate": 0.339},
-      "±0.5pp": {"n": 540, "home_rate": 0.380, "draw_rate": 0.333, "away_rate": 0.287},
-      "0.5~2pp": {"n": 575, "home_rate": 0.456, "draw_rate": 0.310, "away_rate": 0.235},
-      "2~5pp": {"n": 579, "home_rate": 0.447, "draw_rate": 0.313, "away_rate": 0.240},
-      ">5pp": {"n": 155, "home_rate": 0.484, "draw_rate": 0.329, "away_rate": 0.187}
-    }
-  },
-  "odds_movement": {
-    "description": "体彩初赔→终赔变动方向与命中率关系 (4222场分析)",
-    "version": "Ultra 11.0",
-    "threshold": 0.05,
-    "baseline_home": 0.429,
-    "baseline_draw": 0.256,
-    "baseline_away": 0.315,
-    "h": {
-      "description": "主胜: 终赔 vs 初赔变动方向",
-      "上升": {"n": 1586, "hit_rate": 0.317, "lr": 0.739},
-      "下降": {"n": 1207, "hit_rate": 0.454, "lr": 1.058},
-      "不变": {"n": 1429, "hit_rate": 0.534, "lr": 1.245}
-    },
-    "d": {
-      "description": "平局: 终赔 vs 初赔变动方向",
-      "上升": {"n": 1585, "hit_rate": 0.233, "lr": 0.910},
-      "下降": {"n": 1340, "hit_rate": 0.275, "lr": 1.074},
-      "不变": {"n": 1297, "hit_rate": 0.260, "lr": 1.016}
-    },
-    "a": {
-      "description": "客胜: 终赔 vs 初赔变动方向",
-      "上升": {"n": 1706, "hit_rate": 0.249, "lr": 0.790},
-      "下降": {"n": 1594, "hit_rate": 0.349, "lr": 1.108},
-      "不变": {"n": 922, "hit_rate": 0.383, "lr": 1.216}
-    }
+ "version": "Ultra 13.14-clean",
+ "generated_at": "2026-08-16 05:55:24",
+ "total_had_sample": 4327,
+ "total_hhad_sample": 2453,
+ "total_conflict_sample": 4329,
+ "description": "官方API核对数据(score_verified=1)重建 — 原3274场版本基于被污染的bulk导入(平局率33.1%, 物理不可能), 已于2026-08-16作废备份",
+ "data_quality": {
+  "filter": "score_verified=1",
+  "base_draw_rate": 0.255,
+  "note": "样本门槛(n>=100等)由引擎侧自动过滤小样本单元"
+ },
+ "draw_change": {
+  "description": "平局赔率变动方向与赛果关系 (官方核对数据重建)",
+  "base_draw_rate": 0.255,
+  "变动": {
+   "上升": {
+    "n": 1626,
+    "draw_rate": 0.234,
+    "home_rate": 0.459,
+    "away_rate": 0.308
+   },
+   "不变": {
+    "n": 1320,
+    "draw_rate": 0.259,
+    "home_rate": 0.415,
+    "away_rate": 0.326
+   },
+   "下降": {
+    "n": 1381,
+    "draw_rate": 0.277,
+    "home_rate": 0.405,
+    "away_rate": 0.319
+   }
   }
+ },
+ "conflict_signal": {
+  "description": "HAD/HHAD矛盾信号 (官方核对数据重建, 静态终赔口径)",
+  "conflict_distribution": {},
+  "confidence_diff": {
+   "HAD自信度更高(>5pp)": {
+    "n": 2065,
+    "had_accuracy": 62.3,
+    "hhad_可靠度": 0.365
+   },
+   "HAD略高(2~5pp)": {
+    "n": 159,
+    "had_accuracy": 53.5,
+    "hhad_可靠度": 0.245
+   },
+   "HAD-HHAD接近(±2pp)": {
+    "n": 230,
+    "had_accuracy": 40.9,
+    "hhad_可靠度": 0.261
+   },
+   "HHAD略高(-5~-2pp)": {
+    "n": 190,
+    "had_accuracy": 49.5,
+    "hhad_可靠度": 0.2
+   },
+   "HHAD自信度更高(<-5pp)": {
+    "n": 1685,
+    "had_accuracy": 42.3,
+    "hhad_可靠度": 0.307
+   }
+  },
+  "conflict_patterns": {}
+ },
+ "had_hhad_linkage": {
+  "description": "HAD-HHAD主赔联动信号 (官方核对数据重建)",
+  "both_down": {
+   "n": 1072,
+   "home_rate": 0.448
+  },
+  "both_up": {
+   "n": 1381,
+   "home_rate": 0.329
+  }
+ },
+ "had_change_detail": {
+  "description": "HAD赔率变动幅度分层信号(概率口径, 官方核对数据重建)",
+  "direction": {
+   "上升(概率↑赔率↓)": {
+    "n": 1733,
+    "home_rate": 0.505,
+    "draw_rate": 0.246,
+    "away_rate": 0.249
+   },
+   "下降(概率↓赔率↑)": {
+    "n": 1926,
+    "home_rate": 0.366,
+    "draw_rate": 0.264,
+    "away_rate": 0.37
+   },
+   "不变": {
+    "n": 668,
+    "home_rate": 0.409,
+    "draw_rate": 0.254,
+    "away_rate": 0.337
+   }
+  },
+  "magnitude_bins": {
+   "-5~5pp": {
+    "n": 3730,
+    "home_rate": 0.427,
+    "draw_rate": 0.255,
+    "away_rate": 0.318
+   },
+   "<-5pp": {
+    "n": 295,
+    "home_rate": 0.349,
+    "draw_rate": 0.271,
+    "away_rate": 0.38
+   },
+   ">5pp": {
+    "n": 302,
+    "home_rate": 0.526,
+    "draw_rate": 0.238,
+    "away_rate": 0.235
+   }
+  }
+ },
+ "odds_movement": {
+  "description": "体彩初赔→终赔变动方向与命中率关系 (官方核对数据重建)",
+  "version": "Ultra 13.14-clean",
+  "threshold": 0.05,
+  "baseline_home": 0.428,
+  "baseline_draw": 0.255,
+  "baseline_away": 0.317,
+  "h": {
+   "上升": {
+    "n": 1628,
+    "hit_rate": 0.316,
+    "lr": 0.739
+   },
+   "下降": {
+    "n": 1240,
+    "hit_rate": 0.452,
+    "lr": 1.055
+   },
+   "不变": {
+    "n": 1459,
+    "hit_rate": 0.533,
+    "lr": 1.245
+   }
+  },
+  "d": {
+   "上升": {
+    "n": 1626,
+    "hit_rate": 0.234,
+    "lr": 0.916
+   },
+   "下降": {
+    "n": 1381,
+    "hit_rate": 0.277,
+    "lr": 1.084
+   },
+   "不变": {
+    "n": 1320,
+    "hit_rate": 0.259,
+    "lr": 1.015
+   }
+  },
+  "a": {
+   "上升": {
+    "n": 1753,
+    "hit_rate": 0.248,
+    "lr": 0.782
+   },
+   "下降": {
+    "n": 1636,
+    "hit_rate": 0.352,
+    "lr": 1.112
+   },
+   "不变": {
+    "n": 938,
+    "hit_rate": 0.384,
+    "lr": 1.212
+   }
+  }
+ }
 }

@@ -59,6 +59,7 @@ def compute_movement_analysis():
                hm.home_score, hm.away_score
         FROM historical_matches hm
         WHERE hm.result IN ('H','D','A')
+          AND hm.score_verified = 1
           AND hm.fc_ouzhi_init_w IS NOT NULL AND hm.fc_ouzhi_final_w IS NOT NULL
           AND hm.fc_ouzhi_init_w > 1 AND hm.fc_ouzhi_final_w > 1
     """)
@@ -87,6 +88,7 @@ def compute_movement_analysis():
         JOIN historical_matches hm ON hm.id = och.match_db_id
         WHERE och.odds_type='had' AND och.h IS NOT NULL
           AND hm.result IN ('H','D','A')
+          AND hm.score_verified = 1
         GROUP BY och.match_db_id
         HAVING h_first IS NOT NULL AND h_last IS NOT NULL
     """)

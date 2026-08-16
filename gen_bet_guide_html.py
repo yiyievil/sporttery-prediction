@@ -95,13 +95,11 @@ def classify(draw_p, argmax_p, win_p, loss_p, league='', bk_intent=None):
     _draw_value_min = 30 if is_cup else 28  # 平局价值最低概率 (28-33%, 实测30-32%档中性偏价值)
     _cup_tag = ' [杯赛]' if is_cup else ''
 
-    # Ultra 13.12: 平赔遭压 → 平局率信号35.8%>基准32.5% (3233场实证), 直击/价值档阈值各降2pp
+    # Ultra 13.14 (2026-08-16): 撤销"平赔遭压→阈值降2pp" (13.12引入)
+    # 原依据3233场"平赔压缩→平局率35.8%">基准32.5% — 该数据集已证实被污染
+    # (bulk导入源平局率33.1%, 英冠48%/西甲41.7%, 物理不可能)。
+    # 干净子集(n=560)实测: 平赔压缩→买平EV -25.0%(-2.5σ), 方向完全反转, 故整段撤销。
     _draw_bonus_tag = ''
-    if bk_intent and bk_intent.get('draw_compressed'):
-        _draw_min -= 2
-        _draw_value_min -= 2
-        _draw_bonus_tag = (f"; 平赔遭压{bk_intent.get('draw_drop_pct', 0):+.1f}%"
-                           f"(实证平局率35.8%>基准32.5%), 阈值降2pp")
 
     # 🎯 Ultra 12.2: 平局为argmax → 直接推荐平局 (不再退化为双选兜底)
     # 理由: 模型最看好的结果就是平局, 没理由躲到HHAD后面

@@ -6333,15 +6333,18 @@ def analyze_bookmaker_intent(had_final, had_init, model_idx, had_dirs=('胜', '�
     out['tier_label'] = labels[tier]
     out['conf_delta'] = deltas[tier]
 
+    # Ultra 13.15 (2026-08-16): 三档注解数字用官方核对全量数据(score_verified=1, n=4534)重算
+    # 旧数字来自污染期小干净子集; 旧confirm注解的"42.3%"实为降赔方向合并口径(含热门54.1%),
+    # 错标为confirm档专属 — 全量口径下confirm方向仅24.5%, 同场热门49.2%, 信号实为反向警示
     if tier == 'strong_confirm':
         out['note'] = (f"资金强确认: 模型方向{had_dirs[model_idx]}为临场热门且获压赔"
-                       f"{moves[model_idx]:+.1f}% (实证48.6%命中)")
+                       f"{moves[model_idx]:+.1f}% (官方核对实证54.1%命中 vs 基准52.4%, n=2170)")
     elif tier == 'confirm':
-        out['note'] = (f"资金确认: 模型方向{had_dirs[model_idx]}获压赔{moves[model_idx]:+.1f}%"
-                       f" (非临场热门, 实证38.5%命中)")
+        out['note'] = (f"资金确认(弱): 模型方向{had_dirs[model_idx]}获压赔{moves[model_idx]:+.1f}%但非热门"
+                       f" — 官方核对实证该方向仅24.5%命中, 同场热门49.2% (n=1708), 模型站冷门需自有依据")
     elif tier == 'fade':
         out['note'] = (f"资金相背: 模型方向{had_dirs[model_idx]}为最大升赔方向"
-                       f"({moves[model_idx]:+.1f}%, 资金撤离), 实证仅28.2%命中, 建议弃赛或极小注")
+                       f"({moves[model_idx]:+.1f}%, 资金撤离), 官方核对实证仅30.4%命中(n=3927), 建议弃赛或极小注")
     elif tier == 'caution':
         if model_rise:
             out['note'] = (f"资金警惕: 模型方向{had_dirs[model_idx]}遭抬赔{moves[model_idx]:+.1f}%, "
@@ -6349,9 +6352,9 @@ def analyze_bookmaker_intent(had_final, had_init, model_idx, had_dirs=('胜', '�
         else:
             out['note'] = (f"资金警惕: 资金压在{had_dirs[drop_i]}({moves[drop_i]:+.1f}%), "
                            f"模型方向{had_dirs[model_idx]}未获确认")
-    if out['draw_compressed']:
-        out['note'] += (f"; 平赔遭压{out['draw_drop_pct']:+.1f}%"
-                        f"(初{had_init['d']:.2f}→即时{had_final['d']:.2f}), 平局率信号35.8%>基准32.5%")
+    # Ultra 13.14: 撤销"平赔遭压→平局率35.8%>基准32.5%"注解 (13.12引入)
+    # 依据的3233场数据集被污染(bulk源平局率33.1%), 干净子集(n=560)实测方向反转:
+    # 平赔压缩→买平EV -25.0%(-2.5σ)。draw_compressed字段保留(事实观测), 不再附带方向性结论。
     return out
 
 
