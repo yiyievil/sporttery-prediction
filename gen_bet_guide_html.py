@@ -14,8 +14,8 @@ gen_bet_guide_html.py — 投注选择显性化指南 (HTML, 数据驱动)
   - 004 胜P50%方向明确 → HAD单选命中 (平P28但方向不模糊, 不走覆盖)
 
 平局阈值统一 (回测定参 4449场 2026-08, 真实模型融合概率, 与 v215_e2e.py 同口径):
-  - 平局直击: 联赛 P平≥30% / 杯赛 P平≥32% 且距argmax≤10pp
-  - 平局价值: 联赛 P平≥26% / 杯赛 P平≥28% 且距argmax≤10pp (1/3本金小注)
+  - 平局直击: 联赛 P平≥33% / 杯赛 P平≥35% 且距argmax≤10pp (v13.9收紧: 33-36%实测平局率39%, 30-32%档31%无优势)
+  - 平局价值: 联赛 P平≥28% / 杯赛 P平≥30% 且距argmax≤10pp (1/3本金小注)
   - 双选兜底: 联赛 P平≥28% / 杯赛 P平≥30% 且方向模糊(<50)
   - 杯赛实际平局率18.7% < 联赛25.8%, 故杯赛阈值高于联赛
     (原"杯赛平局率远超联赛"结论基于260814小样本9场过拟合, 已按674场回测修正)
@@ -90,9 +90,9 @@ def classify(draw_p, argmax_p, win_p, loss_p, league=''):
     is_cup = _is_cup_league(league)
     _cover_threshold = 30 if is_cup else 28
     _avoid_threshold = 25  # 联赛/杯赛统一 (杯赛平局率低, 不单独下调)
-    _draw_gap_threshold = 10  # 与引擎覆盖规则统一 (8→10pp)
-    _draw_min = 32 if is_cup else 30  # 平局直击最低概率 (与引擎覆盖阈值一致)
-    _draw_value_min = 28 if is_cup else 26  # 平局价值最低概率
+    _draw_gap_threshold = 10  # 投注口径比引擎覆盖(7pp)宽: 指南是并行价值注, 引擎决定主方向
+    _draw_min = 35 if is_cup else 33  # 平局直击最低概率 (与引擎v13.9覆盖阈值一致, 33-36%实测平局率39%)
+    _draw_value_min = 30 if is_cup else 28  # 平局价值最低概率 (28-33%, 实测30-32%档中性偏价值)
     _cup_tag = ' [杯赛]' if is_cup else ''
 
     # 🎯 Ultra 12.2: 平局为argmax → 直接推荐平局 (不再退化为双选兜底)

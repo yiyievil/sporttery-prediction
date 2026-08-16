@@ -7316,12 +7316,17 @@ def predict_match(match_num, data):
     had_dirs = ['胜', '平', '负']
     had_min_idx = fused_probs.index(max(fused_probs))
 
-    # ===== Ultra 12.2: 平局方向覆盖 (HAD argmax结构性盲区修复) =====
+    # ===== Ultra 13.9: 平局方向覆盖收紧 (08-15复盘: 覆盖6中1, 4场覆盖掉本命中的argmax) =====
     # 根因: HAD方向=argmax([p_w, p_d, p_l]), 平局概率即使校准到27-32%也永远排不进前二
-    # 实证: 4484场历史中平局隐含概率成为HAD三选项最高的场次仅0.2%
-    # 回归(83场): 预测胜/负但实际平局23%误判率, "平"方向F1=0.00
-    # 策略: 平局概率≥30%且top2差≤8pp(势均力敌)时, 强制覆盖HAD方向为"平"
-    # 历史实证: 平局隐含30-34%时实际平局率36.6%(+12pp显著优于市场)
+    # 回归实证 (155场实测校准, 2026-08-16):
+    #   模型P平 30-32% → 实际平局率31% (中性无优势, 原阈值30%把这些场次也覆盖了)
+    #   模型P平 33-35% → 实际平局率39% (真价值带, 唯一值得覆盖的区间)
+    #   模型P平 36-38% → 实际平局率14% (模型过度自信带, 禁止覆盖)
+    #   原 argmax胜/负方向近期命中51-56%, 覆盖成平=主动降命中 (平局实际率最高39%)
+    # 08-15实锤: 覆盖触发6次仅1中(神户), 其中001/006/018/024四场原argmax本会命中,
+    #   该轮HAD本可12/18(67%)而非8/18(44%) — 平局覆盖是CUSUM漂移主因之一
+    # 策略 (v13.9): 阈值30%→33%(杯赛32%→35%), 差距10pp→7pp, 加上限36%(杯赛38%),
+    #   只在真价值带覆盖; 平局投注建议仍由投注指南的🎯平局直击档承担
     _draw_override = False
     _draw_override_reason = ""
     if had_min_idx != 1:  # 平局不是当前argmax
@@ -7329,21 +7334,23 @@ def predict_match(match_num, data):
         _draw_prob = p1_d
         _top_prob = fused_probs[had_min_idx]
         _top2_gap = _top_prob - _draw_prob
-        # 触发条件 (回测定参 2026-08, 4449场): 联赛 平局≥30% 且 (top2差≤10pp 或 平局≥32%);
-        # 杯赛实际平局率低(18.7%), 阈值抬至 32%; 差阈值 8pp→10pp (35场平局率40%净增益+17.1%)
+        # 触发条件 (v13.9 实测校准 2026-08-16): 联赛 平局∈[33%,36%) 且 top2差≤7pp;
+        # 杯赛实际平局率低(18.7%), 带区抬至[35%,38%); 36%+为模型过度自信带禁止覆盖
         _is_cup_draw = _is_cup_league(league) if league else False
-        _draw_t = 0.32 if _is_cup_draw else 0.30
+        _draw_t = 0.35 if _is_cup_draw else 0.33
+        _draw_cap = _draw_t + 0.03
         _draw_strong = _draw_prob >= _draw_t
+        _draw_not_overconf = _draw_prob < _draw_cap
         _draw_very_strong = _draw_prob >= _draw_t + 0.02
-        _gap_small = _top2_gap <= 0.10
+        _gap_small = _top2_gap <= 0.07
         # 排除极端热门(主赔<1.50, 强队碾压局平局概率虚高来自校准)
         _not_extreme_fav = _home_odds >= 1.50 or _home_odds == 0
-        if _draw_strong and (_gap_small or _draw_very_strong) and _not_extreme_fav:
+        if _draw_strong and _draw_not_overconf and (_gap_small or _draw_very_strong) and _not_extreme_fav:
             had_min_idx = 1  # 覆盖为平局
             _draw_override = True
             _draw_override_reason = (
-                f"平局覆盖: P平={_draw_prob:.0%}≥{_draw_t:.0%} top2差={_top2_gap:.0%}≤10pp "
-                f"主赔={_home_odds:.2f} (HAD argmax结构性盲区修复{'·杯赛' if _is_cup_draw else ''})"
+                f"平局覆盖: P平={_draw_prob:.0%}∈[{_draw_t:.0%},{_draw_cap:.0%}) top2差={_top2_gap:.0%}≤7pp "
+                f"主赔={_home_odds:.2f} (真价值带33-36%, 实测平局率39%{'·杯赛' if _is_cup_draw else ''})"
             )
             v611_notes.append(_draw_override_reason)
             v611_flags['draw_override'] = True
