@@ -2,7 +2,7 @@
  "_meta": {
   "canonical": "sporttery",
   "version": 1,
-  "updated": "2026-08-16 06:55:52"
+  "updated": "2026-08-16 07:34:11"
  },
  "teams": {
   "金泉尚武": {
@@ -4008,6 +4008,16 @@
    "sources": {
     "qiumiwu": [
      "卡萨比亚"
+    ]
+   }
+  },
+  "盖斯": {
+   "aliases": [
+    "哥德堡盖斯"
+   ],
+   "sources": {
+    "leisu": [
+     "哥德堡盖斯"
     ]
    }
   }
