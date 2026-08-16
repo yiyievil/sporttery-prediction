@@ -2,7 +2,7 @@
  "_meta": {
   "canonical": "sporttery",
   "version": 1,
-  "updated": "2026-08-15 21:49:25"
+  "updated": "2026-08-16 02:29:06"
  },
  "teams": {
   "金泉尚武": {
@@ -201,7 +201,8 @@
    "aliases": [
     "国际土尔库",
     "英特土尔库",
-    "Inter Turku"
+    "Inter Turku",
+    "图尔库国际"
    ],
    "sources": {
     "nowscore": [
@@ -210,6 +211,9 @@
     ],
     "en": [
      "Inter Turku"
+    ],
+    "qiumiwu": [
+     "图尔库国际"
     ]
    }
   },
@@ -1028,7 +1032,8 @@
   "佐加顿斯": {
    "aliases": [
     "Djurgårdens",
-    "佐加顿"
+    "佐加顿",
+    "尤尔加登"
    ],
    "sources": {
     "en": [
@@ -1036,6 +1041,9 @@
     ],
     "nowscore": [
      "佐加顿"
+    ],
+    "leisu": [
+     "尤尔加登"
     ]
    }
   },
@@ -3783,6 +3791,99 @@
    "sources": {
     "leisu": [
      "阿尔克马尔"
+    ]
+   }
+  },
+  "鸟栖沙岩": {
+   "aliases": [
+    "鸟栖砂岩"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "鸟栖砂岩"
+    ],
+    "leisu": [
+     "鸟栖砂岩"
+    ]
+   }
+  },
+  "厄格里特": {
+   "aliases": [
+    "奥尔格里特"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "奥尔格里特"
+    ]
+   }
+  },
+  "AC奥卢": {
+   "aliases": [
+    "奥卢"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "奥卢"
+    ]
+   }
+  },
+  "葡国民": {
+   "aliases": [
+    "马德拉国民"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "马德拉国民"
+    ]
+   }
+  },
+  "埃斯托里": {
+   "aliases": [
+    "埃斯托里尔"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "埃斯托里尔"
+    ]
+   }
+  },
+  "桑坦德": {
+   "aliases": [
+    "桑坦德竞技"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "桑坦德竞技"
+    ]
+   }
+  },
+  "摩雷伦斯": {
+   "aliases": [
+    "莫雷拉人"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "莫雷拉人"
+    ]
+   }
+  },
+  "达伽马": {
+   "aliases": [
+    "瓦斯科达伽马"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "瓦斯科达伽马"
+    ]
+   }
+  },
+  "吉维森特": {
+   "aliases": [
+    "吉尔维森特"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "吉尔维森特"
     ]
    }
   }
