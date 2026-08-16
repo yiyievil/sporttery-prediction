@@ -504,6 +504,18 @@ body {{ font-family: 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif; backgrou
                      f'title="{_md.get("note","")}">⚠️ 市场分歧{_arrow}: 模型{_md.get("model_dir")}'
                      f'{_md.get("model_prob",0):.0f}% vs 市场{_md.get("market_dir")}'
                      f'{_md.get("market_prob",0):.0f}% ({_md.get("max_diff_pp",0):.0f}pp)</span>\n')
+
+        # Ultra 13.12: 庄家意图徽标 (资金动量×模型方向, 五档)
+        _bk = m.get('bookmaker_intent')
+        if _bk and _bk.get('tier') not in (None, 'neutral'):
+            _bk_style = {'strong_confirm': ('#1a3a1a', '#4ade80'), 'confirm': ('#2a3a1a', '#a3e635'),
+                         'caution': ('#3a2a1a', '#fbbf24'), 'fade': ('#4a1a1a', '#ff6b6b')
+                         }.get(_bk.get('tier'), ('#333333', '#cccccc'))
+            _bk_emoji = {'strong_confirm': '💰✅', 'confirm': '💰',
+                         'caution': '💰⚠️', 'fade': '💰🚫'}.get(_bk.get('tier'), '💰')
+            html += (f'<span class="swot-tag" style="background:{_bk_style[0]};color:{_bk_style[1]}" '
+                     f'title="{_bk.get("note","")}">{_bk_emoji} 资金{_bk.get("tier_label","")}'
+                     f'({_bk.get("model_move_rel_pct",0):+.1f}%)</span>\n')
         
         if m['swot_key_factor']:
             html += f'<span style="color:#999">关键因素: {m["swot_key_factor"]}</span>\n'

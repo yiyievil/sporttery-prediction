@@ -1028,6 +1028,17 @@ def _wdl_cell(m):
         base += (f'<br/><font name="CJKBold" color="#dc2626" size="9.5">'
                  f'⚠️{arrow}市场{md.get("market_dir", "?")}{md.get("market_prob", 0):.0f}%'
                  f' 分歧{md.get("max_diff_pp", 0):.0f}pp</font>')
+    # Ultra 13.12: 庄家意图行 — 资金动量×模型方向 (绿=确认 黄=警惕 红=弃赛)
+    bk = m.get('bookmaker_intent')
+    if bk and bk.get('tier') not in (None, 'neutral'):
+        _t = bk.get('tier')
+        _c = {'strong_confirm': '#15803d', 'confirm': '#4d7c0f',
+              'caution': '#b45309', 'fade': '#dc2626'}.get(_t, '#555555')
+        _e = {'strong_confirm': '💰✅', 'confirm': '💰',
+              'caution': '💰⚠️', 'fade': '💰🚫'}.get(_t, '💰')
+        base += (f'<br/><font name="CJKBold" color="{_c}" size="9.5">'
+                 f'{_e}资金{bk.get("tier_label", "")}'
+                 f'({bk.get("model_move_rel_pct", 0):+.1f}%)</font>')
     return base
 
 

@@ -37,6 +37,11 @@ h1{font-size:21px;font-weight:800}
 .mc-primary{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#f0f9ff;border:1px dashed #93c5fd;color:#1d4ed8}
 .mc-mkt-div{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#fef2f2;border:1px solid #f87171;color:#b91c1c;font-weight:600}
 .mc-sample{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#fff7ed;border:1px dashed #fb923c;color:#c2410c}
+.mc-intent{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;font-weight:600}
+.mc-intent.bk-strong{background:#f0fdf4;border:1px solid #4ade80;color:#15803d}
+.mc-intent.bk-confirm{background:#f7fee7;border:1px solid #a3e635;color:#4d7c0f}
+.mc-intent.bk-caution{background:#fffbeb;border:1px solid #fbbf24;color:#b45309}
+.mc-intent.bk-fade{background:#fef2f2;border:2px solid #dc2626;color:#b91c1c}
 .sec{font-size:15px;font-weight:800;margin:16px 0 4px}
 .ins{padding:11px 13px;border-radius:8px;font-size:12.5px;margin:8px 0;line-height:1.7;border-left:4px solid}
 .ins.good{background:#f0fdf4;border-color:#16a34a} .ins.warn{background:#fffbeb;border-color:#f59e0b} .ins.bad{background:#fef2f2;border-color:#dc2626}
@@ -61,7 +66,7 @@ h1{font-size:21px;font-weight:800}
 <div class="ins" style="margin-top:10px">📌 <b>首推参考（命中率优先，仅补充）</b>：✅胜平负 10 场 · 🎯让球 18 场。首推=预测PDF「主推」，与四档主推并存，仅供参考。</div>
 </div>
 
-<div class="card"><div class="sec" style="margin-top:0">🎯 投注建议</div><div class="ins draw">🎯 <b>平局直击 1 场</b>：周日004(平 @3.00)。模型最看好平局，直接买平局赔率~3.0，比HHAD覆盖项高2倍收益。</div><div class="ins good">✅ <b>可单选 9 场</b>：周日006(负 @2.22) + 周日007(胜 @1.37) + 周日008(胜 @1.15) + 周日009(胜 @1.26) + 周日016(胜 @1.33) + 周日020(胜 @1.37) + 周日021(胜 @1.68) + 周日022(负 @3.65) + 周日024(负)。建议 <b>2-3 关</b> 组合（容错高），不要 6 场全选。</div><div class="ins warn">⚠️ <b>双选兜底 18 场</b>：周日001(让负 @1.42) + 周日002(受让胜 @1.5) + 周日003(受让胜 @1.9) + 周日005(让负 @1.98) + 周日010(受让胜 @1.5) + 周日011(让负 @1.44) + 周日012(受让胜 @1.52) + 周日013(让负 @1.47) + 周日014(受让胜 @2.05) + 周日015(让负 @1.59) + 周日017(受让胜 @1.62) + 周日018(受让胜 @1.69) + 周日019(让负 @1.66) + 周日023(让负 @1.65) + 周日025(让负 @1.85) + 周日026(让负 @2.05) + 周日027(让负 @2.36) + 周日028(让负 @1.57)。平局高发，务必买 HHAD 覆盖项而非胜平负单选。</div><div class="ins draw">💡 <b>平局价值 6 场</b>：周日014(平@3.00) + 周日015(平@3.00) + 周日025(平@3.00) + 周日026(平@3.00) + 周日027(平@3.00) + 周日028(平@3.00)。回测该档(平P≥26%且差≤10pp)平局率33%、优于热门方向EV，平局@~3.0接近正期望值。建议用主推的<b>1/3本金</b>小注博高赔，不影响主推收益。</div><div class="ins draw">🎯 <b>平局直击 2 场</b>：周日001(平@3.00) + 周日003(平@3.00)。平P紧贴argmax(≤10pp)，回测该档平局率40%、平局正EV，可博高赔平局。</div><div class="ins">📌 <b>首推参考(命中率优先)</b>：✅胜平负10场 · 🎯让球18场。首推=预测PDF「主推」，仅作补充参考，主推以四档为准。</div></div>
+<div class="card"><div class="sec" style="margin-top:0">🎯 投注建议</div><div class="ins draw">🎯 <b>平局直击 1 场</b>：周日004(平 @3.00)。模型最看好平局，直接买平局赔率~3.0，比HHAD覆盖项高2倍收益。</div><div class="ins good">✅ <b>可单选 9 场</b>：周日006(负 @2.18) + 周日007(胜 @1.37) + 周日008(胜 @1.15) + 周日009(胜 @1.26) + 周日016(胜 @1.33) + 周日020(胜 @1.37) + 周日021(胜 @1.68) + 周日022(负 @3.65) + 周日024(负)。建议 <b>2-3 关</b> 组合（容错高），不要 6 场全选。</div><div class="ins warn">⚠️ <b>双选兜底 18 场</b>：周日001(让负 @1.42) + 周日002(受让胜 @1.5) + 周日003(受让胜 @1.9) + 周日005(让负 @1.98) + 周日010(受让胜 @1.5) + 周日011(让负 @1.44) + 周日012(受让胜 @1.52) + 周日013(让负 @1.47) + 周日014(受让胜 @2.05) + 周日015(让负 @1.59) + 周日017(受让胜 @1.62) + 周日018(受让胜 @1.69) + 周日019(让负 @1.66) + 周日023(让负 @1.65) + 周日025(让负 @1.82) + 周日026(让负 @2.05) + 周日027(让负 @2.36) + 周日028(让负 @1.57)。平局高发，务必买 HHAD 覆盖项而非胜平负单选。</div><div class="ins draw">💡 <b>平局价值 5 场</b>：周日014(平@3.00) + 周日015(平@3.00) + 周日026(平@3.00) + 周日027(平@3.00) + 周日028(平@3.00)。回测该档(平P≥26%且差≤10pp)平局率33%、优于热门方向EV，平局@~3.0接近正期望值。建议用主推的<b>1/3本金</b>小注博高赔，不影响主推收益。</div><div class="ins draw">🎯 <b>平局直击 3 场</b>：周日001(平@3.00) + 周日003(平@3.00) + 周日025(平@3.00)。平P紧贴argmax(≤10pp)，回测该档平局率40%、平局正EV，可博高赔平局。</div><div class="ins">📌 <b>首推参考(命中率优先)</b>：✅胜平负10场 · 🎯让球18场。首推=预测PDF「主推」，仅作补充参考，主推以四档为准。</div></div>
 
 <div class="sec">📋 每场选择</div>
 <div class="mc cover">
@@ -71,6 +76,7 @@ h1{font-size:21px;font-weight:800}
     <span class="mc-tag cover">⚠️ 双选兜底</span></div>
   <div class="mc-rec">让负 @1.42 (让球·覆盖平局)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让负 @1.42</b> P=61%</div>
+  
   
   
   <div class="mc-draw-strike">🎯 平局直击: <b>平 @3.00</b> (胜平负) — 平P35%仅差胜P43% 8pp — 回测该档平局率40%, 平局@~3.0有正EV, 可博高赔平局</div>
@@ -85,10 +91,11 @@ h1{font-size:21px;font-weight:800}
   <div class="mc-rec">受让胜 @1.5 (让球·覆盖平局)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD受让胜 @1.5</b> P=59%</div>
   
+  <div class="mc-intent bk-strong">💰✅ 庄家意图·强确认: 资金强确认: 模型方向负为临场热门且获压赔+3.5% (实证48.6%命中); 平赔遭压+1.5%(初3.40→即时3.35), 平局率信号35.8%>基准32.5%</div>
   
   
   
-  <div class="mc-meta">概率 24/32/44% · ★★½ · 可预测性 52.3 · 一致性 50%</div>
+  <div class="mc-meta">概率 24/32/44% · ★★★ · 可预测性 52.3 · 一致性 50%</div>
   <div class="mc-reason">平P32%且方向P44%模糊 — 平局高发, HAD单选易漏平</div>
 </div><div class="mc cover">
   <div class="mc-top"><span class="mc-no">周日003</span>
@@ -98,10 +105,11 @@ h1{font-size:21px;font-weight:800}
   <div class="mc-rec">受让胜 @1.9 (让球·覆盖平局)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HAD负 @1.7</b> P=46%</div>
   
+  <div class="mc-intent bk-fade">💰🚫 庄家意图·弃赛: 资金相背: 模型方向负为最大升赔方向(-3.0%, 资金撤离), 实证仅28.2%命中, 建议弃赛或极小注; 平赔遭压+3.5%(初3.42→即时3.30), 平局率信号35.8%>基准32.5%</div>
   
-  <div class="mc-draw-strike">🎯 平局直击: <b>平 @3.00</b> (胜平负) — 平P35%仅差负P44% 9pp — 回测该档平局率40%, 平局@~3.0有正EV, 可博高赔平局</div>
+  <div class="mc-draw-strike">🎯 平局直击: <b>平 @3.00</b> (胜平负) — 平P35%仅差负P44% 9pp — 回测该档平局率40%, 平局@~3.0有正EV, 可博高赔平局; 平赔遭压+3.5%(实证平局率35.8%>基准32.5%), 阈值降2pp</div>
   
-  <div class="mc-meta">概率 20/35/44% · ★★ · 可预测性 56.9 · 一致性 75%</div>
+  <div class="mc-meta">概率 20/35/44% · ★½ · 可预测性 56.9 · 一致性 75%</div>
   <div class="mc-reason">平P35%且方向P44%模糊 — 平局高发, HAD单选易漏平</div>
 </div><div class="mc draw">
   <div class="mc-top"><span class="mc-no">周日004</span>
@@ -110,6 +118,7 @@ h1{font-size:21px;font-weight:800}
     <span class="mc-tag draw">🎯 平局直击</span></div>
   <div class="mc-rec">平 @3.00 (胜平负·平局直击)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让负 @1.54</b> P=60%</div>
+  
   
   
   
@@ -127,6 +136,7 @@ h1{font-size:21px;font-weight:800}
   
   
   
+  
   <div class="mc-meta">概率 44/30/26% · ★★★½ · 可预测性 60.4 · 一致性 100%</div>
   <div class="mc-reason">平P30%且方向P44%模糊 — 平局高发, HAD单选易漏平</div>
 </div><div class="mc single">
@@ -134,13 +144,14 @@ h1{font-size:21px;font-weight:800}
     <span class="mc-time">20:00</span><span class="mc-lg">瑞超</span>
     <span class="mc-teams"><b>代格福什</b> vs 哥德堡</span>
     <span class="mc-tag single">✅ 单选</span></div>
-  <div class="mc-rec">负 @2.22 (胜平负)</div>
-  <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD受让胜 @1.51</b> P=59%</div>
-  <div class="mc-mkt-div">⚠️ 市场分歧(幅度偏离): 模型负54% vs 市场负41%, 分歧22pp — 方向一致但模型高估13pp, 比市场更激进, 注意回落风险</div>
+  <div class="mc-rec">负 @2.18 (胜平负)</div>
+  <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD受让胜 @1.53</b> P=59%</div>
+  <div class="mc-mkt-div">⚠️ 市场分歧(幅度偏离): 模型负54% vs 市场负42%, 分歧22pp — 方向一致但模型高估12pp, 比市场更激进, 注意回落风险</div>
+  <div class="mc-intent bk-strong">💰✅ 庄家意图·强确认: 资金强确认: 模型方向负为临场热门且获压赔+1.8% (实证48.6%命中)</div>
   
   
   
-  <div class="mc-meta">概率 6/35/59% · ★★★½ · 可预测性 70.0 · 一致性 100%</div>
+  <div class="mc-meta">概率 6/35/59% · ★★★★ · 可预测性 70.3 · 一致性 100%</div>
   <div class="mc-reason">方向P59%明确, 平P35%可控</div>
 </div><div class="mc single">
   <div class="mc-top"><span class="mc-no">周日007</span>
@@ -150,6 +161,7 @@ h1{font-size:21px;font-weight:800}
   <div class="mc-rec">胜 @1.37 (胜平负)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HAD胜 @1.37</b> P=47%</div>
   <div class="mc-mkt-div">⚠️ 市场分歧(幅度偏离): 模型胜47% vs 市场胜71%, 分歧24pp — 方向一致但模型低估24pp, 市场资金更看好, 信号偏正面</div>
+  
   
   
   
@@ -166,6 +178,7 @@ h1{font-size:21px;font-weight:800}
   
   
   
+  
   <div class="mc-meta">概率 66/21/13% · ★★★½ · 可预测性 82.3 · 一致性 100%</div>
   <div class="mc-reason">方向P66%明确, 平P21%可控</div>
 </div><div class="mc single">
@@ -176,6 +189,7 @@ h1{font-size:21px;font-weight:800}
   <div class="mc-rec">胜 @1.26 (胜平负)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HAD胜 @1.26</b> P=47%</div>
   <div class="mc-mkt-div">⚠️ 市场分歧(幅度偏离): 模型胜47% vs 市场胜78%, 分歧31pp — 方向一致但模型低估31pp, 市场资金更看好, 信号偏正面</div>
+  <div class="mc-intent bk-strong">💰✅ 庄家意图·强确认: 资金强确认: 模型方向胜为临场热门且获压赔+1.6% (实证48.6%命中)</div>
   
   
   
@@ -189,6 +203,7 @@ h1{font-size:21px;font-weight:800}
   <div class="mc-rec">受让胜 @1.5 (让球·覆盖平局)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD受让胜 @1.5</b> P=64%</div>
   
+  <div class="mc-intent bk-confirm">💰 庄家意图·确认: 资金确认: 模型方向胜获压赔+2.4% (非临场热门, 实证38.5%命中)</div>
   
   
   
@@ -201,6 +216,7 @@ h1{font-size:21px;font-weight:800}
     <span class="mc-tag cover">⚠️ 双选兜底</span></div>
   <div class="mc-rec">让负 @1.44 (让球·覆盖平局)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让负 @1.44</b> P=67%</div>
+  
   
   
   
@@ -218,6 +234,7 @@ h1{font-size:21px;font-weight:800}
   
   
   
+  
   <div class="mc-meta">概率 22/29/49% · ★★★½ · 可预测性 52.3 · 一致性 50%</div>
   <div class="mc-reason">平P29%且方向P49%模糊 — 平局高发, HAD单选易漏平</div>
 </div><div class="mc cover">
@@ -228,6 +245,7 @@ h1{font-size:21px;font-weight:800}
   <div class="mc-rec">让负 @1.47 (让球·覆盖平局)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让负 @1.47</b> P=66%</div>
   <div class="mc-mkt-div">⚠️ 市场分歧(方向相反): 模型负47% vs 市场胜40%, 分歧17pp — 方向相反, 模型与市场资金显著相左, 谨慎参考或放弃</div>
+  
   
   
   
@@ -243,6 +261,7 @@ h1{font-size:21px;font-weight:800}
   <div class="mc-mkt-div">⚠️ 市场分歧(幅度偏离): 模型负38% vs 市场负61%, 分歧22pp — 方向一致但模型低估22pp, 市场资金更看好, 信号偏正面</div>
   
   
+  
   <div class="mc-draw-value">💡 平局价值: <b>平 @3.00</b> (胜平负·小注) — 平P30%距负P36% 6pp — 回测该档平局率33%, 优于热门方向EV, 建议1/3本金小注博平</div>
   <div class="mc-meta">概率 33/30/36% · ★★½ · 可预测性 49.7 · 一致性 75%</div>
   <div class="mc-reason">平P30%且方向P36%模糊 — 平局高发, HAD单选易漏平</div>
@@ -254,10 +273,11 @@ h1{font-size:21px;font-weight:800}
   <div class="mc-rec">让负 @1.59 (让球·覆盖平局)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让负 @1.59</b> P=55%</div>
   
+  <div class="mc-intent bk-strong">💰✅ 庄家意图·强确认: 资金强确认: 模型方向胜为临场热门且获压赔+2.9% (实证48.6%命中)</div>
   
   
   <div class="mc-draw-value">💡 平局价值: <b>平 @3.00</b> (胜平负·小注) — 平P31%距胜P38% 7pp — 回测该档平局率33%, 优于热门方向EV, 建议1/3本金小注博平</div>
-  <div class="mc-meta">概率 38/31/32% · ★★ · 可预测性 58.6 · 一致性 100%</div>
+  <div class="mc-meta">概率 38/31/32% · ★★½ · 可预测性 58.6 · 一致性 100%</div>
   <div class="mc-reason">平P31%且方向P38%模糊 — 平局高发, HAD单选易漏平</div>
 </div><div class="mc single">
   <div class="mc-top"><span class="mc-no">周日016</span>
@@ -267,6 +287,7 @@ h1{font-size:21px;font-weight:800}
   <div class="mc-rec">胜 @1.33 (胜平负)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HAD胜 @1.33</b> P=46%</div>
   <div class="mc-mkt-div">⚠️ 市场分歧(幅度偏离): 模型胜46% vs 市场胜74%, 分歧28pp — 方向一致但模型低估28pp, 市场资金更看好, 信号偏正面</div>
+  
   
   
   
@@ -283,6 +304,7 @@ h1{font-size:21px;font-weight:800}
   
   
   
+  
   <div class="mc-meta">概率 26/31/44% · ★★★½ · 可预测性 58.3 · 一致性 100%</div>
   <div class="mc-reason">平P31%且方向P44%模糊 — 平局高发, HAD单选易漏平</div>
 </div><div class="mc cover">
@@ -292,6 +314,7 @@ h1{font-size:21px;font-weight:800}
     <span class="mc-tag cover">⚠️ 双选兜底</span></div>
   <div class="mc-rec">受让胜 @1.69 (让球·覆盖平局)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD受让胜 @1.69</b> P=51%</div>
+  
   
   <div class="mc-sample">⚠️ 小样本警示: 桑坦德(n=1) xG样本不足3场, 其统计性优劣势已标注(共2条), 参考价值有限</div>
   
@@ -306,10 +329,11 @@ h1{font-size:21px;font-weight:800}
   <div class="mc-rec">让负 @1.66 (让球·覆盖平局)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让负 @1.66</b> P=59%</div>
   <div class="mc-mkt-div">⚠️ 市场分歧(方向相反): 模型负41% vs 市场胜48%, 分歧16pp — 方向相反, 模型与市场资金显著相左, 谨慎参考或放弃</div>
+  <div class="mc-intent bk-caution">💰⚠️ 庄家意图·警惕: 资金警惕: 资金压在平(+1.9%), 模型方向负未获确认; 平赔遭压+1.9%(初3.60→即时3.53), 平局率信号35.8%>基准32.5%</div>
   
   
   
-  <div class="mc-meta">概率 29/28/44% · ★★★ · 可预测性 58.0 · 一致性 100%</div>
+  <div class="mc-meta">概率 29/28/44% · ★★½ · 可预测性 58.0 · 一致性 100%</div>
   <div class="mc-reason">平P28%且方向P44%模糊 — 平局高发, HAD单选易漏平</div>
 </div><div class="mc single">
   <div class="mc-top"><span class="mc-no">周日020</span>
@@ -318,6 +342,7 @@ h1{font-size:21px;font-weight:800}
     <span class="mc-tag single">✅ 单选</span></div>
   <div class="mc-rec">胜 @1.37 (胜平负)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HAD胜 @1.37</b> P=65%</div>
+  
   
   
   
@@ -332,6 +357,7 @@ h1{font-size:21px;font-weight:800}
   <div class="mc-rec">胜 @1.68 (胜平负)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HAD胜 @1.68</b> P=45%</div>
   
+  <div class="mc-intent bk-strong">💰✅ 庄家意图·强确认: 资金强确认: 模型方向胜为临场热门且获压赔+2.3% (实证48.6%命中)</div>
   
   
   
@@ -345,6 +371,7 @@ h1{font-size:21px;font-weight:800}
   <div class="mc-rec">负 @3.65 (胜平负)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让负 @1.74</b> P=49%</div>
   <div class="mc-mkt-div">⚠️ 市场分歧(方向相反): 模型负46% vs 市场胜51%, 分歧26pp — 方向相反, 模型与市场资金显著相左, 谨慎参考或放弃</div>
+  <div class="mc-intent bk-confirm">💰 庄家意图·确认: 资金确认: 模型方向负获压赔+5.2% (非临场热门, 实证38.5%命中)</div>
   
   
   
@@ -361,6 +388,7 @@ h1{font-size:21px;font-weight:800}
   
   
   
+  
   <div class="mc-meta">概率 26/31/44% · ★½ · 可预测性 52.6 · 一致性 50%</div>
   <div class="mc-reason">平P31%且方向P44%模糊 — 平局高发, HAD单选易漏平</div>
 </div><div class="mc single">
@@ -374,6 +402,7 @@ h1{font-size:21px;font-weight:800}
   
   
   
+  
   <div class="mc-meta">概率 33/24/42% · ★★½ · 可预测性 52.8 · 一致性 100%</div>
   <div class="mc-reason">方向P42%明确, 平P24%可控</div>
 </div><div class="mc cover">
@@ -381,14 +410,15 @@ h1{font-size:21px;font-weight:800}
     <span class="mc-time">03:00</span><span class="mc-lg">巴甲</span>
     <span class="mc-teams"><b>达伽马</b> vs 桑托斯</span>
     <span class="mc-tag cover">⚠️ 双选兜底</span></div>
-  <div class="mc-rec">让负 @1.85 (让球·覆盖平局)</div>
-  <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让负 @1.85</b> P=43%</div>
-  <div class="mc-mkt-div">⚠️ 市场分歧(幅度偏离): 模型胜39% vs 市场胜54%, 分歧16pp — 方向一致但模型低估16pp, 市场资金更看好, 信号偏正面</div>
+  <div class="mc-rec">让负 @1.82 (让球·覆盖平局)</div>
+  <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让负 @1.82</b> P=51%</div>
   
+  <div class="mc-intent bk-fade">💰🚫 庄家意图·弃赛: 资金相背: 模型方向胜为最大升赔方向(-1.7%, 资金撤离), 实证仅28.2%命中, 建议弃赛或极小注; 平赔遭压+2.1%(初3.35→即时3.28), 平局率信号35.8%>基准32.5%</div>
   
-  <div class="mc-draw-value">💡 平局价值: <b>平 @3.00</b> (胜平负·小注) — 平P32%距胜P36% 4pp — 回测该档平局率33%, 优于热门方向EV, 建议1/3本金小注博平</div>
-  <div class="mc-meta">概率 36/32/32% · ★★½ · 可预测性 56.4 · 一致性 100%</div>
-  <div class="mc-reason">平P32%且方向P36%模糊 — 平局高发, HAD单选易漏平</div>
+  <div class="mc-draw-strike">🎯 平局直击: <b>平 @3.00</b> (胜平负) — 平P31%仅差胜P36% 5pp — 回测该档平局率40%, 平局@~3.0有正EV, 可博高赔平局; 平赔遭压+2.1%(实证平局率35.8%>基准32.5%), 阈值降2pp</div>
+  
+  <div class="mc-meta">概率 36/31/32% · ★★ · 可预测性 57.4 · 一致性 100%</div>
+  <div class="mc-reason">平P31%且方向P36%模糊 — 平局高发, HAD单选易漏平</div>
 </div><div class="mc cover">
   <div class="mc-top"><span class="mc-no">周日026</span>
     <span class="mc-time">03:30</span><span class="mc-lg">葡超</span>
@@ -397,6 +427,7 @@ h1{font-size:21px;font-weight:800}
   <div class="mc-rec">让负 @2.05 (让球·覆盖平局)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HAD负 @4.75</b> P=44%</div>
   <div class="mc-mkt-div">⚠️ 市场分歧(方向相反): 模型负44% vs 市场胜60%, 分歧34pp — 方向相反, 模型与市场资金显著相左, 谨慎参考或放弃</div>
+  
   <div class="mc-sample">⚠️ 小样本警示: 马里迪莫(n=1) xG样本不足3场, 其统计性优劣势已标注(共1条), 参考价值有限</div>
   
   <div class="mc-draw-value">💡 平局价值: <b>平 @3.00</b> (胜平负·小注) — 平P32%距负P42% 10pp — 回测该档平局率33%, 优于热门方向EV, 建议1/3本金小注博平</div>
@@ -409,7 +440,8 @@ h1{font-size:21px;font-weight:800}
     <span class="mc-tag cover">⚠️ 双选兜底</span></div>
   <div class="mc-rec">让负 @2.36 (让球·覆盖平局)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HAD胜 @1.44</b> P=41%</div>
-  <div class="mc-mkt-div">⚠️ 市场分歧(幅度偏离): 模型胜41% vs 市场胜67%, 分歧26pp — 方向一致但模型低估27pp, 市场资金更看好, 信号偏正面</div>
+  <div class="mc-mkt-div">⚠️ 市场分歧(幅度偏离): 模型胜41% vs 市场胜67%, 分歧26pp — 方向一致但模型低估26pp, 市场资金更看好, 信号偏正面</div>
+  
   
   
   <div class="mc-draw-value">💡 平局价值: <b>平 @3.00</b> (胜平负·小注) — 平P31%距胜P39% 8pp — 回测该档平局率33%, 优于热门方向EV, 建议1/3本金小注博平</div>
@@ -422,6 +454,7 @@ h1{font-size:21px;font-weight:800}
     <span class="mc-tag cover">⚠️ 双选兜底</span></div>
   <div class="mc-rec">让负 @1.57 (让球·覆盖平局)</div>
   <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让负 @1.57</b> P=57%</div>
+  
   
   
   

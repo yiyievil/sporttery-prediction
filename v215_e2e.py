@@ -122,6 +122,8 @@ except ImportError:
 TARGET_DATE = None   # ← 不限日期(避免跨天分类问题)
 TARGET_WEEKDAY = "周四"  # ← 指定周几过滤(如"周四"), None=不过滤
 MATCH_NUMBERS = ["001","002","003","004","005","006","007","008","009","010"]  # ← 场次编号(后3位)
+TARGET_NUM_DATE = None  # ← Ultra 13.13: 编号/开盘日期(YYMMDD, 如'260816')。单传日期时启用,
+                        #   按matchNumDate筛整个销售批次(不限周几/场次), MATCH_NUMBERS=None表示全量
 
 # ===== 工作模式 (Ultra 8.1) =====
 # predict: 全新预测 — 所有数据重新拉取, 不读缓存, 完成后写入缓存
@@ -190,8 +192,13 @@ def apply_cli_match_input():
       260801周六001-003             → 编号日期+周几+范围 (Ultra 11.1)
       260801周六001,002,003        → 编号日期+周几+场次 (Ultra 11.1)
       260801 周六 001-016           → 编号日期+周几+范围 (带空格, Ultra 11.2)
+      260816                       → 单传编号日期=整个销售批次 (Ultra 13.13)
+    Ultra 13.13 (2026-08-16): 单传日期语义修正 — 编号日期只定位 sporttery 开盘日
+      (API字段matchNumDate/businessDate), 不代表实际比赛日(如'周一005'开盘260817、
+      实际8-18凌晨踢, matchDate=2026-08-18)。单日期按开盘日筛出整个销售批次的
+      全部场次(不限周几/场次), 不再静默回退顶部配置误跑全部在售(260816事故: 56场跨7天)。
     """
-    global TARGET_WEEKDAY, MATCH_NUMBERS
+    global TARGET_WEEKDAY, MATCH_NUMBERS, TARGET_NUM_DATE
     # Ultra 12.5.1: 过滤 --force 标志 (apply_cli_mode 会把它加回 argv 末尾,
     # 不过滤会破坏编号/日期解析, 导致回退文件顶部配置跑错比赛)
     args = [a for a in sys.argv[1:] if a.strip() and a != '--force']
@@ -201,6 +208,20 @@ def apply_cli_match_input():
 
     # 先尝试去除空格匹配: 260801 周六 001-016 → 260801周六001-016
     text_no_space = text.replace(' ', '')
+
+    # 形式0 (Ultra 13.13): 单传编号日期 260816 → 整个销售批次 (不限周几/场次)
+    # 放在最前: 纯6位数字不与其它格式冲突; parse_code_date校验合法日期
+    m0 = re.match(r'^(\d{6})$', text_no_space)
+    if m0:
+        d, wd = parse_code_date(m0.group(1))
+        if d:
+            TARGET_NUM_DATE = m0.group(1)
+            TARGET_WEEKDAY = None   # 批次内可含多个周几组, 不按周几过滤
+            MATCH_NUMBERS = None    # None=不限场次, fetch按matchNumDate筛
+            print(f"  [输入] 编号日期 {m0.group(1)} → 开盘日批次({d} {wd}开售), "
+                  f"不限周几/场次, 按matchNumDate={m0.group(1)}筛全部场次")
+            return
+        print(f"  [输入] ⚠️ '{m0.group(1)}' 不是合法编号日期, 忽略单日期模式")
 
     # 形式3 (Ultra 11.1): 编号日期+周几+范围 260801周六001-003
     m3 = re.match(r'^(\d{6})(周[一二三四五六日])(\d{3})-(\d{3})$', text_no_space)
@@ -253,7 +274,7 @@ def apply_cli_match_input():
             print(f"  [输入] 编号日期 {m.group(1)} → {wd}, 场次 {MATCH_NUMBERS}")
             return
     print(f"  [输入] ⚠️ 无法解析 '{text}', 回退文件顶部配置 "
-          f"(正确格式: 260728 001,002 或 260728001,260728002 或 260801周六001-003)")
+          f"(支持: 260816=开盘日整批次 | 260728 001,002 | 260728001,260728002 | 260801周六001-003)")
 
 
 def inject_memory_context():
@@ -268,9 +289,13 @@ def inject_memory_context():
         return
 
     # 构建完整编号列表 (YYMMDD + NNN)
+    # Ultra 13.13: 批次模式(MATCH_NUMBERS=None)下编号未知, match_ids留空,
+    # 记忆召回仅按关键词(user_input含开盘日期)进行, 逐编号校验跳过
     match_ids = []
     if TARGET_DATE:
         date_prefix = TARGET_DATE.strftime('%y%m%d')
+    elif TARGET_NUM_DATE:
+        date_prefix = TARGET_NUM_DATE
     elif TARGET_WEEKDAY:
         # 从 TARGET_WEEKDAY 反推日期: 用今天往前找匹配的周几
         today = datetime.now().date()
@@ -285,12 +310,12 @@ def inject_memory_context():
     else:
         date_prefix = datetime.now().strftime('%y%m%d')
 
-    for num in MATCH_NUMBERS:
+    for num in (MATCH_NUMBERS or []):
         full_id = f"{date_prefix}{num.zfill(3)}"
         match_ids.append(full_id)
 
     # 用户输入文本 (用于关键词召回)
-    user_input = f"预测 {TARGET_WEEKDAY or ''} {' '.join(match_ids)}"
+    user_input = f"预测 {TARGET_WEEKDAY or ''} {TARGET_NUM_DATE or ''} {' '.join(match_ids)}".strip()
 
     # 获取预测上下文
     context = _mem.get_prediction_context(match_ids=match_ids, user_input=user_input)
@@ -486,10 +511,16 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
                 if not match_num:
                     continue
                 match_num = match_num[-3:]  # 取后3位
-                
-                if match_num not in match_numbers:
+
+                # Ultra 13.13: 单传日期批次模式 — match_numbers=None表示不限场次
+                if match_numbers and match_num not in match_numbers:
                     continue
-                
+
+                # Ultra 13.13: 按开盘日批次筛选 — matchNumDate=编号/开盘日(YYMMDD),
+                # ≠实际比赛日matchDate(凌晨场会跨天, 如'周一005'开盘260817实际8-18踢)
+                if TARGET_NUM_DATE and str(s.get('matchNumDate', '') or '') != TARGET_NUM_DATE:
+                    continue
+
                 match_date = s.get('matchDate', '')
                 if target_date and match_date != str(target_date):
                     continue
@@ -525,6 +556,7 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
                 matches[key] = {
                     'match_num': match_num,
                     'full_num': s.get('matchNumStr', '') or f"{weekday}{match_num}",
+                    'num_date': str(s.get('matchNumDate', '') or ''),  # Ultra 13.13: 开盘日批次标识
                     'weekday': weekday,
                     'key': key,
                     'match_id': s.get('matchId'),
@@ -571,6 +603,14 @@ def fetch_sporttery_matches(match_numbers, target_date=None):
                     _d, _ = parse_code_date(_m.group(1))
                     if _d:
                         _target_date_str = _d.strftime('%Y-%m-%d')
+                else:
+                    # Ultra 13.13: 单传日期批次模式 — 回退按开盘日±1天查结果API
+                    # (开盘日非实际比赛日, 凌晨场跨天, ±1窗口覆盖)
+                    _m0 = re.match(r'^(\d{6})$', _text.replace(' ', ''))
+                    if _m0:
+                        _d, _ = parse_code_date(_m0.group(1))
+                        if _d:
+                            _target_date_str = _d.strftime('%Y-%m-%d')
         
         if _target_date_str:
             print(f"  [回退] 从结果API获取 (目标日期: {_target_date_str})...")
@@ -707,7 +747,8 @@ def fetch_sporttery_matches_from_results(match_numbers, target_date=None):
     for key, m in all_results.items():
         # 从matchNumStr提取编号 (如 "周四201" → "201")
         match_num = key[-3:] if len(key) >= 3 else ''
-        if match_num not in match_numbers:
+        # Ultra 13.13: 批次模式 match_numbers=None 表示不限场次
+        if match_numbers and match_num not in match_numbers:
             continue
         
         weekday = key[:-3] if len(key) > 3 else ''
@@ -6211,7 +6252,110 @@ def post_fusion_hhad_draw_calibration(probs, had, hhad, handicap, league):
     return [pw_new, pd_new, pl_new]
 
 
-def apply_odds_change_analysis_calibration(probs, had, hhad, league, odds_change, 
+def analyze_bookmaker_intent(had_final, had_init, model_idx, had_dirs=('胜', '平', '负')):
+    """Ultra 13.12 (2026-08-16): 庄家意图五档标签 — 初赔→即时赔资金动量 × 模型方向
+
+    实证基础 (historical_odds.db 体彩HAD 3233场全量检验, 2026-08-16):
+      降赔方向命中38.5% vs 升赔方向28.2% → 相对性成立(压赔方向优于抬赔方向)
+      但绝对性不成立: 降幅≥2%命中36.9%, ≥6%仅34.0%, ≥12%仅26.8%
+        (大幅降赔多发生在长赔冷门侧, favourite-longshot bias, 压得越狠越不能重仓)
+      最优形态: 临场热门+自身被压 = 48.6%命中 (热门获资金确认)
+      最差形态: 热门遭抬赔 = 44.2% (掉4.4pp); 模型方向=升赔方向 = 28.2% (资金黑洞)
+      平赔被压 → 平局率35.8% vs 平赔被抬30.3% (基准32.5%)
+
+    五档 (与置信度联动 ±0.5★):
+      strong_confirm 强确认: 模型方向=临场热门=降赔方向 → +0.5★
+      confirm       确认:    模型方向=降赔方向(非热门)   → 维持
+      neutral       中性:    三方向变动均<1%             → 维持
+      caution       警惕:    模型方向遭抬赔 或 资金压在别处 → -0.5★
+      fade          弃赛:    模型方向=最大升赔方向(资金撤离) → -0.5★ + 红标
+    返回: dict(tier, tier_label, conf_delta, 各方向/幅度/平局信号/note), 数据不足时tier=neutral
+    """
+    _keys = ('h', 'd', 'a')
+
+    def _valid(d):
+        return bool(d) and all(isinstance(d.get(k), (int, float)) and d.get(k, 0) > 1.01 for k in _keys)
+
+    out = {
+        'tier': 'neutral', 'tier_label': '中性', 'conf_delta': 0,
+        'model_dir': had_dirs[model_idx] if isinstance(model_idx, int) and 0 <= model_idx <= 2 else None,
+        'fav_dir': None, 'drop_dir': None, 'rise_dir': None,
+        'drop_rel_pct': 0.0, 'rise_rel_pct': 0.0, 'model_move_rel_pct': 0.0,
+        'draw_compressed': False, 'draw_drop_pct': 0.0, 'note': '',
+    }
+    if not (_valid(had_final) and _valid(had_init)):
+        out['note'] = '初赔/即时赔不完整, 意图分析跳过'
+        return out
+
+    # moves[i] > 0 = 降赔(庄家压缩该方向回报); < 0 = 升赔
+    moves = [(had_init[k] - had_final[k]) / had_init[k] * 100 for k in _keys]
+    drop_i = max(range(3), key=lambda i: moves[i])
+    rise_i = min(range(3), key=lambda i: moves[i])
+    fav_i = _keys.index(min(_keys, key=lambda k: had_final[k]))
+    drop_sig = moves[drop_i] >= 1.0
+    rise_sig = moves[rise_i] <= -1.0
+    _m_ok = isinstance(model_idx, int) and 0 <= model_idx <= 2
+
+    out.update({
+        'fav_dir': had_dirs[fav_i],
+        'drop_dir': had_dirs[drop_i] if drop_sig else None,
+        'rise_dir': had_dirs[rise_i] if rise_sig else None,
+        'drop_rel_pct': round(moves[drop_i], 1),
+        'rise_rel_pct': round(moves[rise_i], 1),
+        'model_move_rel_pct': round(moves[model_idx], 1) if _m_ok else 0.0,
+        'draw_compressed': moves[1] >= 1.0,
+        'draw_drop_pct': round(moves[1], 1),
+    })
+
+    if not (drop_sig or rise_sig):
+        out['note'] = '三方向变动均<1%, 无有效资金信号'
+        return out
+
+    model_drop = _m_ok and moves[model_idx] >= 1.0
+    model_rise = _m_ok and moves[model_idx] <= -1.0
+    if model_rise and model_idx == rise_i:
+        tier = 'fade'
+    elif model_rise:
+        tier = 'caution'
+    elif drop_sig and model_idx == drop_i and model_idx == fav_i:
+        tier = 'strong_confirm'
+    elif drop_sig and model_idx == drop_i:
+        tier = 'confirm'
+    elif drop_sig and model_idx != drop_i and not model_drop:
+        tier = 'caution'
+    else:
+        tier = 'neutral'
+
+    labels = {'strong_confirm': '强确认', 'confirm': '确认', 'neutral': '中性',
+              'caution': '警惕', 'fade': '弃赛'}
+    deltas = {'strong_confirm': 0.5, 'confirm': 0.0, 'neutral': 0.0, 'caution': -0.5, 'fade': -0.5}
+    out['tier'] = tier
+    out['tier_label'] = labels[tier]
+    out['conf_delta'] = deltas[tier]
+
+    if tier == 'strong_confirm':
+        out['note'] = (f"资金强确认: 模型方向{had_dirs[model_idx]}为临场热门且获压赔"
+                       f"{moves[model_idx]:+.1f}% (实证48.6%命中)")
+    elif tier == 'confirm':
+        out['note'] = (f"资金确认: 模型方向{had_dirs[model_idx]}获压赔{moves[model_idx]:+.1f}%"
+                       f" (非临场热门, 实证38.5%命中)")
+    elif tier == 'fade':
+        out['note'] = (f"资金相背: 模型方向{had_dirs[model_idx]}为最大升赔方向"
+                       f"({moves[model_idx]:+.1f}%, 资金撤离), 实证仅28.2%命中, 建议弃赛或极小注")
+    elif tier == 'caution':
+        if model_rise:
+            out['note'] = (f"资金警惕: 模型方向{had_dirs[model_idx]}遭抬赔{moves[model_idx]:+.1f}%, "
+                           f"未获资金确认")
+        else:
+            out['note'] = (f"资金警惕: 资金压在{had_dirs[drop_i]}({moves[drop_i]:+.1f}%), "
+                           f"模型方向{had_dirs[model_idx]}未获确认")
+    if out['draw_compressed']:
+        out['note'] += (f"; 平赔遭压{out['draw_drop_pct']:+.1f}%"
+                        f"(初{had_init['d']:.2f}→即时{had_final['d']:.2f}), 平局率信号35.8%>基准32.5%")
+    return out
+
+
+def apply_odds_change_analysis_calibration(probs, had, hhad, league, odds_change,
                                             had_hhad_change=None, sp_had_probs=None, sp_hhad_probs=None,
                                             had_init=None, hhad_init=None):
     """体彩赔率变动特征 + 玩法矛盾信号校准 (Ultra 10.6 → 11.0)
@@ -7638,6 +7782,13 @@ def predict_match(match_num, data):
     #  控制台摘要/一致性文案全标成"让胜/让负", 与跨玩法(已转换)矛盾; 此处在方向确定后统一转换)
     hhad_dir = _hhad_display_label(hhad_dir, handicap)
 
+    # ===== Ultra 13.12: 庄家意图五档 — 初赔→即时赔资金动量 × 模型方向 (2026-08-16实证) =====
+    # 命中率优先铁律下的资金面信号: 模型方向=热门且被压赔→+0.5★; 遭抬赔/资金相背→-0.5★
+    _bk_init_odds = sp.get('sporttery_bonus', {}).get('had_init')
+    bookmaker_intent = analyze_bookmaker_intent(
+        had if had_open else None, _bk_init_odds,
+        had_min_idx if had_open else None, had_dirs)
+
     # ===== 置信度计算 (Ultra 12.1: 星级 = 校准命中率分档) =====
     # 新定义(用户要求): 星级体现模型对预测结果的信心程度, 越高说明越稳。
     #   信心 = 校准命中率(模型概率经历史校准后的真实命中期望), 星越高=真实命中越高。
@@ -7796,6 +7947,22 @@ def predict_match(match_num, data):
         had_conf = format_stars(had_conf_score)
         v611_notes.append(f"[xG回归] 客队超额{_xg_away['overperformance']:+.2f}>+0.5, 置信度-0.5★")
         _xg_regress_flag = True
+
+    # Ultra 13.12: 庄家意图联动置信度 — 资金强确认+0.5★ / 警惕、弃赛-0.5★
+    # (实证: 热门+被压48.6% vs 热门遭抬44.2% vs 升赔方向28.2%, 差距足以支撑星级调整)
+    if bookmaker_intent and bookmaker_intent.get('conf_delta'):
+        _bk_cd = bookmaker_intent['conf_delta']
+        if _bk_cd > 0:
+            had_conf_score = min(5.0, had_conf_score + _bk_cd)
+            hhad_conf_score = min(5.0, hhad_conf_score + _bk_cd)
+        else:
+            had_conf_score = max(1.0, had_conf_score + _bk_cd)
+            hhad_conf_score = max(1.0, hhad_conf_score + _bk_cd)
+        had_conf = format_stars(had_conf_score)
+        v611_notes.append(f"[庄家意图·{bookmaker_intent['tier_label']}] "
+                          f"{bookmaker_intent['note']} → 置信度{_bk_cd:+.1f}★")
+        if bookmaker_intent['tier'] in ('strong_confirm', 'caution', 'fade'):
+            v611_flags['bookmaker_intent'] = True
 
     # Ultra 7.4: 杯赛首回合大比分惩罚 — 置信度封顶★★★★
     if cup_leg_penalty_info and cup_leg_penalty_info.get('applied'):
@@ -8031,6 +8198,15 @@ def predict_match(match_num, data):
             _model_i = had_min_idx if had_open else max(range(3), key=lambda i: had_probs[i])
             _mkt_i = max(range(3), key=lambda i: _mkt_p[i])
             _dir_conflict = (_model_i != _mkt_i)
+            # Ultra 13.12: 动量维度 — 不只看市场"现在在哪", 还看资金"正在往哪走"
+            _mom = ''
+            if bookmaker_intent:
+                _bd = bookmaker_intent.get('drop_dir')
+                _br = bookmaker_intent.get('rise_dir')
+                if _bd:
+                    _mom = f"; 资金动量: 压{_bd}{bookmaker_intent.get('drop_rel_pct', 0):+.1f}%"
+                    if _br and _br != _bd:
+                        _mom += f"/抬{_br}{bookmaker_intent.get('rise_rel_pct', 0):+.1f}%"
             if _max_diff >= 15.0:
                 market_divergence = {
                     'flagged': True,
@@ -8043,7 +8219,7 @@ def predict_match(match_num, data):
                     'market_source': _mkt_src,
                     # 措辞分三档: 方向相反 / 模型高估(比市场激进) / 模型低估(市场资金更看好)
                     'note': (f"模型{had_dirs[_model_i]}{had_probs[_model_i]:.0%} vs 市场{had_dirs[_mkt_i]}{_mkt_p[_mkt_i]:.0%}"
-                             f"({_mkt_src}), 最大分歧{_max_diff:.0f}pp({had_dirs[_max_i]}方向)"
+                             f"({_mkt_src}{_mom}), 最大分歧{_max_diff:.0f}pp({had_dirs[_max_i]}方向)"
                              + (" — 方向相反, 模型与市场资金显著相左, 谨慎参考或放弃" if _dir_conflict
                                 else (f" — 方向一致但模型高估{(had_probs[_model_i]-_mkt_p[_mkt_i])*100:.0f}pp, 比市场更激进, 注意回落风险"
                                       if had_probs[_model_i] > _mkt_p[_mkt_i]
@@ -8128,6 +8304,7 @@ def predict_match(match_num, data):
         'sporttery_pools': sporttery_pools,  # Ultra 6.5: 竞彩固定奖金EV分析
         'v611_flags': v611_flags,  # Ultra 6.11: 五大场景修正标记
         'market_divergence': market_divergence,  # 优化③ (Ultra 13.11): 模型-市场分歧≥15pp时非空
+        'bookmaker_intent': bookmaker_intent,  # Ultra 13.12: 庄家意图五档 (初→即时赔资金动量×模型方向)
         'cup_leg_penalty': cup_leg_penalty_info,  # Ultra 7.4: 杯赛首回合惩罚信息
         # Ultra 8.0: xG/xGA 数据 + 交叉验证质量
         'xg_data': _xg_data,

@@ -76,7 +76,7 @@ def _parse_probs(p_str):
     return (vals + [0.0, 0.0, 0.0])[:3]
 
 
-def classify(draw_p, argmax_p, win_p, loss_p, league=''):
+def classify(draw_p, argmax_p, win_p, loss_p, league='', bk_intent=None):
     """四档判定。返回 (level, reason, draw_strike, draw_strike_reason, draw_value, draw_value_reason)。
     level: 'draw'|'single'|'cover'|'avoid'
     draw_strike: bool — 平局直击 (P平≥30%联赛/32%杯赛 且距argmax≤10pp), 可博高赔平局
@@ -94,6 +94,14 @@ def classify(draw_p, argmax_p, win_p, loss_p, league=''):
     _draw_min = 35 if is_cup else 33  # 平局直击最低概率 (与引擎v13.9覆盖阈值一致, 33-36%实测平局率39%)
     _draw_value_min = 30 if is_cup else 28  # 平局价值最低概率 (28-33%, 实测30-32%档中性偏价值)
     _cup_tag = ' [杯赛]' if is_cup else ''
+
+    # Ultra 13.12: 平赔遭压 → 平局率信号35.8%>基准32.5% (3233场实证), 直击/价值档阈值各降2pp
+    _draw_bonus_tag = ''
+    if bk_intent and bk_intent.get('draw_compressed'):
+        _draw_min -= 2
+        _draw_value_min -= 2
+        _draw_bonus_tag = (f"; 平赔遭压{bk_intent.get('draw_drop_pct', 0):+.1f}%"
+                           f"(实证平局率35.8%>基准32.5%), 阈值降2pp")
 
     # 🎯 Ultra 12.2: 平局为argmax → 直接推荐平局 (不再退化为双选兜底)
     # 理由: 模型最看好的结果就是平局, 没理由躲到HHAD后面
@@ -119,7 +127,7 @@ def classify(draw_p, argmax_p, win_p, loss_p, league=''):
         _gap_dir = '胜' if win_p == argmax_p else '负'
         draw_strike_reason = (
             f'平P{draw_p:.0f}%仅差{_gap_dir}P{argmax_p:.0f}% {_gap:.0f}pp — '
-            f'回测该档平局率40%, 平局@~3.0有正EV, 可博高赔平局'
+            f'回测该档平局率40%, 平局@~3.0有正EV, 可博高赔平局{_draw_bonus_tag}'
         )
 
     # 平局价值单: 26-30%(联赛)/28-32%(杯赛) 且 距argmax≤10pp (与引擎 draw_value 同口径)
@@ -128,7 +136,7 @@ def classify(draw_p, argmax_p, win_p, loss_p, league=''):
         _gap_dir = '胜' if win_p == argmax_p else '负'
         draw_value_reason = (
             f'平P{draw_p:.0f}%距{_gap_dir}P{argmax_p:.0f}% {_gap:.0f}pp — '
-            f'回测该档平局率33%, 优于热门方向EV, 建议1/3本金小注博平{_cup_tag}'
+            f'回测该档平局率33%, 优于热门方向EV, 建议1/3本金小注博平{_cup_tag}{_draw_bonus_tag}'
         )
 
     # 🚫 方向性误判高发: 强主场(胜P≥60)但平局不可忽视(平P≥25) → 黑天鹅特征
@@ -217,7 +225,8 @@ def generate(pred_json=None):
         else:
             w, dr, l = _parse_probs(had.get('p', '0/0/0'))
             argmax_p = max(w, dr, l)
-            level, reason, draw_strike, draw_strike_reason, draw_value, draw_value_reason = classify(dr, argmax_p, w, l, league)
+            level, reason, draw_strike, draw_strike_reason, draw_value, draw_value_reason = classify(
+                dr, argmax_p, w, l, league, bk_intent=m.get('bookmaker_intent'))  # Ultra 13.12: 传入庄家意图
 
             # HHAD 覆盖项 (含平局的一侧): 让球盘→让负(平+负), 受让盘→受让胜(胜+平)
             if handicap is not None:
@@ -274,6 +283,7 @@ def generate(pred_json=None):
             'draw_odds': had.get('draw_odds', '3.00'),
             'primary_note': primary_note,
             'mkt_div': m.get('market_divergence'),  # 优化③: 模型-市场分歧
+            'bk_intent': m.get('bookmaker_intent'),  # Ultra 13.12: 庄家意图五档
             'swot_sample_warning': (m.get('swot') or {}).get('sample_warning'),  # 优化②: 小样本警示
         })
 
@@ -301,6 +311,17 @@ def generate(pred_json=None):
                         f'{_md.get("model_prob",0):.0f}% vs 市场{_md.get("market_dir","?")}'
                         f'{_md.get("market_prob",0):.0f}%, 分歧{_md.get("max_diff_pp",0):.0f}pp'
                         f' — {_md.get("note","").split("—")[-1].strip() if "—" in str(_md.get("note","")) else "谨慎参考"}</div>')
+        # Ultra 13.12: 庄家意图五档行 (资金动量×模型方向)
+        bk_html = ''
+        _bk = c.get('bk_intent')
+        if _bk and _bk.get('tier') not in (None, 'neutral'):
+            _tier = _bk.get('tier')
+            _cls = {'strong_confirm': 'bk-strong', 'confirm': 'bk-confirm',
+                    'caution': 'bk-caution', 'fade': 'bk-fade'}.get(_tier, '')
+            _emoji = {'strong_confirm': '💰✅', 'confirm': '💰',
+                      'caution': '💰⚠️', 'fade': '💰🚫'}.get(_tier, '💰')
+            bk_html = (f'<div class="mc-intent {_cls}">{_emoji} 庄家意图·{_bk.get("tier_label","")}: '
+                       f'{_bk.get("note","")}</div>')
         # 优化② (Ultra 13.11): SWOT小样本警示行
         ss_html = ''
         if c.get('swot_sample_warning'):
@@ -313,6 +334,7 @@ def generate(pred_json=None):
   <div class="mc-rec">{c['rec']}</div>
   {primary_html}
   {div_html}
+  {bk_html}
   {ss_html}
   {ds_html}
   {dv_html}
@@ -382,6 +404,11 @@ h1{{font-size:21px;font-weight:800}}
 .mc-primary{{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#f0f9ff;border:1px dashed #93c5fd;color:#1d4ed8}}
 .mc-mkt-div{{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#fef2f2;border:1px solid #f87171;color:#b91c1c;font-weight:600}}
 .mc-sample{{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#fff7ed;border:1px dashed #fb923c;color:#c2410c}}
+.mc-intent{{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;font-weight:600}}
+.mc-intent.bk-strong{{background:#f0fdf4;border:1px solid #4ade80;color:#15803d}}
+.mc-intent.bk-confirm{{background:#f7fee7;border:1px solid #a3e635;color:#4d7c0f}}
+.mc-intent.bk-caution{{background:#fffbeb;border:1px solid #fbbf24;color:#b45309}}
+.mc-intent.bk-fade{{background:#fef2f2;border:2px solid #dc2626;color:#b91c1c}}
 .sec{{font-size:15px;font-weight:800;margin:16px 0 4px}}
 .ins{{padding:11px 13px;border-radius:8px;font-size:12.5px;margin:8px 0;line-height:1.7;border-left:4px solid}}
 .ins.good{{background:#f0fdf4;border-color:#16a34a}} .ins.warn{{background:#fffbeb;border-color:#f59e0b}} .ins.bad{{background:#fef2f2;border-color:#dc2626}}

@@ -2,7 +2,7 @@
  "_meta": {
   "canonical": "sporttery",
   "version": 1,
-  "updated": "2026-08-16 02:29:06"
+  "updated": "2026-08-16 04:14:18"
  },
  "teams": {
   "金泉尚武": {
@@ -3884,6 +3884,36 @@
    "sources": {
     "qiumiwu": [
      "吉尔维森特"
+    ]
+   }
+  },
+  "韦斯特罗": {
+   "aliases": [
+    "索尔纳"
+   ],
+   "sources": {
+    "leisu": [
+     "索尔纳"
+    ]
+   }
+  },
+  "乌德勒支": {
+   "aliases": [
+    "海牙"
+   ],
+   "sources": {
+    "leisu": [
+     "海牙"
+    ]
+   }
+  },
+  "鹿斯巴达": {
+   "aliases": [
+    "前进之鹰"
+   ],
+   "sources": {
+    "leisu": [
+     "前进之鹰"
     ]
    }
   }
