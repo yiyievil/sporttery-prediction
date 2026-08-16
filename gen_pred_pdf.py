@@ -203,7 +203,9 @@ def extract_match(data, match_id):
 
     had = res.get('HAD', {})
     had_dir = had.get('dir', '?')
-    had_odds = had.get('odds', '?')
+    # P1-4 (Ultra 13.10): odds=None/0(SWOT翻转或档位停售) → 显示"以盘口为准", 不渲染"@0"
+    _had_odds_raw = had.get('odds', '?')
+    had_odds = _had_odds_raw if _had_odds_raw else '以盘口为准'
     had_conf = had.get('conf', '')
     had_p = had.get('p', '')
     if isinstance(had_p, str):
@@ -211,7 +213,8 @@ def extract_match(data, match_id):
 
     hhad = res.get('HHAD', {})
     hhad_dir = hhad.get('dir', '?')
-    hhad_odds = hhad.get('odds', '?')
+    _hhad_odds_raw = hhad.get('odds', '?')
+    hhad_odds = _hhad_odds_raw if _hhad_odds_raw else '以盘口为准'
     hhad_conf = hhad.get('conf', '')
     hhad_h = hhad.get('handicap', '?')
     hhad_p = hhad.get('p', '')
@@ -257,6 +260,8 @@ def extract_match(data, match_id):
     ev_list = res.get('ev', [])
     initial = res.get('initial', {})
     had_trend = meta.get('had_trend', '')
+    # 优化③ (Ultra 13.11): 模型-市场分歧 (≥15pp时非空, 展示层高亮)
+    market_divergence = res.get('market_divergence') or None
 
     return {
         'id': match_id,
@@ -291,6 +296,7 @@ def extract_match(data, match_id):
         'ev_list': ev_list,
         'initial': initial,
         'had_trend': had_trend,
+        'market_divergence': market_divergence,  # 优化③: 分歧提示
     }
 
 
@@ -443,9 +449,12 @@ def build_match_page(m, page_num, total):
         _hcap_label = '平盘(0球)'
     else:
         _hcap_label = f'盘口{_hcap}'
+    # P1-4: 赔率无效时"胜平负/让球"行不再显示"@以盘口为准", 改为括号说明
+    _had_odds_disp = f'@{m["had_odds"]}' if isinstance(m["had_odds"], (int, float)) else f'({m["had_odds"]})'
+    _hhad_odds_disp = f'@{m["hhad_odds"]}' if isinstance(m["hhad_odds"], (int, float)) else f'({m["hhad_odds"]})'
     data_rows = [
-        _make_row('胜平负', f'{m["had_dir"]}  @{m["had_odds"]}    {m["had_conf"]}  ({had_p_clean})'),
-        _make_row('让球', f'{m["hhad_dir"]}  @{m["hhad_odds"]}    {m["hhad_conf"]}  ({_hcap_label})'),
+        _make_row('胜平负', f'{m["had_dir"]}  {_had_odds_disp}    {m["had_conf"]}  ({had_p_clean})'),
+        _make_row('让球', f'{m["hhad_dir"]}  {_hhad_odds_disp}    {m["hhad_conf"]}  ({_hcap_label})'),
     ]
     if m['wdl']:
         wdl_clean = m['wdl'].replace('%', '')
@@ -513,7 +522,9 @@ def build_match_page(m, page_num, total):
 
         inner = []
         title_row = Table(
-            [[Paragraph('● 主推推荐', S['rec_main']), Paragraph(f'@{odds}', S['rec_main_odds'])]],
+            # P1-4: odds=0/None → "未开盘", 不渲染"@0"
+            [[Paragraph('● 主推推荐', S['rec_main']),
+              Paragraph(f'@{odds}' if odds else '未开盘', S['rec_main_odds'])]],
             colWidths=[full_w * 0.32, full_w * 0.14]
         )
         title_row.setStyle(TableStyle([
@@ -572,8 +583,9 @@ def build_match_page(m, page_num, total):
             dir_ = entry.get('direction', '')
 
             odds_row = Table(
+                # P1-4: odds=0/None → "未开盘"
                 [[Paragraph(f'{_hhad_option_label(opt, m["hhad_h"])}', S['rec_sub_odds']),
-                  Paragraph(f'@{odds}', S['rec_sub_odds'])]],
+                  Paragraph(f'@{odds}' if odds else '未开盘', S['rec_sub_odds'])]],
                 colWidths=[full_w * 0.32, full_w * 0.14]
             )
             odds_row.setStyle(TableStyle([
@@ -631,8 +643,9 @@ def build_match_page(m, page_num, total):
         _ldr_odds = ldr.get('odds', 0)
         _ldr_ev = ldr.get('ev_pct', 0)
         _ldr_label = _hhad_option_label(ldr.get('option', ''), m['hhad_h'])
+        _ldr_odds_disp = f'@{_ldr_odds}' if _ldr_odds else '(未开盘)'  # P1-4
         alert_rows.append(Paragraph(
-            f'▲ 让平直推  {_ldr_label} @{_ldr_odds}  |  P = {_ldr_prob:.1f}%  |  EV = {_ldr_ev:+.1f}%',
+            f'▲ 让平直推  {_ldr_label} {_ldr_odds_disp}  |  P = {_ldr_prob:.1f}%  |  EV = {_ldr_ev:+.1f}%',
             S['alert_line']))
 
     # 平局关注行 (Ultra 11.18)
@@ -641,8 +654,9 @@ def build_match_page(m, page_num, total):
         _dar_prob = dar.get('prob', 0)
         _dar_odds = dar.get('odds', 0)
         _dar_ev = dar.get('ev_pct', 0)
+        _dar_odds_disp = f'@{_dar_odds}' if _dar_odds else '(未开盘)'  # P1-4
         alert_rows.append(Paragraph(
-            f'▲ 平局关注  HAD平 @{_dar_odds}  |  P = {_dar_prob:.1f}%  |  EV = {_dar_ev:+.1f}%  |  历史平局率≈25%',
+            f'▲ 平局关注  HAD平 {_dar_odds_disp}  |  P = {_dar_prob:.1f}%  |  EV = {_dar_ev:+.1f}%  |  历史平局率≈25%',
             S['alert_line_sub']))
 
     # 平局窗口HHAD优先行 (Ultra 11.19) — 平局场次让球盘判别力更强
@@ -984,7 +998,8 @@ def _strip_market(opt):
 def _wdl_cell(m):
     """胜平负列: 优先取共斥双推 wdl_picks (Ultra 11.30: 净胜球互斥Top2, 不重叠不冗余)
     命中率最高的选项高亮显示。字段缺失/为空时回退旧口径 HAD主推 + HHAD主推.
-    单行空格分隔, 不强制分行 (Ultra 11.28: 消除大片留空)"""
+    单行空格分隔, 不强制分行 (Ultra 11.28: 消除大片留白)
+    优化③ (Ultra 13.11): 模型-市场分歧≥15pp时追加红色警示行"""
     wdl = m.get('wdl_picks') or []
     if wdl:
         wdl = sorted(wdl, key=lambda x: x.get('prob', 0), reverse=True)
@@ -992,19 +1007,28 @@ def _wdl_cell(m):
         for i, it in enumerate(wdl):
             label = _strip_market(it.get('option', '?'))
             parts.append(_hl(label) if i == 0 else label)
-        return ' '.join(parts) if parts else '-'
-    candidates = []
-    pb = m.get('primary') or {}
-    if pb.get('option'):
-        candidates.append((pb.get('prob', 0), _strip_market(pb.get('option'))))
-    hpb = m.get('hhad_primary') or {}
-    if hpb.get('option'):
-        candidates.append((hpb.get('prob', 0), _strip_market(hpb.get('option'))))
-    candidates.sort(key=lambda x: x[0], reverse=True)
-    parts = []
-    for i, (_, label) in enumerate(candidates):
-        parts.append(_hl(label) if i == 0 else label)
-    return ' '.join(parts) if parts else '-'
+        base = ' '.join(parts) if parts else '-'
+    else:
+        candidates = []
+        pb = m.get('primary') or {}
+        if pb.get('option'):
+            candidates.append((pb.get('prob', 0), _strip_market(pb.get('option'))))
+        hpb = m.get('hhad_primary') or {}
+        if hpb.get('option'):
+            candidates.append((hpb.get('prob', 0), _strip_market(hpb.get('option'))))
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        parts = []
+        for i, (_, label) in enumerate(candidates):
+            parts.append(_hl(label) if i == 0 else label)
+        base = ' '.join(parts) if parts else '-'
+    # 优化③: 分歧警示 — 红色小字换行追加, 不挤占主推荐空间
+    md = m.get('market_divergence')
+    if md and md.get('flagged'):
+        arrow = '⇄' if md.get('dir_conflict') else '±'
+        base += (f'<br/><font name="CJKBold" color="#dc2626" size="9.5">'
+                 f'⚠️{arrow}市场{md.get("market_dir", "?")}{md.get("market_prob", 0):.0f}%'
+                 f' 分歧{md.get("max_diff_pp", 0):.0f}pp</font>')
+    return base
 
 
 def _hl(label):

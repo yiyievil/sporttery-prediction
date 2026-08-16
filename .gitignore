@@ -59,10 +59,10 @@ analysis_report_*.html
 renderData.json
 .wbtest_venv/
 
-# --- 生成报告与产物（HTML/PDF 报告、归档、分析输出，不入库）---
-# 顶层生成的投注指南 / 预测 PDF / 分析报告
-bet_guide_*.html
-pred_*.pdf
+# --- 生成报告与产物 ---
+# P2-9 (Ultra 13.10, 2026-08-16): 顶层 bet_guide_*.html / pred_*.pdf 是每日交付物,
+# 仓库策略=最新一期入库(此前每次都要 git add -f, 容易漏提交), 故不再忽略;
+# 历史积累由人工定期清理, 分析类HTML继续忽略
 prediction-analysis-*.html
 verify_analysis_*.html
 

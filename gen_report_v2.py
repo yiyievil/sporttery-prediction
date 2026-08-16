@@ -330,6 +330,8 @@ def rank_match(key, meta, result):
         'swot_adjust': swot_adjust,
         'swot_key_factor': swot_key_factor,
         'swot_prob_adjust': swot_prob_adjust,
+        'swot_sample_warning': swot.get('sample_warning'),  # 优化②: 小样本警示
+        'market_divergence': result.get('market_divergence'),  # 优化③: 模型-市场分歧
         'data_source': data_source,
         'goals': goals,
         'score_info': score_info,
@@ -489,6 +491,19 @@ body {{ font-family: 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif; backgrou
                 html += f'<span class="swot-tag" style="background:#3a2a1a;color:#f39c12">🔄 SWOT翻转: {pa["old_dir"]}→{pa["new_dir"]} ({pa["old_p"]}→{pa["new_p"]})</span>\n'
             else:
                 html += f'<span style="color:#777">概率调整: {pa["old_p"]}→{pa["new_p"]}</span>\n'
+
+        # 优化② (Ultra 13.11): 小样本警示徽标
+        if m.get('swot_sample_warning'):
+            html += f'<span class="swot-tag" style="background:#3a1a1a;color:#e74c3c">{m["swot_sample_warning"]}</span>\n'
+
+        # 优化③ (Ultra 13.11): 模型-市场分歧徽标 (≥15pp)
+        _md = m.get('market_divergence')
+        if _md and _md.get('flagged'):
+            _arrow = '⇄方向相反' if _md.get('dir_conflict') else '±幅度偏离'
+            html += (f'<span class="swot-tag" style="background:#4a1a2a;color:#ff6b9d" '
+                     f'title="{_md.get("note","")}">⚠️ 市场分歧{_arrow}: 模型{_md.get("model_dir")}'
+                     f'{_md.get("model_prob",0):.0f}% vs 市场{_md.get("market_dir")}'
+                     f'{_md.get("market_prob",0):.0f}% ({_md.get("max_diff_pp",0):.0f}pp)</span>\n')
         
         if m['swot_key_factor']:
             html += f'<span style="color:#999">关键因素: {m["swot_key_factor"]}</span>\n'

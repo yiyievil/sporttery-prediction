@@ -468,7 +468,8 @@ class MemoryStore:
             }
         """
         warnings = []
-        result = {'valid': True, 'date': '', 'sequence': '', 'warnings': warnings}
+        result = {'valid': True, 'date': '', 'sequence': '', 'warnings': warnings,
+                  'rule_reminders': []}  # P2-6 (Ultra 13.10): 铁律提醒独立存放, 不混入warnings
 
         if len(match_id) != 9 or not match_id.isdigit():
             result['valid'] = False
@@ -504,10 +505,13 @@ class MemoryStore:
                 warnings.append(f"记忆库已有此编号记录: {mem['text'][:100]}...")
 
         # 检查铁律中是否有编号相关规则
+        # P2-6 (Ultra 13.10): 260816冒烟实测 82场次×每场次都追加"铁律提醒[RULE-003]" →
+        # 预测日志刷82条"⚠️ 编号xxx有历史纠正记录"全是噪音。铁律提醒与具体编号无关,
+        # 移到 rule_reminders 独立字段, 且全批次只在上下文注入时提示一次(铁律节已展示)
         rules = self.load_critical_rules()
         for rule in rules:
             if '编号' in rule.get('title', '') or 'matchNum' in rule.get('title', ''):
-                warnings.append(f"铁律提醒 [{rule['id']}]: {rule['title']}")
+                result['rule_reminders'].append(f"铁律提醒 [{rule['id']}]: {rule['title']}")
 
         return result
 

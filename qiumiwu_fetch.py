@@ -705,10 +705,18 @@ def parse_rank_number(rank_str: str) -> tuple[int | None, int | None]:
 # Ultra 13.2 (排名阶梯缩放 2026-08-14): 联赛排名影响随轮次阶梯放大
 # 赛季初(第1轮)排名≈队名排序, 不代表真实实力; 随联赛进程逐步收敛到真实实力
 # 每5轮调一次: 1-5轮 0.05 → 6-10轮 0.25 → 11-15轮 0.50 → 16-20轮 0.70 → 21-25轮 0.85 → 26+轮 1.00
-ROUND_SCALE_STEPS = [0.05, 0.25, 0.50, 0.70, 0.85, 1.00]
+# Ultra 13.10 (P0-2 2026-08-16 冒烟修正):
+#   ① 轮次<6 或轮次未知(0) → 乘子完全禁用(0.0)。旧版轮次未知用满权重1.0是缺陷:
+#      260816 葡超第1-2轮场次轮次解析失败时, 排名差把 λ_h 压到 0.30 下限、λ_a 顶到 2.5+,
+#      直接造成 026法马利康/027布拉加 模型方向与欧指主胜完全反向。
+#   ② 乘子边界收紧 [0.5, 2.0]: RANK_PENALTY_FLOOR 0.30→0.50, 加成上限 3.0→2.0
+ROUND_SCALE_STEPS = [0.00, 0.25, 0.50, 0.70, 0.85, 1.00, 1.00]  # 索引=(轮-1)//5: 1-5轮禁用, 6-10轮0.25, 26+轮1.00
 ROUND_STEP_SIZE = 5          # 每5轮上调一档
-RANK_MAX_IMPACT = 2.0        # 满权重最大影响: λ_h ×(1+2.0)=×3.0 (顶级球队应获充分加成)
-RANK_PENALTY_FLOOR = 0.30    # 弱队λ下限, 防止过度惩罚导致负值
+RANK_MIN_ROUNDS = 6          # 最少轮次门槛: 联赛<6轮排名≈队名字典序, 无信息量
+RANK_MAX_IMPACT = 1.0        # 满权重最大影响: λ_h ×(1+1.0)=×2.0 (收紧自2.0/×3.0)
+RANK_PENALTY_FLOOR = 0.50    # 弱队λ下限 0.50 (收紧自0.30, 防过度惩罚)
+RANK_MULT_FLOOR = 0.50       # 乘子硬下限 (P0-2)
+RANK_MULT_CAP = 2.00         # 乘子硬上限 (P0-2)
 
 
 def extract_round_num(league_str: str) -> int:
@@ -722,16 +730,17 @@ def extract_round_num(league_str: str) -> int:
 def round_scale_factor(round_num: int) -> float:
     """轮次缩放系数: 排名权重随轮次阶梯放大 (每5轮调一次)
 
-    第1-5轮   → 0.05 (排名≈队名排序, 几乎无信息量)
+    第1-5轮   → 0.00 (P0-2: 排名≈队名字典序, 完全禁用; 旧版0.05仍引入噪声)
     第6-10轮  → 0.25
     第11-15轮 → 0.50
     第16-20轮 → 0.70
     第21-25轮 → 0.85
     第26轮+   → 1.00 (满权重, 漫长联赛30+轮排名已稳定)
-    无轮次信息(round_num=0) → 1.00 (保守用满权重, 不因缺数据忽略排名)
+    无轮次信息(round_num=0) → 0.00 (P0-2: 旧版1.0满权重是缺陷, 排名来源轮次不明
+      时无法判断信息量, 宁可禁用也不用满权重压λ)
     """
     if round_num <= 0:
-        return 1.0
+        return 0.0
     step = (round_num - 1) // ROUND_STEP_SIZE
     return ROUND_SCALE_STEPS[min(step, len(ROUND_SCALE_STEPS) - 1)]
 
@@ -786,19 +795,24 @@ def compute_rank_boost(home_rank_str: str, away_rank_str: str,
     norm_diff = rank_diff / league_size
     impact = math.tanh(abs(norm_diff) * 3) * RANK_MAX_IMPACT * r_scale
 
+    # Ultra 13.10 (P0-2): r_scale=0 (轮次<6/未知) 时乘子已恒为1.0, 提前返回
+    if r_scale <= 0:
+        result["note"] = f"排名差{rank_diff:+d}(主{h_rank}vs客{a_rank}) 第{round_num or '?'}轮 (<{RANK_MIN_ROUNDS}轮/轮次未知, 乘子禁用)"
+        return result
+
     if rank_diff > 0:
         # 主队排名更高(实力更强)
-        result["boost_factor"] = 1.0 + impact
-        result["penalty_factor"] = max(RANK_PENALTY_FLOOR, 1.0 - impact * 0.7)
+        result["boost_factor"] = min(RANK_MULT_CAP, 1.0 + impact)
+        result["penalty_factor"] = max(RANK_MULT_FLOOR, 1.0 - impact * 0.7)
         result["note"] = f"排名差+{rank_diff}(主{h_rank}vs客{a_rank}), λ_h×{result['boost_factor']:.3f} λ_a×{result['penalty_factor']:.3f}"
         if round_num > 0 and r_scale < 1.0:
-            result["note"] += f" [第{round_num}轮×{r_scale:.2f}缩放]"
+            result["note"] += f" [第{round_num}轮×{r_scale:.2f}缩放, 边界{RANK_MULT_FLOOR}~{RANK_MULT_CAP}]"
     else:
-        result["boost_factor"] = max(RANK_PENALTY_FLOOR, 1.0 - impact * 0.7)
-        result["penalty_factor"] = 1.0 + impact
+        result["boost_factor"] = max(RANK_MULT_FLOOR, 1.0 - impact * 0.7)
+        result["penalty_factor"] = min(RANK_MULT_CAP, 1.0 + impact)
         result["note"] = f"排名差{rank_diff}(主{h_rank}vs客{a_rank}), λ_h×{result['boost_factor']:.3f} λ_a×{result['penalty_factor']:.3f}"
         if round_num > 0 and r_scale < 1.0:
-            result["note"] += f" [第{round_num}轮×{r_scale:.2f}缩放]"
+            result["note"] += f" [第{round_num}轮×{r_scale:.2f}缩放, 边界{RANK_MULT_FLOOR}~{RANK_MULT_CAP}]"
 
     return result
 

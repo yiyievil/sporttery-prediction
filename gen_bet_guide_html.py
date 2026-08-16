@@ -197,6 +197,12 @@ def generate(pred_json=None):
                 rec = f"{hh_dir} @{hh_odds} (让球·HAD未开盘)"
                 rec_cls, tag = 'single', '✅ 单选'
                 reason = f'HAD未开盘, 仅HHAD可选: {hh_dir} (HHAD P={hh.get("p","")})'
+            elif hh_dir:
+                level = 'single'
+                n_single += 1
+                rec = f"{hh_dir} (让球·HAD未开盘, 赔率以盘口为准)"  # P1-4: odds=0不渲染@0
+                rec_cls, tag = 'single', '✅ 单选'
+                reason = f'HAD未开盘, 仅HHAD可选: {hh_dir} (HHAD赔率未同步)'
             else:
                 level = 'avoid'
                 n_avoid += 1
@@ -221,11 +227,15 @@ def generate(pred_json=None):
 
             if level == 'draw':
                 n_draw += 1
-                rec = f"平 @{had.get('draw_odds', '3.00')} (胜平负·平局直击)"
+                _do = had.get('draw_odds') or '3.00'  # P1-4: 兜底默认
+                rec = f"平 @{_do} (胜平负·平局直击)"
                 rec_cls, tag = 'draw', '🎯 平局直击'
             elif level == 'single':
                 n_single += 1
-                rec = f"{had.get('dir','')} @{had.get('odds','')} (胜平负)"
+                _ho = had.get('odds', '')
+                # P1-4: odds=None/0 (SWOT翻转或档位停售) → 注明以盘口为准, 不渲染"@0"
+                _ho_s = f'@{_ho}' if _ho else '(赔率以盘口为准)'
+                rec = f"{had.get('dir','')} {_ho_s} (胜平负)"
                 rec_cls, tag = 'single', '✅ 单选'
             elif level == 'cover':
                 n_cover += 1
@@ -250,9 +260,11 @@ def generate(pred_json=None):
         primary_note = ''
         if primary_opt and primary_odds:
             pct = f"P={primary_prob:.0f}%" if isinstance(primary_prob, (int, float)) else ''
-            primary_note = f'📌 首推参考(命中率优先): <b>{primary_opt} @{primary_odds}</b> {pct}'
+            _po_s = f'@{primary_odds}' if primary_odds else '(赔率以盘口为准)'  # P1-4
+            primary_note = f'📌 首推参考(命中率优先): <b>{primary_opt} {_po_s}</b> {pct}'
         cards.append({
             'no': key, 'home': meta.get('home', '?'), 'away': meta.get('away', '?'),
+            'time': meta.get('match_time', ''), 'league': league,  # P2-8: 加比赛时间+联赛
             'level': level, 'tag': tag, 'rec': rec, 'reason': reason,
             'probs': f'{w:.0f}/{dr:.0f}/{l:.0f}', 'conf': conf,
             'diff': m.get('difficulty', 0), 'agree': m.get('model_agreement', 0),
@@ -261,6 +273,8 @@ def generate(pred_json=None):
             'draw_value': draw_value, 'draw_value_reason': draw_value_reason,
             'draw_odds': had.get('draw_odds', '3.00'),
             'primary_note': primary_note,
+            'mkt_div': m.get('market_divergence'),  # 优化③: 模型-市场分歧
+            'swot_sample_warning': (m.get('swot') or {}).get('sample_warning'),  # 优化②: 小样本警示
         })
 
     # 过关建议: 四档主推 (单选+平局直击场)
@@ -278,12 +292,28 @@ def generate(pred_json=None):
         if c.get('draw_value'):
             dv_html = f'<div class="mc-draw-value">💡 平局价值: <b>平 @{c.get("draw_odds","3.00")}</b> (胜平负·小注) — {c.get("draw_value_reason","")}</div>'
         primary_html = f'<div class="mc-primary">{c["primary_note"]}</div>' if c.get('primary_note') else ''
+        # 优化③ (Ultra 13.11): 模型-市场分歧警示行 (≥15pp)
+        div_html = ''
+        _md = c.get('mkt_div')
+        if _md and _md.get('flagged'):
+            _arrow = '方向相反' if _md.get('dir_conflict') else '幅度偏离'
+            div_html = (f'<div class="mc-mkt-div">⚠️ 市场分歧({_arrow}): 模型{_md.get("model_dir","?")}'
+                        f'{_md.get("model_prob",0):.0f}% vs 市场{_md.get("market_dir","?")}'
+                        f'{_md.get("market_prob",0):.0f}%, 分歧{_md.get("max_diff_pp",0):.0f}pp'
+                        f' — {_md.get("note","").split("—")[-1].strip() if "—" in str(_md.get("note","")) else "谨慎参考"}</div>')
+        # 优化② (Ultra 13.11): SWOT小样本警示行
+        ss_html = ''
+        if c.get('swot_sample_warning'):
+            ss_html = f'<div class="mc-sample">{c["swot_sample_warning"]}</div>'
         card_html += f'''<div class="mc {c['rec_cls']}">
   <div class="mc-top"><span class="mc-no">{c['no']}</span>
+    <span class="mc-time">{c.get('time','')}</span><span class="mc-lg">{c.get('league','')}</span>
     <span class="mc-teams"><b>{c['home']}</b> vs {c['away']}</span>
     <span class="mc-tag {c['rec_cls']}">{c['tag']}</span></div>
   <div class="mc-rec">{c['rec']}</div>
   {primary_html}
+  {div_html}
+  {ss_html}
   {ds_html}
   {dv_html}
   <div class="mc-meta">概率 {c['probs']}% · {c['conf']} · 可预测性 {c['diff']} · 一致性 {c['agree']:.0%}</div>
@@ -336,6 +366,8 @@ h1{{font-size:21px;font-weight:800}}
 .mc.single{{border-left-color:#16a34a}} .mc.cover{{border-left-color:#f59e0b}} .mc.avoid{{border-left-color:#dc2626;background:#fafafa}} .mc.draw{{border-left-color:#eab308;background:linear-gradient(135deg,#fffbeb,#fefce8)}}
 .mc-top{{display:flex;align-items:center;gap:8px;flex-wrap:wrap}}
 .mc-no{{font-weight:800;color:#334155;background:#eef2f7;border-radius:6px;padding:2px 8px;font-size:12px}}
+.mc-time{{color:#0ea5e9;font-weight:700;font-size:12px;font-variant-numeric:tabular-nums}}
+.mc-lg{{color:#94a3b8;font-size:11px}}
 .mc-teams{{font-size:14px;flex:1}}
 .mc-tag{{font-size:12px;font-weight:700;border-radius:6px;padding:3px 8px}}
 .mc-tag.single{{background:#dcfce7;color:#15803d}} .mc-tag.cover{{background:#fef3c7;color:#b45309}} .mc-tag.avoid{{background:#fee2e2;color:#b91c1c}} .mc-tag.draw{{background:#fef9c3;color:#92400e}}
@@ -348,6 +380,8 @@ h1{{font-size:21px;font-weight:800}}
 .mc-meta{{font-size:11px;color:#94a3b8}}
 .mc-reason{{font-size:12px;color:#475569;margin-top:6px;line-height:1.6;background:#f8fafc;border-radius:8px;padding:8px 10px}}
 .mc-primary{{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#f0f9ff;border:1px dashed #93c5fd;color:#1d4ed8}}
+.mc-mkt-div{{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#fef2f2;border:1px solid #f87171;color:#b91c1c;font-weight:600}}
+.mc-sample{{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#fff7ed;border:1px dashed #fb923c;color:#c2410c}}
 .sec{{font-size:15px;font-weight:800;margin:16px 0 4px}}
 .ins{{padding:11px 13px;border-radius:8px;font-size:12.5px;margin:8px 0;line-height:1.7;border-left:4px solid}}
 .ins.good{{background:#f0fdf4;border-color:#16a34a}} .ins.warn{{background:#fffbeb;border-color:#f59e0b}} .ins.bad{{background:#fef2f2;border-color:#dc2626}}

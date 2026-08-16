@@ -349,10 +349,12 @@ def fuse_swot_into_predictions(pred_file):
                 had['p'] = _fmt_wdl(new_wdl)
                 had['dir'] = new_dir
                 if prob_adjust['flipped']:
-                    # 修复: 原用 m.get('HAD') 取分项赔率是死代码 (meta 无 'HAD' 键, 且 HAD 结构
-                    # 只有主推 odds 无 h/d/a 分项), 导致翻转后 odds 仍为旧方向赔率;
-                    # 置 0 提示"以当前盘口为准", 避免误用旧方向赔率
-                    had['odds'] = 0
+                    # 修复(P1-4, Ultra 13.10): 原用 m.get('HAD') 取分项赔率是死代码 (meta 无 'HAD' 键,
+                    # 且 HAD 结构只有主推 odds 无 h/d/a 分项), 导致翻转后 odds 仍为旧方向赔率。
+                    # 旧方案置 0 → 全部展示层渲染成"胜@0"像坏数据;
+                    # 现改为 None + odds_note 说明, 展示层统一渲染"以当前盘口为准"
+                    had['odds'] = None
+                    had['odds_note'] = 'SWOT翻转方向, 赔率未同步, 以体彩当前盘口为准'
                 # 同步调整比分矩阵的wdl汇总 (保持顶层一致)
                 sc = result.get('score', {})
                 if isinstance(sc, dict) and sc.get('wdl'):
@@ -435,12 +437,58 @@ def fuse_swot_into_predictions(pred_file):
         away_key = _shorten(swot_data.get('away_weaknesses', [''])[0]) if swot_data.get('away_weaknesses') else ''
         
         key_factor = f"{home}{home_key}，{away}{away_key}，{trend_str}"
-        
-        result['swot'] = {
+
+        # 优化② (Ultra 13.11, 2026-08-16): SWOT小样本标注 — 球队xG样本n<3时,
+        # 对该队SWOT条目中的统计性表述(场均/失球/进球/xG)追加"(小样本n=X)"
+        # 260816实证: 026马里迪莫"防守稳固: 场均仅失0.0球"来自仅1场数据,
+        # 读者会误以为是赛季稳定属性; 标注后信息透明, 由用户自行权衡
+        def _annotate_small_sample(items, n_games):
+            """给样本敏感条目追加小样本标注, 返回(新列表, 标注数)"""
+            if not items or not isinstance(n_games, int) or n_games >= 3:
+                return items, 0
+            _kw = ('场均', '失球', '进球', 'xG', 'XG')
+            out, cnt = [], 0
+            for it in items:
+                if isinstance(it, str) and any(k in it for k in _kw) and '小样本' not in it:
+                    out.append(f"{it}(小样本n={n_games})")
+                    cnt += 1
+                else:
+                    out.append(it)
+            return out, cnt
+
+        _xg_res = result.get('xg_data') or {}
+        _n_h = (_xg_res.get('home') or {}).get('n_games', 99)
+        _n_a = (_xg_res.get('away') or {}).get('n_games', 99)
+        _swot_out = {
             'home_strengths': swot_data.get('home_strengths', []),
             'home_weaknesses': swot_data.get('home_weaknesses', []),
             'away_strengths': swot_data.get('away_strengths', []),
             'away_weaknesses': swot_data.get('away_weaknesses', []),
+        }
+        _annotated = 0
+        if isinstance(_n_h, int) and _n_h < 3:
+            _swot_out['home_strengths'], _c1 = _annotate_small_sample(_swot_out['home_strengths'], _n_h)
+            _swot_out['home_weaknesses'], _c2 = _annotate_small_sample(_swot_out['home_weaknesses'], _n_h)
+            _annotated += _c1 + _c2
+        if isinstance(_n_a, int) and _n_a < 3:
+            _swot_out['away_strengths'], _c3 = _annotate_small_sample(_swot_out['away_strengths'], _n_a)
+            _swot_out['away_weaknesses'], _c4 = _annotate_small_sample(_swot_out['away_weaknesses'], _n_a)
+            _annotated += _c3 + _c4
+        sample_warning = None
+        if _annotated > 0:
+            _ss_teams = []
+            if isinstance(_n_h, int) and _n_h < 3:
+                _ss_teams.append(f"{home}(n={_n_h})")
+            if isinstance(_n_a, int) and _n_a < 3:
+                _ss_teams.append(f"{away}(n={_n_a})")
+            sample_warning = (f"⚠️ 小样本警示: {'、'.join(_ss_teams)} xG样本不足3场, "
+                              f"其统计性优劣势已标注(共{_annotated}条), 参考价值有限")
+
+        result['swot'] = {
+            'home_strengths': _swot_out['home_strengths'],
+            'home_weaknesses': _swot_out['home_weaknesses'],
+            'away_strengths': _swot_out['away_strengths'],
+            'away_weaknesses': _swot_out['away_weaknesses'],
             'swot_lean': lean,
             'swot_score': f'主{home_score:.1f}/客{away_score:.1f}',
             'key_factor': key_factor,
@@ -454,6 +502,7 @@ def fuse_swot_into_predictions(pred_file):
             'source_url': swot_data.get('swot_url', ''),
             'fused_at': now_str,
             'trend': trend,
+            'sample_warning': sample_warning,  # 优化②: 小样本警示(None=样本充足)
         }
         fused_count += 1
     

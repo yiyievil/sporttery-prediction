@@ -296,12 +296,15 @@ def inject_memory_context():
     context = _mem.get_prediction_context(match_ids=match_ids, user_input=user_input)
     print(context)
 
-    # 检查是否有编号相关的警告 (每编号只提示一次, Bug-2修复)
-    for mid in match_ids:
-        validation = _mem.validate_match_id(mid)
-        if any('RULE-001' in w or 'RULE-003' in w or '记忆库已有此编号记录' in w
-               for w in validation.get('warnings', [])):
-            print(f"  [记忆] ⚠️ 编号 {mid} 有历史纠正记录, 请确认编号正确!")
+    # 检查是否有编号相关的警告 (P2-6/P2-7, Ultra 13.10: 聚合成一行, 不再每编号刷一条)
+    # 260816冒烟实测: 82条"⚠️ 编号xxx有历史纠正记录"重复警告全是铁律RULE-003噪音;
+    # 现在只报真正与该编号绑定的记录('记忆库已有此编号记录'), 且全批次汇总为1行
+    ids_with_history = [mid for mid in match_ids
+                        if any('记忆库已有此编号记录' in w
+                               for w in _mem.validate_match_id(mid).get('warnings', []))]
+    if ids_with_history:
+        _show = ', '.join(ids_with_history[:5]) + ('...' if len(ids_with_history) > 5 else '')
+        print(f"  [记忆] ⚠️ {len(ids_with_history)}个编号在记忆库有历史记录({_show}), 请确认编号正确!")
 
     # Ultra 7.6: 纠错记录硬中止 — 编号曾被用户纠正(importance>=0.8)时中止预测
     hard = _mem.get_correction_records(match_ids)
@@ -1355,15 +1358,43 @@ def fetch_one_match(match_num, match_info, fixture_id):
             return fn(fixture_id)
         except Exception:
             return None
+
+    def _safe_init(name, fn):
+        """P1-5 (Ultra 13.10, 2026-08-16 冒烟修正): 初赔抓取失败强制重试1次 + 显式日志
+
+        260816 冒烟实测: init_ouzhi/yazhi/daxiao 静默返回 None (页面结构变化/限流/空响应),
+        无日志无重试, 初赔缺失直接影响市场锚回退(P0-1)和初终赔变动分析。
+        规则: 第1次失败(异常或None) → 等1s重试1次 → 仍失败打印警告并返回None。
+        """
+        import time as _time
+        for attempt in (1, 2):
+            try:
+                r = fn(fixture_id)
+                if r is not None:
+                    return r
+                if attempt == 1:
+                    print(f"  [初赔] ⚠️ {match_num} {name} 第1次无数据, 1s后重试")
+                    _time.sleep(1)
+                    continue
+                print(f"  [初赔] ❌ {match_num} {name} 重试后仍无数据 (初赔缺失, 下游自动兜底)")
+                return None
+            except Exception as e:
+                if attempt == 1:
+                    print(f"  [初赔] ⚠️ {match_num} {name} 异常({str(e)[:50]}), 1s后重试")
+                    _time.sleep(1)
+                    continue
+                print(f"  [初赔] ❌ {match_num} {name} 重试后仍失败: {str(e)[:60]}")
+                return None
+        return None
     
-    # 6个请求全部并行 (仅依赖fixture_id, 无相互依赖)
+    # 6个请求全部并行 (仅依赖fixture_id, 无相互依赖); 初赔三盘走P1-5重试+日志包装
     with ThreadPoolExecutor(max_workers=6) as pool:
         fut_ouzhi = pool.submit(fetch_ouzhi_json, fixture_id)
         fut_shuju = pool.submit(fetch_shuju_page, fixture_id)
         fut_daxiao = pool.submit(fetch_daxiao_goal_line, fixture_id)
-        fut_init_ouzhi = pool.submit(_safe, fetch_initial_ouzhi)
-        fut_init_yazhi = pool.submit(_safe, fetch_initial_yazhi)
-        fut_init_daxiao = pool.submit(_safe, fetch_initial_daxiao)
+        fut_init_ouzhi = pool.submit(_safe_init, '欧指', fetch_initial_ouzhi)
+        fut_init_yazhi = pool.submit(_safe_init, '亚指', fetch_initial_yazhi)
+        fut_init_daxiao = pool.submit(_safe_init, '大小', fetch_initial_daxiao)
         
         try:
             result['ouzhi'] = fut_ouzhi.result()
@@ -5378,6 +5409,16 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
         cv_quality = 1.0 / (1.0 + mae)
         overperformance = avg_actual - avg_xg_for
 
+        # 优化① (Ultra 13.11, 2026-08-16): xG小样本降权 — n<3时cv_quality按样本量打折
+        # 260816实证: 026马里迪莫 xG样本仅1场(n=1), cv_quality却高达0.62(n=1时MAE只有
+        # 1个样本点, 几乎恒好看), 触发"质量≥0.45加星"逻辑, 用1场数据给置信度+0.5★。
+        # 规则: n<3 → cv_quality *= n/3 (n=1打3.3折, n=2打6.7折), 原始值存cv_quality_raw
+        XG_MIN_SAMPLE_N = 3
+        small_sample = n < XG_MIN_SAMPLE_N
+        cv_quality_raw = round(cv_quality, 3)
+        if small_sample:
+            cv_quality = cv_quality * (n / XG_MIN_SAMPLE_N)
+
         if avg_ppda is not None:
             pressure_index = 1.0 / (1.0 + pow(2.71828, (avg_ppda - 11.0) / 3.0))
             pressure_index = round(pressure_index, 3)
@@ -5399,7 +5440,9 @@ def fetch_xg_rolling_stats(team_cn, match_date, league_cn='', window=10):
             'ppda_stability': round(ppda_stability, 3),
             'overperformance': round(overperformance, 2),
             'cv_quality': round(cv_quality, 3),
+            'cv_quality_raw': cv_quality_raw,  # 优化①: 打折前原始值(n<3时≠cv_quality)
             'n_games': n,
+            'small_sample': small_sample,  # 优化①: n<3小样本标记, 供SWOT标注/展示层使用
             'has_xg': not is_proxy,
             'is_proxy': is_proxy,
         }
@@ -6572,6 +6615,10 @@ def predict_match(match_num, data):
     sp = data
     had = sp['HAD']
     hhad = sp['HHAD']
+    # Ultra 13.10 (P0-1): v611_notes/flags 提前到函数开头初始化 —
+    # 市场锚回退逻辑(Step 2)早于原初始化点, 需要在Step 2就能打降级标记
+    v611_notes = []
+    v611_flags = {}
     ouzhi = sp.get('ouzhi') or {}
     shuju = sp.get('shuju') or {}
     daxiao = sp.get('daxiao') or {}
@@ -6639,11 +6686,13 @@ def predict_match(match_num, data):
     
     if avg_odds:
         ow, od, ol = avg_odds['w'], avg_odds['d'], avg_odds['l']
+        _euro_anchor_src = 'shuju页平均欧指'
     elif ouzhi and not ouzhi_is_rr:
         # ouzhi返回正常赔率(>1.0)
         ow = ouzhi.get('latest_w', 2.0)
         od = ouzhi.get('latest_d', 3.2)
         ol = ouzhi.get('latest_l', 3.0)
+        _euro_anchor_src = '500.com欧指API'
     elif ouzhi and ouzhi_is_rr:
         # ouzhi返回返还率(<1.0)
         # 检测最新值是否收敛(三值差异<0.05→无区分度)
@@ -6661,11 +6710,26 @@ def predict_match(match_num, data):
         rs = rw + rd + rl
         pw5, pd5, pl5 = rw/rs, rd/rs, rl/rs
         ow = od = ol = 0  # 标记已直接计算概率
+        _euro_anchor_src = '500.com欧指返还率'
     else:
-        # 无ouzhi数据，用体彩或默认值
-        ow = float(had.get('h')) if had and had.get('h') else 2.0
-        od = float(had.get('d')) if had and had.get('d') else 3.2
-        ol = float(had.get('a')) if had and had.get('a') else 3.0
+        # 无ouzhi数据 → P0-1修复(Ultra 13.10): 初赔AJAX平均欧指兜底, 避免直接落到默认值
+        # 260816冒烟实测: HAD未开盘+shuju/ouzhi缺失时, 旧逻辑用默认2.0/3.2/3.0冒充市场锚,
+        # 026法马利康/027布拉加被qiumiwu乘子拖成模型负 vs 欧指主胜51%+ 的方向背离
+        _init_euro = (init_ouzhi or {}).get('avg_instant') or (init_ouzhi or {}).get('avg_initial')
+        if _init_euro and len(_init_euro) >= 3 and all(float(x) > 1.0 for x in _init_euro[:3]):
+            ow, od, ol = float(_init_euro[0]), float(_init_euro[1]), float(_init_euro[2])
+            _euro_anchor_src = '初赔AJAX平均欧指'
+            print(f"  [市场锚] HAD未开盘且无500欧指, 回退初赔AJAX: {ow:.2f}/{od:.2f}/{ol:.2f}")
+        elif had and had.get('h'):
+            ow = float(had.get('h')); od = float(had.get('d', 3.2)); ol = float(had.get('a', 3.0))
+            _euro_anchor_src = '体彩HAD直用'
+        else:
+            # 彻底无市场数据: 默认值冒充锚 → 打降级标记, 让下游知道本场缺市场源
+            ow, od, ol = 2.0, 3.2, 3.0
+            _euro_anchor_src = '默认值(⚠️无真实市场锚)'
+            v611_flags['market_anchor_degraded'] = True
+            v611_notes.append("⚠️降级预测: HAD未开盘且欧指/初赔全部缺失, 市场源为默认赔率(2.0/3.2/3.0), 概率以模型源为主, 建议开盘后update重算")
+            print(f"  [市场锚] ⚠️ {match_num} 无任何真实赔率, 用默认值锚(降级预测)")
     
     if ow > 0:  # 正常赔率路径
         # Ultra 2.0: Shin's method 替代简单1/odds归一化
@@ -6908,8 +6972,23 @@ def predict_match(match_num, data):
             # 贝叶斯收缩 — 用实际样本量而非硬编码10
             league = sp.get('league', '')
             LEAGUE_AVG_GF = LEAGUE_AVG_GF_MAP.get(league, 1.3)
-            lam_h = bayesian_shrinkage(lam_h, _xg_home['n_games'], LEAGUE_AVG_GF, k=10)
-            lam_a = bayesian_shrinkage(lam_a, _xg_away['n_games'], LEAGUE_AVG_GF, k=10)
+            # 优化① (Ultra 13.11): xG小样本(n<3)收缩强度k放大 10→30
+            # n=1时样本权重从 1/11≈9% 压到 1/31≈3%, 单场漂亮数据不再能拉动λ
+            # 260816实证: 026客队n=1(xG1.47/失0球), 旧k=10下λ_a仍被拉高, 模型偏客胜
+            # 与市场主胜51%反向; k=30后向联赛均值(1.3)充分回归, 以市场信号为主
+            _k_h = 30 if _xg_home['n_games'] < 3 else 10
+            _k_a = 30 if _xg_away['n_games'] < 3 else 10
+            if _k_h > 10 or _k_a > 10:
+                v611_flags['xg_small_sample'] = True
+                _ss_parts = []
+                if _k_h > 10:
+                    _ss_parts.append(f"主队n={_xg_home['n_games']}")
+                if _k_a > 10:
+                    _ss_parts.append(f"客队n={_xg_away['n_games']}")
+                v611_notes.append(f"xG小样本降权({'+'.join(_ss_parts)}): 贝叶斯收缩k=30+cv_quality按n/3打折, λ向联赛均值回归")
+                print(f"  [xG] ⚠️ 小样本降权: {'/'.join(_ss_parts)} <3场, 收缩k=10→30, cv_quality按n/3打折")
+            lam_h = bayesian_shrinkage(lam_h, _xg_home['n_games'], LEAGUE_AVG_GF, k=_k_h)
+            lam_a = bayesian_shrinkage(lam_a, _xg_away['n_games'], LEAGUE_AVG_GF, k=_k_a)
             # xG超额修正: 超额表现(实际>xG)不可持续, 适度回调
             # Ultra 7.7: 超额>+0.5 视为强回归信号, 加大回调力度
             if _xg_home['overperformance'] > 0.3:
@@ -7008,8 +7087,7 @@ def predict_match(match_num, data):
     
     # ===== Ultra 6.11: 五大场景修正 (2026-07-28) =====
     # 在市场盘口校准后、compute_scores前施加, 修正系统性盲区
-    v611_notes = []
-    v611_flags = {}
+    # (v611_notes/flags 已在函数开头初始化 — Ultra 13.10 P0-1)
 
     # --- 修正1: 近况滑坡 (主队近3场LLL → 下调进攻λ) ---
     h_slump, h_slump_sev = detect_form_slump(home_form, n_recent=3)
@@ -7470,6 +7548,10 @@ def predict_match(match_num, data):
     if had_open:
         had_dir = had_dirs[had_min_idx]
         odds = round([had['h'], had['d'], had['a']][had_min_idx], 2)
+        # P1-4 (Ultra 13.10): 所选方向赔率无效(0=停售/未开档位)时置 None,
+        # 展示层统一渲染"以盘口为准", 不再出现"胜@0"
+        if odds is not None and odds <= 0:
+            odds = None
     else:
         had_dir = '未开盘'
         odds = None
@@ -7824,8 +7906,9 @@ def predict_match(match_num, data):
     # ===== 证据收集 =====
     had_str = f"{had['h']}/{had['d']}/{had['a']}" if had_open else "未开"
     hhad_str = f"{handicap} {hhad['h']}/{hhad['d']}/{hhad['a']}" if hhad and 'h' in hhad else f"{handicap} 未开"
+    _odds_tag = f"@{odds}" if odds else "(赔率以盘口为准)"  # P1-4: odds=None 渲染兜底
     evidence = [
-        f"HAD {had_str}→{had_dir}@{odds}" if had_open else f"HAD 未开→不推荐",
+        f"HAD {had_str}→{had_dir}{_odds_tag}" if had_open else f"HAD 未开→不推荐",
         f"HHAD {hhad_str}→{hhad_dir}",
     ]
     if ouzhi or avg_odds or init_ouzhi:
@@ -7927,6 +8010,52 @@ def predict_match(match_num, data):
         if not sporttery_pools:
             sporttery_pools = None
 
+    # 优化③ (Ultra 13.11, 2026-08-16): 模型-市场分歧检测 — 任一方向概率差≥15pp时高亮
+    # 260816实证: 026法马利康 模型负42% vs 市场主胜52.6%, 分歧26.6pp无任何提示,
+    # 用户盲从模型方向易踩"模型小样本偏差 vs 市场真金白银"的坑。
+    # 市场源优先级: 体彩HAD即时(Shin去水) > 欧指锚概率pw5/pd5/pl5
+    market_divergence = None
+    try:
+        _mkt_p, _mkt_src = None, ''
+        if had_open and all(had.get(k, 0) and had.get(k, 0) > 1.0 for k in ('h', 'd', 'a')):
+            _mkt_p = shin_method([had['h'], had['d'], had['a']])
+            _mkt_src = '体彩HAD即时'
+        elif pw5 and pd5 and pl5 and (pw5 + pd5 + pl5) > 0.9:
+            _s5 = pw5 + pd5 + pl5
+            _mkt_p = [pw5 / _s5, pd5 / _s5, pl5 / _s5]
+            _mkt_src = f'欧指锚({_euro_anchor_src})'
+        if _mkt_p and had_probs:
+            _diffs_pp = [round((m - k) * 100, 1) for m, k in zip(had_probs, _mkt_p)]
+            _max_i = max(range(3), key=lambda i: abs(_diffs_pp[i]))
+            _max_diff = abs(_diffs_pp[_max_i])
+            _model_i = had_min_idx if had_open else max(range(3), key=lambda i: had_probs[i])
+            _mkt_i = max(range(3), key=lambda i: _mkt_p[i])
+            _dir_conflict = (_model_i != _mkt_i)
+            if _max_diff >= 15.0:
+                market_divergence = {
+                    'flagged': True,
+                    'model_dir': had_dirs[_model_i], 'model_prob': round(had_probs[_model_i] * 100, 1),
+                    'market_dir': had_dirs[_mkt_i], 'market_prob': round(_mkt_p[_mkt_i] * 100, 1),
+                    'dir_conflict': _dir_conflict,
+                    'max_diff_pp': round(_max_diff, 1),
+                    'max_diff_dir': had_dirs[_max_i],
+                    'diff_wdl_pp': _diffs_pp,
+                    'market_source': _mkt_src,
+                    # 措辞分三档: 方向相反 / 模型高估(比市场激进) / 模型低估(市场资金更看好)
+                    'note': (f"模型{had_dirs[_model_i]}{had_probs[_model_i]:.0%} vs 市场{had_dirs[_mkt_i]}{_mkt_p[_mkt_i]:.0%}"
+                             f"({_mkt_src}), 最大分歧{_max_diff:.0f}pp({had_dirs[_max_i]}方向)"
+                             + (" — 方向相反, 模型与市场资金显著相左, 谨慎参考或放弃" if _dir_conflict
+                                else (f" — 方向一致但模型高估{(had_probs[_model_i]-_mkt_p[_mkt_i])*100:.0f}pp, 比市场更激进, 注意回落风险"
+                                      if had_probs[_model_i] > _mkt_p[_mkt_i]
+                                      else f" — 方向一致但模型低估{(_mkt_p[_mkt_i]-had_probs[_model_i])*100:.0f}pp, 市场资金更看好, 信号偏正面"))),
+                }
+                v611_flags['market_divergence'] = True
+                print(f"  [分歧] ⚠️ {match_num} 模型{had_dirs[_model_i]}{had_probs[_model_i]:.0%} vs "
+                      f"市场{had_dirs[_mkt_i]}{_mkt_p[_mkt_i]:.0%}, 分歧{_max_diff:.0f}pp"
+                      f"{'(方向相反)' if _dir_conflict else ''}")
+    except Exception as _div_e:
+        print(f"  [分歧] 检测异常(不影响预测): {_div_e}")
+
     return {
         'HAD': {
             'dir': had_dir,
@@ -7947,8 +8076,9 @@ def predict_match(match_num, data):
             'poisson': hhad_wdl_str,
         },
         'kelly': {
+            # P1-4: odds=None(SWOT翻转/档位停售)时不进kelly计算, 避免误报EV
             'HAD': kelly_criterion(p_for_had_dir, odds,
-                                   pool_margin([had['h'], had['d'], had['a']]) if had_open else 0.0) if had_open else {'stake_pct': 0, 'ev': 0, 'value': False},
+                                   pool_margin([had['h'], had['d'], had['a']]) if had_open else 0.0) if (had_open and odds) else {'stake_pct': 0, 'ev': 0, 'value': False},
             'HHAD': kelly_criterion(p_for_hhad_dir, hhad_odds_val,
                                     pool_margin([hhad['h'], hhad['d'], hhad['a']]) if hhad and 'h' in hhad else 0.0),
         },
@@ -7997,6 +8127,7 @@ def predict_match(match_num, data):
         'historical_feedback': historical_feedback,
         'sporttery_pools': sporttery_pools,  # Ultra 6.5: 竞彩固定奖金EV分析
         'v611_flags': v611_flags,  # Ultra 6.11: 五大场景修正标记
+        'market_divergence': market_divergence,  # 优化③ (Ultra 13.11): 模型-市场分歧≥15pp时非空
         'cup_leg_penalty': cup_leg_penalty_info,  # Ultra 7.4: 杯赛首回合惩罚信息
         # Ultra 8.0: xG/xGA 数据 + 交叉验证质量
         'xg_data': _xg_data,
@@ -8019,11 +8150,22 @@ def fmt_size(s):
 # ============================================================
 # Phase 1.5: nowscore 辅助数据源 — 为体彩预测提供统计增强 (盘口+近况+交锋+积分)
 # ============================================================
+# P1-3 (Ultra 13.10, 2026-08-16 冒烟修正): nowscore 网络熔断器
+# 260816 冒烟实测: nowscore 全线超时(主机不可达), 28场×每场内部2次重试×10s超时,
+# 线程池里同URL反复重试刷168条警告, 全流程8分钟里~5分钟耗在注定失败的请求上。
+# 熔断规则: 连续3场网络型失败(超时/连接错误, 区别于'no_data') → 断开, 队列剩余场次立即降级500.com
+_NOWSCORE_BREAKER = {'consec_net_fails': 0, 'open': False}
+_NOWSCORE_BREAKER_THRESHOLD = 3
+
+
 def _fetch_one_nowscore(key, mi):
     """单场nowscore获取 (供线程池并行调用)"""
+    if _NOWSCORE_BREAKER['open']:
+        return key, None, 'circuit_open'
     try:
         ns = fetch_nowscore_match_data(mi['home'], mi['away'])
         if ns:
+            _NOWSCORE_BREAKER['consec_net_fails'] = 0  # 成功重置连续失败计数
             for k, v in mi.items():
                 if k not in ns:
                     ns[k] = v
@@ -8033,10 +8175,19 @@ def _fetch_one_nowscore(key, mi):
             ns['data_source'] = 'nowscore'
             return key, ns, None
         else:
-            # P1-4: 记录降级原因
+            # no_data = 网络通了但没匹配到比赛, 不计入网络熔断
             return key, None, 'no_data'
     except Exception as e:
-        return key, None, str(e)
+        err = str(e)
+        _is_net_err = any(t in err.lower() for t in ('timeout', 'timed out', 'connection', 'connect', 'reach', 'reset', 'refused'))
+        if _is_net_err:
+            _NOWSCORE_BREAKER['consec_net_fails'] += 1
+            if _NOWSCORE_BREAKER['consec_net_fails'] >= _NOWSCORE_BREAKER_THRESHOLD \
+                    and not _NOWSCORE_BREAKER['open']:
+                _NOWSCORE_BREAKER['open'] = True
+                print(f"  [nowscore] 🔌 熔断: 连续{_NOWSCORE_BREAKER['consec_net_fails']}场网络失败({err[:60]}...), "
+                      f"本轮剩余场次直接降级500.com")
+        return key, None, err
 
 def fetch_nowscore_for_matches(matches):
     """用nowscore为体彩比赛获取统计数据增强 (辅助数据源)
@@ -8476,7 +8627,10 @@ def main():
                 _hr = had_info.get('conf_hit_rate')
                 _hr_s = f" 校准命中≈{_hr:.0f}%" if _hr is not None else ""
                 _do_tag = " [平局覆盖]" if had_info.get('draw_override') else ""
-                summary_lines.append(f"    HAD:  {had_info['dir']}@{had_info['odds']} {had_info['conf']}{_hr_s}{_do_tag} P={had_info['p']}")
+                # P1-4: odds=None/0 → 显示"以盘口为准", 不再出现"胜@0"
+                _od = had_info.get('odds')
+                _od_s = f"@{_od}" if _od else "(赔率以盘口为准)"
+                summary_lines.append(f"    HAD:  {had_info['dir']}{_od_s} {had_info['conf']}{_hr_s}{_do_tag} P={had_info['p']}")
             else:
                 summary_lines.append(f"    HAD:  未开盘 (仅参考HHAD)")
             _hhr = hhad_info.get('conf_hit_rate')
