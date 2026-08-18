@@ -8,10 +8,10 @@
     "poisson": 1.0,
     "elo": 1.0
   },
-  "measured_drift_pp": -0.3,
+  "measured_drift_pp": 0.8,
   "pre_hit_rate": 0.395,
-  "post_hit_rate": 0.398,
-  "activated_at": "2026-08-16 23:50:42",
+  "post_hit_rate": 0.387,
+  "activated_at": "2026-08-18 01:46:11",
   "source": "v215_verify.py CUSUM (Ultra 8.0)",
-  "note": "CUSUM累积量于2026-08-10越限, 但实测漂移-0.3pp<2.0pp(补录清洁赛果后漂移后39.8% vs 漂移前39.5%), 无实际退化 → 权重响应解除(全1.0)"
+  "note": "CUSUM累积量于2026-08-10越限, 但实测漂移+0.8pp<2.0pp(补录清洁赛果后漂移后38.7% vs 漂移前39.5%), 无实际退化 → 权重响应解除(全1.0)"
 }
