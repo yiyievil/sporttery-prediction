@@ -2,7 +2,7 @@
  "_meta": {
   "canonical": "sporttery",
   "version": 1,
-  "updated": "2026-08-17 08:24:18"
+  "updated": "2026-08-18 08:49:55"
  },
  "teams": {
   "金泉尚武": {
@@ -4067,6 +4067,36 @@
    "sources": {
     "leisu": [
      "卡迪夫城"
+    ]
+   }
+  },
+  "里独立": {
+   "aliases": [
+    "门多萨独立"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "门多萨独立"
+    ]
+   }
+  },
+  "索列夫": {
+   "aliases": [
+    "索非亚列夫斯基"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "索非亚列夫斯基"
+    ]
+   }
+  },
+  "萨迪纳摩": {
+   "aliases": [
+    "萨格勒布迪纳摩"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "萨格勒布迪纳摩"
     ]
    }
   }
