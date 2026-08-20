@@ -658,6 +658,13 @@ def match_and_fetch(sp_matches: dict, schedule_html: str = None,
             sp_fp, qm_fps, source='qiumiwu', threshold=0.55,
             allow_context=not ambiguous)
         if best_idx is not None:
+            # Ultra 14.1: 队名信号校验 (与 swot_auto 对齐) — 上下文匹配(联赛+时间+日期)
+            # 队名零证据时拒绝, 防止错配 game_id 导致前瞻数据污染 λ 链
+            name_score = match_score(sp_fp, qm_fps[best_idx],
+                                     weights={"team_name": 1.0, "league": 0.0, "time": 0.0, "date": 0.0})
+            if name_score < 0.4 and not learned:
+                logger.info(f"  qiumiwu 拒绝低队名分匹配: {key} (score={score:.2f}, name={name_score:.2f})")
+                continue
             qm = matches[best_idx]
             gid = qm["game_id"]
             if learned:

@@ -388,6 +388,15 @@ def _learn_alias_pair(target: MatchFingerprint, cand: MatchFingerprint,
         src_name = (src_name or '').strip()
         if not sp_name or not src_name or sp_name == src_name:
             continue
+        # Ultra 14.1 (2026-08-20): 别名矛盾防护 — 上下文学习把别场卡片学成别名的事故修复
+        # (260821周五批次: 费哈卡被误学为 胡巴卡德→费哈 / 吉达联合→利雅得新月 /
+        #  贝蒂斯→巴列卡诺 / 皇家社会→阿拉维斯, 导致SWOT错配+假翻转)
+        # 规则: src_name 若已归属另一支球队(是其他标准名的别名, 或本身是已知标准名),
+        # 拒绝学习 — 一个真实队名不可能同时是两支不同球队的别名。
+        src_canon = team_names.canonicalize(src_name)
+        sp_canon = team_names.canonicalize(sp_name)
+        if src_canon is not None and src_canon != (sp_canon or sp_name):
+            continue
         # 仅当 sporttery 名为已知标准名或中文时学习 (避免把来源名当标准名)
         if team_names.is_known(sp_name) or team_names._is_chinese(sp_name):
             to_learn.append((sp_name, src_name, source))
@@ -432,9 +441,11 @@ def find_best_match_with_learning(target: MatchFingerprint, candidates: list[Mat
         tm = _time_similarity(target.match_time, c.match_time)
         if lg < 0.8 or tm < 0.8:
             continue
-        # 双方都有日期时须匹配(同天或±1天); 至少一方缺日期不否决
+        # 双方都有日期时须同日 — Ultra 14.1: 原±1天容忍(0.7)放行了"同联赛邻日同时刻"
+        # 的别场卡片 (如 费哈8-21卡 被误配给 8-22的胡巴卡德场, 队名零证据仍学习)
+        # 上下文路径队名零证据, 日期是唯一强判别器, 收紧为同日; 至少一方缺日期不否决
         if target.match_date and c.match_date:
-            if _date_similarity(target.match_date, c.match_date) < 0.7:
+            if _date_similarity(target.match_date, c.match_date) < 0.99:
                 continue
         ctx_hits.append((i, lg, tm))
 

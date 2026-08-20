@@ -30,6 +30,10 @@ SWOT_FLIP_DIFF = 6.0     # 评分差≥6 视为强信号, 允许方向翻转 (�
 SWOT_FLIP_MARGIN = 0.05  # 翻转后反超安全余量 5pp
 SWOT_FLIP_MAX = 0.35     # 翻转迁移上限 35pp (防止过度极端)
 
+# Ultra 14.0 (2026-08-20): 翻转后一致性重算 — λ镜像增强参数
+SWOT_LAMBDA_BOOST_PER_POINT = 0.04  # 镜像后方向仍不符时, 每评分点迁移λ 4%
+SWOT_LAMBDA_BOOST_MAX = 0.25        # λ迁移上限 25% (防过度极端)
+
 
 def _parse_pct(v):
     """健壮解析百分比字符串(如 '33%' / '33.5%'), 失败返回0"""
@@ -251,6 +255,134 @@ def _score_to_conf(score):
     return '★' * full + ('½' if score > full else '')
 
 
+def _recompute_after_flip(result, swot_dir, home_score, away_score, league=None):
+    """Ultra 14.0 (2026-08-20): SWOT翻转后 λ/比分Top3/HHAD/半全场 一致性重算
+
+    修复已知瑕疵 (260819复盘#002): SWOT强信号翻转HAD方向后, lam/score.top3/HHAD/
+    half_full 仍是旧方向产物, 展示层出现"主推负但比分Top3全偏主队"的自相矛盾。
+
+    重算口径 (复用引擎 compute_scores/compute_half_full, 与主链路同源):
+      1. λ 镜像交换 — SWOT判定攻防强弱互换, 总量级保留
+         残差增强: 镜像后泊松argmax仍≠SWOT方向时, 每轮按评分差×4%迁移λ (上限25%)
+      2. score.top3/high_top3/wdl/main_dir/high_dir/over_*: 新λ重算
+      3. HHAD poisson/p/dir: 新hhad_wdl argmax (让球线=玩法定义不变, 受让标签映射同引擎)
+      4. half_full main/top3: 新λ重算 (半全场方向同样需对齐)
+
+    返回重算明细dict (写入prob_adjust.recomputed供展示); 解析失败返回None回退旧逻辑。
+    """
+    # --- 解析原λ ("1.6/1.8") ---
+    lam_str = result.get('lam', '')
+    try:
+        lam_h, lam_a = [float(x) for x in str(lam_str).split('/')]
+    except (ValueError, TypeError):
+        return None
+    if lam_h <= 0 or lam_a <= 0:
+        return None
+
+    # --- 让球线 (玩法定义, 翻转不改盘口) ---
+    hhad = result.get('HHAD', {}) or {}
+    try:
+        goal_line = float(hhad.get('handicap'))
+    except (TypeError, ValueError):
+        goal_line = 0.0
+
+    # --- 主盘口还原: market_gl_str "3/3.5" → 3.25 (fmt_gl逆运算=两段平均) ---
+    market_gl = 2.5
+    gl_str = (result.get('score', {}) or {}).get('market_gl_str', '')
+    try:
+        parts = [float(x) for x in str(gl_str).split('/') if x.strip()]
+        if parts:
+            market_gl = sum(parts) / len(parts)
+    except ValueError:
+        pass
+
+    # 惰性导入引擎 (仅真翻转时加载; v215_e2e以__main__运行时import为独立实例,
+    # 与 swot_auto.py 同模式, 先例验证安全)
+    import v215_e2e as engine
+
+    # --- 1. λ镜像交换 + 残差增强 (确保新λ隐含方向与SWOT一致) ---
+    new_h, new_a = lam_a, lam_h
+    diff = abs(home_score - away_score)
+    boosted = False
+    scores = None
+    for _ in range(3):
+        scores = engine.compute_scores(new_h, new_a, goal_line=goal_line,
+                                       market_goal_line=market_gl, top_n=3, league=league)
+        pw, pd, pl = [v / 100.0 for v in scores['poisson_wdl']]
+        _mx = max(pw, pd, pl)
+        _cur = '胜' if _mx == pw else ('平' if _mx == pd else '负')
+        if _cur == swot_dir:
+            break
+        adj = min(SWOT_LAMBDA_BOOST_MAX, SWOT_LAMBDA_BOOST_PER_POINT * diff)
+        if swot_dir == '胜':
+            new_h *= (1 + adj)
+            new_a *= (1 - adj)
+        else:
+            new_a *= (1 + adj)
+            new_h *= (1 - adj)
+        boosted = True
+    if scores is None:
+        return None
+
+    # --- 2. score 重写 (口径同引擎第8588行组装) ---
+    sc = result.get('score', {})
+    if isinstance(sc, dict):
+        sc['top3'] = ' '.join(f"{s}:{p}" for s, p in scores['top3_filtered'][:3])
+        sc['high_top3'] = ' '.join(f"{s}:{p}" for s, p in scores['high_top3'][:3])
+        sc['wdl'] = '/'.join(f"{v}" for v in scores['poisson_wdl'])
+        sc['main_dir'] = scores['main_dir']
+        sc['high_dir'] = scores.get('high_dir', '')
+        sc['over_main'] = scores['over_main']
+        sc['over_low'] = scores['over_low']
+        sc['over_high'] = scores['over_high']
+
+    # --- 3. HHAD 重算 (让球线不变, 概率随新λ; 受让标签映射同引擎铁律) ---
+    hhad_wdl = scores['hhad_wdl']  # [让胜/让平/让负] 百分数
+    hhad_probs = [v / 100.0 for v in hhad_wdl]
+    idx = hhad_probs.index(max(hhad_probs))
+    hhad_base_dirs = ['让胜', '让平', '让负']
+    new_hhad_dir = engine._hhad_display_label(hhad_base_dirs[idx], goal_line)
+    result['HHAD'] = {
+        'dir': new_hhad_dir,
+        'handicap': hhad.get('handicap'),
+        'odds': None,  # 旧odds对应旧方向, 翻转后失效 (与HAD翻转处理一致)
+        'odds_note': 'SWOT翻转重算, 赔率未同步, 以体彩当前盘口为准',
+        'conf': hhad.get('conf', ''),
+        'conf_hit_rate': hhad.get('conf_hit_rate'),
+        'p': f"{hhad_probs[0]:.0%}/{hhad_probs[1]:.0%}/{hhad_probs[2]:.0%}",
+        'poisson': '/'.join(f"{v}" for v in hhad_wdl),
+    }
+
+    # --- 4. 半全场重算 (方向类玩法一并对齐) ---
+    try:
+        hf = engine.compute_half_full(new_h, new_a, league=league)
+        result['half_full'] = {
+            'main': hf.get('main', ''),
+            'top3': hf.get('top3', ''),
+            'recalibrated': True,
+        }
+    except Exception:
+        pass  # 半全场重算失败不影响主链路
+
+    # --- 5. λ 更新 + 痕迹标记 ---
+    old_lam = f"{lam_h:.1f}/{lam_a:.1f}"
+    result['lam'] = f"{new_h:.1f}/{new_a:.1f}"
+    result['lam_calibration'] = {
+        'recalibrated': True,
+        'original': old_lam,
+        'calibrated': f"{new_h:.2f}/{new_a:.2f}",
+        'reason': f"SWOT翻转镜像交换{'+残差增强' if boosted else ''}",
+    }
+    result.setdefault('v611_flags', {})['swot_flip_recomputed'] = True
+
+    return {
+        'lam': f"{old_lam}→{result['lam']}",
+        'score_top3': sc.get('top3', '') if isinstance(sc, dict) else '',
+        'hhad_dir': new_hhad_dir,
+        'boosted': boosted,
+    }
+
+
 def fuse_swot_into_predictions(pred_file):
     """将SWOT数据融合到预测文件中"""
     if not os.path.exists(pred_file):
@@ -373,15 +505,30 @@ def fuse_swot_into_predictions(pred_file):
                     # 现改为 None + odds_note 说明, 展示层统一渲染"以当前盘口为准"
                     had['odds'] = None
                     had['odds_note'] = 'SWOT翻转方向, 赔率未同步, 以体彩当前盘口为准'
+                    # ===== Ultra 14.0 (2026-08-20): 翻转后一致性重算 =====
+                    # 修复260819#002瑕疵: 翻转后 λ/比分Top3/HHAD/半全场仍是旧方向产物
+                    # ("主推负但比分Top3全偏主队"自相矛盾)。重算失败回退旧的wdl数值同步。
+                    _flip_dir = '胜' if home_score > away_score else '负'
+                    try:
+                        _rc = _recompute_after_flip(
+                            result, _flip_dir, home_score, away_score,
+                            m.get('league', ''))
+                    except Exception:
+                        _rc = None
+                    if _rc:
+                        prob_adjust['recomputed'] = _rc
                 # 同步调整比分矩阵的wdl汇总 (保持顶层一致)
-                sc = result.get('score', {})
-                if isinstance(sc, dict) and sc.get('wdl'):
-                    nums = re.findall(r'([\d.]+)', str(sc['wdl']))
-                    if len(nums) == 3:
-                        sc_vals = [float(x) / 100 for x in nums]
-                        if all(v > 0 for v in sc_vals):
-                            new_sc, _, _ = apply_swot_prob_shift(sc_vals, home_score, away_score)
-                            sc['wdl'] = f"{new_sc[0]*100:.1f}/{new_sc[1]*100:.1f}/{new_sc[2]*100:.1f}"
+                # Ultra 14.0: 翻转且重算成功时 score 已整体重算(含wdl), 此处仅未翻转/
+                # 重算失败时做旧式数值同步
+                if not prob_adjust.get('recomputed'):
+                    sc = result.get('score', {})
+                    if isinstance(sc, dict) and sc.get('wdl'):
+                        nums = re.findall(r'([\d.]+)', str(sc['wdl']))
+                        if len(nums) == 3:
+                            sc_vals = [float(x) / 100 for x in nums]
+                            if all(v > 0 for v in sc_vals):
+                                new_sc, _, _ = apply_swot_prob_shift(sc_vals, home_score, away_score)
+                                sc['wdl'] = f"{new_sc[0]*100:.1f}/{new_sc[1]*100:.1f}/{new_sc[2]*100:.1f}"
         
         # 当前模型方向 (概率调整后)
         model_dir = had.get('dir', '')
@@ -406,6 +553,11 @@ def fuse_swot_into_predictions(pred_file):
             consistency = 'SWOT翻转'
             conf_adjust = '+1★'
             fusion_advice = f'🔄 SWOT强信号翻转方向: 模型判{orig_model_dir}→SWOT判{swot_dir}, 置信度上调+1★'
+            # Ultra 14.0: 翻转重算详情透出 (λ/比分/HHAD已按新方向对齐)
+            _rc = (prob_adjust or {}).get('recomputed')
+            if _rc:
+                fusion_advice += (f"; λ/比分/HHAD/半全场已重算对齐"
+                                  f"(λ{_rc.get('lam','')}, HHAD→{_rc.get('hhad_dir','')})")
         elif swot_dir == orig_model_dir:
             consistency = '一致'
             # 信号强度

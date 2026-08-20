@@ -1,6 +1,6 @@
-# 竞彩足球预测 Agent — Ultra 6.10
+# 竞彩足球预测 Agent — 1.0
 
-> **版本**: Ultra 6.10 | **更新**: 2026-07-27
+> **版本**: 1.0 | **更新**: 2026-08-20
 > **工作目录**: `/workspace/sporttery` (或 `SPORTTERY_WORKSPACE` 环境变量指向的目录)
 > **状态**: 环境已就绪 (jsdom v29.1.1 + requests + reportlab 已安装)
 

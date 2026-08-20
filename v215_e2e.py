@@ -130,6 +130,19 @@ TARGET_NUM_DATE = None  # ← Ultra 13.13: 编号/开盘日期(YYMMDD, 如'26081
 # update:  更新预测 — 重新拉取数据, 与上次预测比对, 根据变化调整结果
 PRED_MODE = 'predict'
 
+# ===== Ultra 14.0 (2026-08-20): 独立分析模式 — 唯一默认架构 =====
+# 用户指令: "不需要对比，今后只出独立模式" (废弃四源含赔率融合为默认路径)
+# 架构: 赔率零输入, 三源对数融合 + 四模块非赔率历史校准 + SWOT情报层:
+#   S1 xG-Poisson (λ链: xG/近况/联赛收缩/PPDA/H2H衰减λ/排名/伤停, 全非赔率)
+#   S2 Elo评分 (历史库 + 联赛主场优势)
+#   S3 H2H历史交锋源 (时间衰减 + 联赛先验平滑, n≥2启用) [v14新增]
+#   C1-C4 非赔率校准: 半全场平局粘性/休息天数/状态差异/模型偏差闭环(3290场) [v14新增]
+#   SWOT情报层: 赛后融合, 强信号(评分差≥6)可翻转方向 + 翻转后一致性重算 [v14修复]
+# 赔率仅作影子对照: market_first.fav_dir 只记录不决策 (逐期双账本对账用)。
+# 平局解禁: 纯模型意见下P平为argmax时允许作主推。
+# 应急回退: 环境变量 SPORTTERY_LEGACY=1 或 CLI --legacy-market 临时启用旧四源模式。
+INDEPENDENT_MODE = os.environ.get('SPORTTERY_LEGACY', '') != '1'  # v14: 独立模式为默认
+
 # ===== 编号日期输入 (Ultra 7.3) =====
 # 竞彩官网(sporttery.cn/jc/jsq/zqspf)编号日期格式: 260728 = 2026-07-28
 # 命令行: python v215_e2e.py 260728 001,002
@@ -153,14 +166,25 @@ def apply_cli_mode():
 
     用法: python v215_e2e.py 260731 001,002 --mode update
           python v215_e2e.py 260731 001,002 --mode=predict --force
+    v14: --independent 为默认(no-op兼容); --legacy-market 应急回退旧四源含赔率模式
     """
-    global PRED_MODE
+    global PRED_MODE, INDEPENDENT_MODE
     _argv_filtered = []
-    _flags_to_strip = {'--force'}  # 这些标志保留在 _flags_seen 中供后续检查, 但不传入 match_input
+    _flags_to_strip = {'--force', '--independent', '--independent=1', '--legacy-market', '--legacy'}  # 这些标志保留在 _flags_seen 中供后续检查, 但不传入 match_input
     _flags_seen = set()
     i = 1
     while i < len(sys.argv):
         arg = sys.argv[i]
+        if arg == '--independent':
+            INDEPENDENT_MODE = True  # v14: 默认即独立, 此标志仅显式声明(no-op)
+            _flags_seen.add(arg)
+            i += 1
+            continue
+        if arg in ('--legacy-market', '--legacy'):
+            INDEPENDENT_MODE = False  # v14: 应急回退旧四源融合(赔率参与), 仅排障/回测用
+            _flags_seen.add(arg)
+            i += 1
+            continue
         if arg == '--mode' and i + 1 < len(sys.argv):
             mode = sys.argv[i + 1].strip().lower()
             if mode in ('predict', 'update'):
@@ -5799,8 +5823,178 @@ def apply_advanced_calibration(probs, sp, had, hhad):
 
 
 # ============================================================
-# Ultra 6.9: 融合后平局校准 — 数据驱动修复系统性平局低估
-# 根因: 几何平均融合(ensemble_fuse)当任一源给平局低概率时,
+# ===== Ultra 14.0: 独立模式专用 — 非赔率数据源与历史校准 =====
+# 用户指令: "不需要对比，今后只出独立模式" — 赔率零输入架构的两块新增基石:
+#   1) _build_h2h_independent_source: H2H历史交锋 → 融合源S3
+#      (旧架构中 H2H 先验埋在 apply_advanced_calibration 模块6, v14 升格为独立源)
+#   2) apply_odds_free_calibration: 四模块纯历史赛果校准 C1-C4
+#      (拆自 apply_advanced_calibration 模块1/2/5/7, 剔除赔率依赖的模块3/4)
+# ============================================================
+
+def _build_h2h_independent_source(sp, league):
+    """Ultra 14.0: H2H历史交锋 → 独立融合源S3
+
+    数据: qiumiwu h2h_decayed (时间衰减加权交锋记录)
+    平滑: 联赛平均先验 k=6 (对数融合要求非零概率, 且小样本防极端)
+    权重: w = 0.10 + 0.05×原始场次, 上限0.35 (2场0.2 → 5场0.35)
+    门槛: 原始交锋 <2 场不启用 (返回 None)
+
+    返回: (probs[w,d,l], weight, note) 或 (None, 0.0, '')
+    """
+    try:
+        qe = sp.get('qiumiwu_enhancements') or {}
+        h2h = qe.get('h2h_decayed', {})
+        raw_n = int(h2h.get('raw_total', 0) or 0)
+        if raw_n < 2:
+            return None, 0.0, ''
+        wt = float(h2h.get('weighted_total', 0) or 0)
+        if wt <= 0:
+            return None, 0.0, ''
+        # 联赛平均三分类先验
+        lg_h = get_league_param(league, 'h_rate', 0.45)
+        lg_d = get_league_param(league, 'd_rate', 0.26)
+        lg_a = max(0.05, 1.0 - lg_h - lg_d)
+        # 时间衰减 H2H 分布
+        hw = float(h2h.get('weighted_home_wins', 0) or 0) / wt
+        dd = float(h2h.get('weighted_draws', 0) or 0) / wt
+        aw = float(h2h.get('weighted_away_wins', 0) or 0) / wt
+        # 联赛先验平滑: 有效样本 = min(原始场次, 衰减权重和)
+        eff_n = min(float(raw_n), wt)
+        k = 6.0
+        p_w = (eff_n * hw + k * lg_h) / (eff_n + k)
+        p_d = (eff_n * dd + k * lg_d) / (eff_n + k)
+        p_l = (eff_n * aw + k * lg_a) / (eff_n + k)
+        s = p_w + p_d + p_l
+        if s <= 0:
+            return None, 0.0, ''
+        probs = [p_w / s, p_d / s, p_l / s]
+        weight = min(0.35, 0.10 + 0.05 * raw_n)
+        # Ultra 14.2: 小样本标注 (与 SWOT sample_warning 同口径) — 2026-08-20 数值实验结论:
+        # n=2 全反向极端场景净影响仅 1.4pp (k=6平滑已内建78%先验收缩, 净信息注入1.8%),
+        # 无需降权; 但 n<4 时交锋方向统计意义仍弱 (随机下 n=3 全同向概率25%), note 显式标注。
+        small_tag = "⚠️小样本 " if raw_n < 4 else ""
+        note = (f"H2H源S3: {small_tag}衰减交锋{hw:.0%}/{dd:.0%}/{aw:.0%}"
+                f"(n={raw_n}) → 平滑{probs[0]:.0%}/{probs[1]:.0%}/{probs[2]:.0%}, w={weight:.2f}")
+        return probs, weight, note
+    except Exception:
+        return None, 0.0, ''
+
+
+def apply_odds_free_calibration(probs, sp):
+    """Ultra 14.0: 非赔率历史校准 (独立模式专用, C1-C4)
+
+    拆自 apply_advanced_calibration 的纯历史赛果模块 (4522场/3290场标定库):
+      C1 半全场平局粘性 — 联赛 HT=D→FT=D 转移率 vs 全局均值, 15%权重, ±4pp界
+      C2 休息天数效应   — 主客休息差≥3天档 vs 联赛均值, 20%权重, ±5pp界
+      C3 近期状态差异   — form_score差分档(±1) vs similar基准, 25%权重
+      C4 模型校准偏差   — 3290场闭环: 按置信区间向实际命中率修正, 50%强度
+    排除 (赔率依赖): 球队×赔率区间偏差(模块3) / 跨市场一致性(模块4) / H2H先验(模块6, 已升格为融合源S3)
+    """
+    league = sp.get('league', '')
+    home_team = sp.get('home', '')
+    away_team = sp.get('away', '')
+    match_date = sp.get('date', '') or sp.get('matchDate', '')
+
+    pw, pd, pl = probs
+    notes = []
+
+    # --- C1. 半场→全场转移: 平局粘性修正 (同 apply_advanced_calibration 模块1) ---
+    if _ADV_CALIB:
+        ht_ft = _ADV_CALIB.get('ht_ft_transition', {}).get(league)
+        if ht_ft:
+            ht_d = ht_ft.get('D', {})
+            if ht_d.get('sample', 0) >= 10:
+                draw_stickiness = ht_d.get('D', 0.35)
+                draw_adj = (draw_stickiness - 0.35) * 0.15
+                draw_adj = max(-0.04, min(0.04, draw_adj))
+                if abs(draw_adj) > 0.008:
+                    pd += draw_adj
+                    pw -= draw_adj * 0.5
+                    pl -= draw_adj * 0.5
+                    notes.append(f'平局粘性: {draw_stickiness:.0%}→平{"↑" if draw_adj > 0 else "↓"}{abs(draw_adj) * 100:.1f}pp')
+
+    # --- C2. 休息天数效应 (同模块2) ---
+    if _ADV_CALIB:
+        home_rest, away_rest = _compute_rest_days(home_team, away_team, match_date)
+        if home_rest is not None and away_rest is not None:
+            rest_diff_data = _ADV_CALIB.get('rest_days', {}).get('rest_diff', {}).get(league)
+            if rest_diff_data:
+                diff = home_rest - away_rest
+                bucket = 'home_less' if diff <= -3 else ('home_more' if diff >= 3 else 'equal')
+                bd = rest_diff_data.get(bucket)
+                if bd and bd.get('sample', 0) >= 10:
+                    lg_h_rate = get_league_param(league, 'h_rate', 0.45)
+                    h_adj = (bd['h_rate'] - lg_h_rate) * 0.20
+                    h_adj = max(-0.05, min(0.05, h_adj))
+                    if abs(h_adj) > 0.01:
+                        pw += h_adj
+                        pl -= h_adj * 0.7
+                        pd -= h_adj * 0.3
+                        notes.append(f'休息天数: 主{home_rest}d/客{away_rest}d→主{"↑" if h_adj > 0 else "↓"}{abs(h_adj) * 100:.1f}pp')
+
+    # --- C3. 近期状态差异 (同模块5) ---
+    if _ADV_CALIB:
+        home_form = _compute_form_score(home_team, match_date, n=5)
+        away_form = _compute_form_score(away_team, match_date, n=5)
+        if home_form is not None and away_form is not None:
+            form_diff = home_form - away_form
+            form_data = _ADV_CALIB.get('form_effect', {}).get('form_diff', {}).get(league)
+            if form_data:
+                bucket = 'home_worse' if form_diff <= -1 else ('home_better' if form_diff >= 1 else 'similar')
+                bd = form_data.get(bucket)
+                similar = form_data.get('similar')
+                if bd and similar and bd.get('sample', 0) >= 10:
+                    h_shift = bd['h_rate'] - similar['h_rate']
+                    pw += h_shift * 0.25
+                    pl -= h_shift * 0.65
+                    pd -= h_shift * 0.35
+                    if abs(h_shift) > 0.05:
+                        notes.append(f'状态差异: 主{home_form:.1f}/客{away_form:.1f}→主{h_shift * 100:+.0f}pp')
+
+    # --- C4. 模型校准偏差修正 (同模块7, 3290场闭环) ---
+    if _MODEL_CALIB:
+        mc = _MODEL_CALIB.get('probability_correction', {})
+        if mc:
+            conf = max(pw, pd, pl)
+            bins = [(0.0, 0.25, '0-25%'), (0.25, 0.35, '25-35%'), (0.35, 0.45, '35-45%'),
+                    (0.45, 0.55, '45-55%'), (0.55, 0.65, '55-65%'), (0.65, 0.75, '65-75%'),
+                    (0.75, 0.85, '75-85%'), (0.85, 1.0, '85-100%')]
+            bin_label = None
+            for lo, hi, lbl in bins:
+                if lo <= conf < hi:
+                    bin_label = lbl
+                    break
+            if bin_label and bin_label in mc:
+                entry = mc[bin_label]
+                bias_pp = entry.get('bias_pp', 0)
+                if abs(bias_pp) > 2 and entry.get('n', 0) >= 8:
+                    correction = bias_pp / 100.0 * 0.5
+                    if conf == pw:
+                        pw += correction
+                        pl -= correction * 0.6
+                        pd -= correction * 0.4
+                    elif conf == pd:
+                        pd += correction
+                        pw -= correction * 0.5
+                        pl -= correction * 0.5
+                    else:
+                        pl += correction
+                        pw -= correction * 0.6
+                        pd -= correction * 0.4
+                    notes.append(f'模型校准: {bin_label}偏差{bias_pp:+.1f}pp→{correction * 100:+.1f}pp修正')
+
+    # 归一化 + 边界保护 (同 apply_advanced_calibration 尾部)
+    s = pw + pd + pl
+    if s > 0:
+        pw, pd, pl = pw / s, pd / s, pl / s
+    pw = max(0.05, min(0.90, pw))
+    pd = max(0.05, min(0.60, pd))
+    pl = max(0.05, min(0.90, pl))
+    s = pw + pd + pl
+    if s > 0:
+        pw, pd, pl = pw / s, pd / s, pl / s
+
+    return [pw, pd, pl], notes
 #   融合后平局被进一步压低。历史数据证实:
 #   - 主赔2.5-3.5区间: 实际平局率32.2% vs 隐含26.9% (+5.2pp)
 #   - 主赔3.5+区间: 实际平局率28.6% vs 隐含22.4% (+6.2pp)
@@ -7440,102 +7634,167 @@ def predict_match(match_num, data):
     _league_for_cal = sp.get('league', '')
     _draw_odds_for_cal = had.get('d') if had and 'd' in had else (od if od > 1.5 else None)
 
-    # 1. 负二项模型概率 → 自适应Logit校准(修正平局低估)
-    poisson_wdl_raw = [v/100 for v in scores['poisson_wdl']]
-    poisson_calibrated = calibrate_probabilities(poisson_wdl_raw, source='poisson', lam_total=lam_total, lam_h=lam_h, lam_a=lam_a,
-                                                 league=_league_for_cal, draw_odds=_draw_odds_for_cal)
-    
-    # 2. 市场隐含概率 (已经过form/odds修正的p1_w/d/l)
-    market_probs = [p1_w, p1_d, p1_l]
-    # Ultra 6.3: 市场源也做平局校准 (赔率本身压平局)
-    market_probs = calibrate_probabilities(market_probs, source='market', lam_total=lam_total, lam_h=lam_h, lam_a=lam_a,
-                                           league=_league_for_cal, draw_odds=_draw_odds_for_cal)
-    
-    # 3. Power方法概率 (从原始赔率提取, 互补Shin方法)
-    if had and 'h' in had:
-        power_probs = power_method([had['h'], had['d'], had['a']])
-    elif ow > 0:
-        power_probs = power_method([ow, od, ol])
-    else:
-        power_probs = market_probs  # 无赔率时回退
-
-    # 4. Ultra 5.0: Elo评级概率 (第4源, 基于球队统计+近况)
-    h_wr_for_elo = home_form_cache[0] if home_form_cache else 0.5
-    a_wr_for_elo = away_form_cache[0] if away_form_cache else 0.5
-    league = sp.get('league', '')
-    elo_hfa = int((LEAGUE_HOME_ADV.get(league, 1.15) - 1.0) * 400)  # 主场优势→Elo点数
-    elo_probs = elo_probabilities(home_stats, away_stats, h_wr_for_elo, a_wr_for_elo, league_home_adv=elo_hfa,
-                                  hist_elo_h=_hist_elo_h, hist_elo_a=_hist_elo_a)
-
-    # 5. 集成融合: 市场 + Power + 校准Poisson + Elo (四源)
-    # Ultra 7.6: 公共权重函数 — dq渐变化 + Power悖论修复 + Elo分级 + proxy降权
-    dq = assess_data_quality(sp)
-    _xg_is_proxy = bool((_xg_home and _xg_home.get('is_proxy')) or
-                        (_xg_away and _xg_away.get('is_proxy')))
-    fuse_weights = compute_fuse_weights(
-        dq['score'], market_probs=market_probs, power_probs=power_probs,
-        hist_elo=(_hist_elo_h is not None and _hist_elo_a is not None),
-        xg_proxy=_xg_is_proxy, ppda_stab=_ppda_stab_factor)
-    # 升级7: 历史Brier学习权重 (已训参数存在时覆盖启发式权重; 缺参=回退)
-    if _MU and UPGRADES.get('learned_fusion') and _UPG_PARAMS.get('fusion_weights'):
-        _lw = _UPG_PARAMS['fusion_weights'].get('weights')
-        if _lw and len(_lw) == 4 and abs(sum(_lw) - 1.0) < 0.05:
-            fuse_weights = _lw
-    if _xg_is_proxy:
-        print(f"  [融合] ⚠️ xG为proxy占位符(非真实Understat), Poisson权重降权, 置信度封顶★★★★")
-    fused_probs, model_agreement = ensemble_fuse([market_probs, power_probs, poisson_calibrated, elo_probs], weights=fuse_weights)
-    # Ultra 7.6 (P10落地): JS散度一致性 — 连续分布相似度, 作为信息字段输出
-    # (回测结论: 不改变融合权重触发逻辑, 仅提供更细粒度的一致性度量)
-    js_agreement = compute_js_agreement([market_probs, power_probs, poisson_calibrated, elo_probs])
-    p1_w, p1_d, p1_l = fused_probs  # 用融合概率替代原始概率
-
-    # 升级2: 赔率→概率 isotonic 校准后处理 (n=788历史库训练)
-    # 隐含概率与真实频率存在系统性偏差(热门低估/冷门高估),
-    # PAV保序回归逐类校准后重新归一化, 修正融合输出的系统性偏移。
-    if _MU and UPGRADES.get('odds_calibration') and _UPG_PARAMS.get('odds_calibrator'):
+    if INDEPENDENT_MODE:
+        # ===== Ultra 13.17: 独立模式 — 赔率零输入, 仅xG-Poisson + Elo =====
+        poisson_wdl_raw = [v/100 for v in scores['poisson_wdl']]
+        poisson_calibrated = calibrate_probabilities(
+            poisson_wdl_raw, source='poisson', lam_total=lam_total, lam_h=lam_h, lam_a=lam_a,
+            league=_league_for_cal, draw_odds=None)  # 赔率区间修正关闭, λ/联赛校准保留
+        dq = assess_data_quality(sp)
+        _xg_is_proxy = bool((_xg_home and _xg_home.get('is_proxy')) or
+                            (_xg_away and _xg_away.get('is_proxy')))
+        league = sp.get('league', '')
+        h_wr_for_elo = home_form_cache[0] if home_form_cache else 0.5
+        a_wr_for_elo = away_form_cache[0] if away_form_cache else 0.5
+        elo_hfa = int((LEAGUE_HOME_ADV.get(league, 1.15) - 1.0) * 400)
+        elo_probs = elo_probabilities(home_stats, away_stats, h_wr_for_elo, a_wr_for_elo,
+                                      league_home_adv=elo_hfa,
+                                      hist_elo_h=_hist_elo_h, hist_elo_a=_hist_elo_a)
+        # 两源权重: 真实xG→Poisson主导; proxy xG→Elo主导; 历史Elo高精度加权
+        _pw_indep = 0.8 if _xg_is_proxy else 1.2
+        _ew_indep = 1.0
+        if _hist_elo_h is not None and _hist_elo_a is not None:
+            _ew_indep = min(1.3, _ew_indep * 1.3)
+        # 漂移乘数照常作用于存留的两源
+        _drift_m = _get_drift_multipliers()
+        if _drift_m:
+            _pw_indep *= _drift_m.get('poisson', 1.0)
+            _ew_indep *= _drift_m.get('elo', 1.0)
+        # ===== Ultra 14.0: H2H独立融合源S3 (时间衰减交锋, 原始n≥2启用) =====
+        # 权重 w = 0.10+0.05×n (上限0.35), 联赛先验平滑防小样本极端
+        h2h_probs, h2h_w, h2h_note = _build_h2h_independent_source(sp, league)
+        _src_list = [poisson_calibrated, elo_probs]
+        _w_list = [_pw_indep, _ew_indep]
+        if h2h_probs:
+            _src_list.append(h2h_probs)
+            _w_list.append(h2h_w)
+        fused_probs, model_agreement = ensemble_fuse(_src_list, weights=_w_list)
+        js_agreement = compute_js_agreement(_src_list)
+        p1_w, p1_d, p1_l = fused_probs
+        market_probs = None; power_probs = None  # 赔率源不参与
+        _adv_notes = []  # Ultra 13.17: 高级标定(赔率依赖)不运行, 但 ev 组装(行8445)仍引用此列表
+        # 概率上限护栏(非赔率逻辑, 保留): 防单源极端
+        if p1_w > 0.85:
+            _ex = p1_w - 0.85; p1_w = 0.85; p1_d += _ex*0.5; p1_l += _ex*0.5
+        if p1_l > 0.85:
+            _ex = p1_l - 0.85; p1_l = 0.85; p1_d += _ex*0.5; p1_w += _ex*0.5
+        _s = p1_w + p1_d + p1_l
+        p1_w, p1_d, p1_l = p1_w/_s, p1_d/_s, p1_l/_s
+        # ===== Ultra 14.0: 非赔率历史校准 C1-C4 =====
+        # C1半全场平局粘性 / C2休息天数 / C3状态差异 / C4模型偏差闭环(3290场)
+        # (拆自apply_advanced_calibration的纯历史赛果模块, 赔率依赖模块全排除)
         try:
-            p1_w, p1_d, p1_l = _MU.apply_odds_calibrator(
-                [p1_w, p1_d, p1_l], _UPG_PARAMS['odds_calibrator'])
+            _cal_probs, _cal_notes = apply_odds_free_calibration([p1_w, p1_d, p1_l], sp)
+            if _cal_notes:
+                p1_w, p1_d, p1_l = _cal_probs
+                _adv_notes.extend(_cal_notes)
         except Exception:
-            pass
+            pass  # 校准异常不阻断主链路
+        fused_probs = [p1_w, p1_d, p1_l]
+        v611_flags['independent_mode'] = True
+        _src_desc = (f"xG-Poisson(w={_pw_indep:.2f}) + Elo(w={_ew_indep:.2f})"
+                     + (f" + H2H(w={h2h_w:.2f})" if h2h_probs else ""))
+        v611_notes.append(
+            f"独立模式: 赔率零输入, {_src_desc} 对数融合, 一致度{model_agreement:.0%}")
+        if h2h_note:
+            v611_notes.append(h2h_note)
+    else:
+        # 1. 负二项模型概率 → 自适应Logit校准(修正平局低估)
+        poisson_wdl_raw = [v/100 for v in scores['poisson_wdl']]
+        poisson_calibrated = calibrate_probabilities(poisson_wdl_raw, source='poisson', lam_total=lam_total, lam_h=lam_h, lam_a=lam_a,
+                                                     league=_league_for_cal, draw_odds=_draw_odds_for_cal)
     
-    # Ultra 6.7: 高级标定 (6大模块) — 在四源融合后施加有界修正
-    _adv_probs, _adv_notes = apply_advanced_calibration([p1_w, p1_d, p1_l], sp, had, hhad)
-    p1_w, p1_d, p1_l = _adv_probs
+        # 2. 市场隐含概率 (已经过form/odds修正的p1_w/d/l)
+        market_probs = [p1_w, p1_d, p1_l]
+        # Ultra 6.3: 市场源也做平局校准 (赔率本身压平局)
+        market_probs = calibrate_probabilities(market_probs, source='market', lam_total=lam_total, lam_h=lam_h, lam_a=lam_a,
+                                               league=_league_for_cal, draw_odds=_draw_odds_for_cal)
+    
+        # 3. Power方法概率 (从原始赔率提取, 互补Shin方法)
+        if had and 'h' in had:
+            power_probs = power_method([had['h'], had['d'], had['a']])
+        elif ow > 0:
+            power_probs = power_method([ow, od, ol])
+        else:
+            power_probs = market_probs  # 无赔率时回退
 
-    # Ultra 10.6 → 11.0: 赔率变动特征分析校准 — 平局赔率变动 + HAD-HHAD联动 + 初终赔变动方向
-    # 注: 平赔变动信号需odds_change_history数据, 预测时无逐场数据则跳过
-    _oca_notes = []
-    if _ODDS_CHANGE_ANALYSIS_CALIB and had and 'h' in had:
-        # Ultra 11.0: 获取体彩初赔数据 (用于初赔→终赔变动方向校准)
-        _had_init = sp.get('sporttery_bonus', {}).get('had_init')
-        _hhad_init = sp.get('sporttery_bonus', {}).get('hhad_init')
-        _oca_probs, _oca_notes, _ = apply_odds_change_analysis_calibration(
-            [p1_w, p1_d, p1_l], had, hhad, _league_for_cal, 
-            odds_change=None, had_hhad_change=None, had_init=_had_init, hhad_init=_hhad_init)
-        p1_w, p1_d, p1_l = _oca_probs
-    if _oca_notes:
-        _adv_notes.extend(_oca_notes)
+        # 4. Ultra 5.0: Elo评级概率 (第4源, 基于球队统计+近况)
+        h_wr_for_elo = home_form_cache[0] if home_form_cache else 0.5
+        a_wr_for_elo = away_form_cache[0] if away_form_cache else 0.5
+        league = sp.get('league', '')
+        elo_hfa = int((LEAGUE_HOME_ADV.get(league, 1.15) - 1.0) * 400)  # 主场优势→Elo点数
+        elo_probs = elo_probabilities(home_stats, away_stats, h_wr_for_elo, a_wr_for_elo, league_home_adv=elo_hfa,
+                                      hist_elo_h=_hist_elo_h, hist_elo_a=_hist_elo_a)
 
-    # Ultra 6.9: 融合后平局校准 — 双信号(主赔+平赔)修复系统性平局低估
-    # 必须在advanced_calibration之后、HAD方向确定之前调用
-    p1_w, p1_d, p1_l = post_fusion_draw_calibration([p1_w, p1_d, p1_l], had, _league_for_cal)
+        # 5. 集成融合: 市场 + Power + 校准Poisson + Elo (四源)
+        # Ultra 7.6: 公共权重函数 — dq渐变化 + Power悖论修复 + Elo分级 + proxy降权
+        dq = assess_data_quality(sp)
+        _xg_is_proxy = bool((_xg_home and _xg_home.get('is_proxy')) or
+                            (_xg_away and _xg_away.get('is_proxy')))
+        fuse_weights = compute_fuse_weights(
+            dq['score'], market_probs=market_probs, power_probs=power_probs,
+            hist_elo=(_hist_elo_h is not None and _hist_elo_a is not None),
+            xg_proxy=_xg_is_proxy, ppda_stab=_ppda_stab_factor)
+        # 升级7: 历史Brier学习权重 (已训参数存在时覆盖启发式权重; 缺参=回退)
+        if _MU and UPGRADES.get('learned_fusion') and _UPG_PARAMS.get('fusion_weights'):
+            _lw = _UPG_PARAMS['fusion_weights'].get('weights')
+            if _lw and len(_lw) == 4 and abs(sum(_lw) - 1.0) < 0.05:
+                fuse_weights = _lw
+        if _xg_is_proxy:
+            print(f"  [融合] ⚠️ xG为proxy占位符(非真实Understat), Poisson权重降权, 置信度封顶★★★★")
+        fused_probs, model_agreement = ensemble_fuse([market_probs, power_probs, poisson_calibrated, elo_probs], weights=fuse_weights)
+        # Ultra 7.6 (P10落地): JS散度一致性 — 连续分布相似度, 作为信息字段输出
+        # (回测结论: 不改变融合权重触发逻辑, 仅提供更细粒度的一致性度量)
+        js_agreement = compute_js_agreement([market_probs, power_probs, poisson_calibrated, elo_probs])
+        p1_w, p1_d, p1_l = fused_probs  # 用融合概率替代原始概率
 
-    # Ultra 8.0: HAD主场偏差修正 (29场回归: 76%预测"胜"但命中率仅41%)
-    # 1. 主场概率上限65% (防止主场优势权重过大)
-    # 2. 客队赔率<3.0时(非弱旅), 对"胜"方向-3pp
-    away_odds_val = had.get('a', 0) if had else 0
-    if p1_w > 0.65:
-        excess = p1_w - 0.65
-        p1_w = 0.65
-        p1_d += excess * 0.5
-        p1_l += excess * 0.5
-    if away_odds_val and 1 < away_odds_val < 3.0 and p1_w > 0.40:
-        p1_w -= 0.03
-        p1_d += 0.015
-        p1_l += 0.015
+        # 升级2: 赔率→概率 isotonic 校准后处理 (n=788历史库训练)
+        # 隐含概率与真实频率存在系统性偏差(热门低估/冷门高估),
+        # PAV保序回归逐类校准后重新归一化, 修正融合输出的系统性偏移。
+        if _MU and UPGRADES.get('odds_calibration') and _UPG_PARAMS.get('odds_calibrator'):
+            try:
+                p1_w, p1_d, p1_l = _MU.apply_odds_calibrator(
+                    [p1_w, p1_d, p1_l], _UPG_PARAMS['odds_calibrator'])
+            except Exception:
+                pass
+    
+        # Ultra 6.7: 高级标定 (6大模块) — 在四源融合后施加有界修正
+        _adv_probs, _adv_notes = apply_advanced_calibration([p1_w, p1_d, p1_l], sp, had, hhad)
+        p1_w, p1_d, p1_l = _adv_probs
 
-    fused_probs = [p1_w, p1_d, p1_l]
+        # Ultra 10.6 → 11.0: 赔率变动特征分析校准 — 平局赔率变动 + HAD-HHAD联动 + 初终赔变动方向
+        # 注: 平赔变动信号需odds_change_history数据, 预测时无逐场数据则跳过
+        _oca_notes = []
+        if _ODDS_CHANGE_ANALYSIS_CALIB and had and 'h' in had:
+            # Ultra 11.0: 获取体彩初赔数据 (用于初赔→终赔变动方向校准)
+            _had_init = sp.get('sporttery_bonus', {}).get('had_init')
+            _hhad_init = sp.get('sporttery_bonus', {}).get('hhad_init')
+            _oca_probs, _oca_notes, _ = apply_odds_change_analysis_calibration(
+                [p1_w, p1_d, p1_l], had, hhad, _league_for_cal, 
+                odds_change=None, had_hhad_change=None, had_init=_had_init, hhad_init=_hhad_init)
+            p1_w, p1_d, p1_l = _oca_probs
+        if _oca_notes:
+            _adv_notes.extend(_oca_notes)
+
+        # Ultra 6.9: 融合后平局校准 — 双信号(主赔+平赔)修复系统性平局低估
+        # 必须在advanced_calibration之后、HAD方向确定之前调用
+        p1_w, p1_d, p1_l = post_fusion_draw_calibration([p1_w, p1_d, p1_l], had, _league_for_cal)
+
+        # Ultra 8.0: HAD主场偏差修正 (29场回归: 76%预测"胜"但命中率仅41%)
+        # 1. 主场概率上限65% (防止主场优势权重过大)
+        # 2. 客队赔率<3.0时(非弱旅), 对"胜"方向-3pp
+        away_odds_val = had.get('a', 0) if had else 0
+        if p1_w > 0.65:
+            excess = p1_w - 0.65
+            p1_w = 0.65
+            p1_d += excess * 0.5
+            p1_l += excess * 0.5
+        if away_odds_val and 1 < away_odds_val < 3.0 and p1_w > 0.40:
+            p1_w -= 0.03
+            p1_d += 0.015
+            p1_l += 0.015
+
+        fused_probs = [p1_w, p1_d, p1_l]
     had_dirs = ['胜', '平', '负']
 
     # ===== Ultra 13.16 (2026-08-16): 市场优先四策 — 45场官方核对赛果实测 =====
@@ -7556,7 +7815,26 @@ def predict_match(match_num, data):
         except Exception:
             _mkt_anchor = None
 
-    if _mkt_anchor:
+    if INDEPENDENT_MODE:
+        # ===== Ultra 13.17: 独立模式 — 纯模型argmax, 平局解禁, 市场仅影子对照 =====
+        had_min_idx = fused_probs.index(max(fused_probs))
+        _market_first['mode'] = 'independent'
+        _market_first['model_probs_pre'] = [round(x, 4) for x in fused_probs]
+        if _mkt_anchor:  # 影子市场方向: 只记录不决策, 供逐期对账
+            _shadow_fav_i = _mkt_anchor.index(max(_mkt_anchor))
+            _market_first['fav_dir'] = had_dirs[_shadow_fav_i]
+            _market_first['shadow_only'] = True
+            if had_min_idx != _shadow_fav_i:
+                _market_first['policies'].append(
+                    f"独立意见{had_dirs[had_min_idx]}≠市场热门{had_dirs[_shadow_fav_i]}(影子对账)")
+        if had_min_idx == 1:
+            v611_flags['draw_primary'] = True
+            v611_notes.append(
+                f"平局作主推(P平{p1_d:.0%}) — 独立模式平局解禁, 纯模型意见不套市场时代禁平规则")
+        _sh = _market_first.get('fav_dir')
+        print(f"  [独立模式] 主推{had_dirs[had_min_idx]} P={max(fused_probs):.0%}"
+              + (f" | 影子市场:{_sh}" if _sh else ""))
+    elif _mkt_anchor:
         _market_first['enabled'] = True
         _model_probs_pre = [p1_w, p1_d, p1_l]
         _market_first['model_probs_pre'] = [round(x, 4) for x in _model_probs_pre]
@@ -7757,7 +8035,17 @@ def predict_match(match_num, data):
     hhad_poisson_idx = hhad_probs_poisson.index(max(hhad_probs_poisson))
     
     # 如果HHAD有开盘，用赔率隐含概率验证；否则用Poisson概率
-    if hhad and 'h' in hhad:
+    if INDEPENDENT_MODE:
+        # Ultra 13.17: 独立模式 — HHAD同样赔率零输入, 仅校准Poisson(让球盘口=玩法定义保留)
+        hhad_poisson_cal = calibrate_probabilities(
+            hhad_probs_poisson, source='poisson', lam_total=lam_total, lam_h=lam_h, lam_a=lam_a,
+            league=_league_for_cal, draw_odds=None)
+        hhad_final_probs = hhad_poisson_cal
+        hhad_final_idx = hhad_final_probs.index(max(hhad_final_probs))
+        hhad_dir = hhad_dirs[hhad_final_idx]
+        hhad_odds_val = round([hhad['h'], hhad['d'], hhad['a']][hhad_final_idx], 2) \
+            if (hhad and 'h' in hhad and hhad.get('h', 0) > 0) else None
+    elif hhad and 'h' in hhad:
         hhad_odds_list = [hhad['h'], hhad['d'], hhad['a']]
         # Ultra 5.0: Shin + Power + 校准Poisson + Elo 四源融合
         hhad_shin = shin_method(hhad_odds_list)
@@ -7785,14 +8073,15 @@ def predict_match(match_num, data):
 
     # Ultra 6.10: 融合后让球平局校准 — 修复-1球盘口让平率系统性低估
     # 在HHAD融合后、方向确定前调用 (与HAD平局校准对称)
-    hhad_final_probs = post_fusion_hhad_draw_calibration(
-        hhad_final_probs, had, hhad, handicap, _league_for_cal)
+    if not INDEPENDENT_MODE:  # 独立模式: 赔率双信号校准跳过
+        hhad_final_probs = post_fusion_hhad_draw_calibration(
+            hhad_final_probs, had, hhad, handicap, _league_for_cal)
 
     # Ultra 10.6 → 11.0: HAD/HHAD矛盾信号 → HHAD可靠性调整 + 初终赔变动方向
     # 当HAD自信度>5pp高于HHAD时, HAD准确率56.4% vs HHAD仅33.5%
     # 此时降低HHAD置信度, 让HAD预测主导
     _oca_hhad_notes = []
-    if _ODDS_CHANGE_ANALYSIS_CALIB and hhad and 'h' in hhad and had and 'h' in had:
+    if not INDEPENDENT_MODE and _ODDS_CHANGE_ANALYSIS_CALIB and hhad and 'h' in hhad and had and 'h' in had:
         try:
             _sp_had_shin = shin_method([had['h'], had['d'], had['a']])
             _sp_hhad_shin = shin_method([hhad['h'], hhad['d'], hhad['a']])
@@ -7823,7 +8112,8 @@ def predict_match(match_num, data):
     hhad_final_idx = hhad_final_probs.index(max(hhad_final_probs))
     if hhad and 'h' in hhad:
         hhad_dir = hhad_dirs[hhad_final_idx]
-        hhad_odds_val = round(hhad_odds_list[hhad_final_idx], 2)
+        if not INDEPENDENT_MODE:  # 独立模式: 展示赔率已在独立分支设置, hhad_odds_list未定义
+            hhad_odds_val = round(hhad_odds_list[hhad_final_idx], 2)
     else:
         hhad_dir = hhad_dirs[hhad_final_idx]
 
@@ -8000,7 +8290,8 @@ def predict_match(match_num, data):
 
     # Ultra 13.12: 庄家意图联动置信度 — 资金强确认+0.5★ / 警惕、弃赛-0.5★
     # (实证: 热门+被压48.6% vs 热门遭抬44.2% vs 升赔方向28.2%, 差距足以支撑星级调整)
-    if bookmaker_intent and bookmaker_intent.get('conf_delta'):
+    # Ultra 13.17: 独立模式下此调整禁用 — 初→终赔变动是赔率信号, 只记录影子对照不调置信度
+    if (not INDEPENDENT_MODE) and bookmaker_intent and bookmaker_intent.get('conf_delta'):
         _bk_cd = bookmaker_intent['conf_delta']
         if _bk_cd > 0:
             had_conf_score = min(5.0, had_conf_score + _bk_cd)
@@ -8296,6 +8587,7 @@ def predict_match(match_num, data):
             'had_open': had_open,
             'draw_override': _draw_override,  # Ultra 12.2: 平局方向覆盖标记 (13.16起恒False, 平局只作指南小注)
             'market_first': _market_first if had_open else None,  # Ultra 13.16: 市场优先四策详情
+            'independent': bool(INDEPENDENT_MODE),  # Ultra 13.17: 独立模式标记(赔率零输入, fav_dir为影子对照)
         },
         'HHAD': {
             'dir': hhad_dir,
@@ -8864,7 +9156,10 @@ def main():
                 _od_s = f"@{_od}" if _od else "(赔率以盘口为准)"
                 summary_lines.append(f"    HAD:  {had_info['dir']}{_od_s} {had_info['conf']}{_hr_s}{_do_tag} P={had_info['p']}")
             else:
-                summary_lines.append(f"    HAD:  未开盘 (仅参考HHAD)")
+                # Ultra 14.2 (RULE-015): HAD未开盘但HHAD已开 → 直接以HHAD为主口径, 汇总行透出主推
+                _hh_od = hhad_info.get('odds')
+                _hh_od_s = f"@{_hh_od}" if _hh_od else "(赔率以盘口为准)"
+                summary_lines.append(f"    HAD:  未开盘 → 本场主推 HHAD {hhad_info['dir']}{_hh_od_s}")
             _hhr = hhad_info.get('conf_hit_rate')
             _hhr_s = f" 校准命中≈{_hhr:.0f}%" if _hhr is not None else ""
             summary_lines.append(f"    HHAD: {hhad_info['dir']}@{hhad_info['odds']} {hhad_info['conf']}{_hhr_s} P={hhad_info['p']}")
@@ -8958,7 +9253,12 @@ def main():
     # 提取周几前缀(如"周六"), 加入文件名避免跨周几冲突
     weekday_prefixes = set(k[:2] for k in results.keys() if k.startswith('周'))
     wd_tag = '_'.join(sorted(weekday_prefixes)) if weekday_prefixes else ''
-    pred_file = os.path.join(predictions_dir, f'pred_{date_tag}_{wd_tag}.json' if wd_tag else f'pred_{date_tag}.json')
+    # Ultra 13.17: 独立模式专属后缀 — 与标准预测分开存档, 供双账本对账
+    # (v215_verify 匹配 pred_{code}*周{wd}* 均可命中; 验证时按 pred_file 字段区分账本)
+    indep_tag = '_indep' if INDEPENDENT_MODE else ''
+    pred_file = os.path.join(predictions_dir,
+                             f'pred_{date_tag}_{wd_tag}{indep_tag}.json' if wd_tag
+                             else f'pred_{date_tag}{indep_tag}.json')
 
     # ===== 保存预测结果到文件 (Ultra 8.1: 按模式区分) =====
     existing_history = []
@@ -8987,6 +9287,7 @@ def main():
         pred_data = {
             'saved_at': time.strftime('%Y-%m-%d %H:%M:%S'),
             'mode': 'predict',
+            'independent_mode': bool(INDEPENDENT_MODE),  # Ultra 13.17: 账本标记
             'update_count': 0,  # 全新预测: 更新次数从0开始
             'meta': meta,
             'results': results,
@@ -9053,6 +9354,7 @@ def main():
         pred_data = {
             'saved_at': time.strftime('%Y-%m-%d %H:%M:%S'),
             'mode': 'update',
+            'independent_mode': bool(INDEPENDENT_MODE),  # Ultra 14.0: 账本标记(update模式补齐, 与predict同口径)
             'update_count': update_count,  # 第N次更新
             'meta': meta,
             'results': results,

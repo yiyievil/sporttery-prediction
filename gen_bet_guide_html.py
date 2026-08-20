@@ -170,6 +170,7 @@ def generate(pred_json=None):
     res = d.get('results', {})
     meta_all = d.get('meta', {})
     base = os.path.basename(pred_json).replace('pred_', '').replace('.json', '')
+    _indep = bool(d.get('independent_mode'))  # Ultra 13.17: 独立模式 — 赔率信号只作影子对照
 
     cards = []
     n_single = n_cover = n_avoid = n_draw = n_draw_strike = n_draw_value = 0
@@ -281,7 +282,7 @@ def generate(pred_json=None):
             'draw_odds': had.get('draw_odds', '3.00'),
             'primary_note': primary_note,
             'mkt_div': m.get('market_divergence'),  # 优化③: 模型-市场分歧
-            'bk_intent': m.get('bookmaker_intent'),  # Ultra 13.12: 庄家意图五档
+            'bk_intent': (None if _indep else m.get('bookmaker_intent')),  # Ultra 13.17: 独立模式不展示赔率资金信号(方向参照可能已过时)
             'swot_sample_warning': (m.get('swot') or {}).get('sample_warning'),  # 优化②: 小样本警示
         })
 
@@ -301,14 +302,21 @@ def generate(pred_json=None):
             dv_html = f'<div class="mc-draw-value">💡 平局价值: <b>平 @{c.get("draw_odds","3.00")}</b> (胜平负·小注) — {c.get("draw_value_reason","")}</div>'
         primary_html = f'<div class="mc-primary">{c["primary_note"]}</div>' if c.get('primary_note') else ''
         # 优化③ (Ultra 13.11): 模型-市场分歧警示行 (≥15pp)
+        # Ultra 13.17: 独立模式改标"影子对照" — 市场方向只记录不决策, 供双账本对账
         div_html = ''
         _md = c.get('mkt_div')
         if _md and _md.get('flagged'):
             _arrow = '方向相反' if _md.get('dir_conflict') else '幅度偏离'
-            div_html = (f'<div class="mc-mkt-div">⚠️ 市场分歧({_arrow}): 模型{_md.get("model_dir","?")}'
-                        f'{_md.get("model_prob",0):.0f}% vs 市场{_md.get("market_dir","?")}'
-                        f'{_md.get("market_prob",0):.0f}%, 分歧{_md.get("max_diff_pp",0):.0f}pp'
-                        f' — {_md.get("note","").split("—")[-1].strip() if "—" in str(_md.get("note","")) else "谨慎参考"}</div>')
+            if _indep:
+                div_html = (f'<div class="mc-mkt-div">🔭 影子对照({_arrow}): 独立意见{_md.get("model_dir","?")}'
+                            f'{_md.get("model_prob",0):.0f}% vs 市场热门{_md.get("market_dir","?")}'
+                            f'{_md.get("market_prob",0):.0f}%, 差{_md.get("max_diff_pp",0):.0f}pp'
+                            f' — 独立模式: 赔率仅作对照记录, 不参与决策, 赛后双账本对账</div>')
+            else:
+                div_html = (f'<div class="mc-mkt-div">⚠️ 市场分歧({_arrow}): 模型{_md.get("model_dir","?")}'
+                            f'{_md.get("model_prob",0):.0f}% vs 市场{_md.get("market_dir","?")}'
+                            f'{_md.get("market_prob",0):.0f}%, 分歧{_md.get("max_diff_pp",0):.0f}pp'
+                            f' — {_md.get("note","").split("—")[-1].strip() if "—" in str(_md.get("note","")) else "谨慎参考"}</div>')
         # Ultra 13.12: 庄家意图五档行 (资金动量×模型方向)
         bk_html = ''
         _bk = c.get('bk_intent')
@@ -363,6 +371,13 @@ def generate(pred_json=None):
     # 首推参考汇总 (补充, 不改四档主推)
     guide += f'<div class="ins">📌 <b>首推参考(命中率优先)</b>：✅胜平负{n_primary_had}场 · 🎯让球{n_primary_hhad}场。首推=预测PDF「主推」，仅作补充参考，主推以四档为准。</div>'
 
+    # Ultra 13.17: 独立模式横幅 — 本指南由"赔率零输入"预测生成
+    _indep_banner = (''
+        if not _indep else
+        '<div class="ins warn" style="margin:10px 0">🔭 <b>独立模式账本</b>：本指南由独立预测生成 — '
+        '赔率零输入，仅 xG-Poisson + Elo + SWOT情报 三要素决策；体彩赔率只作"影子对照"记录，'
+        '赛后与市场热门双账本对账，检验独立模型 vs 市场谁更准。</div>')
+
     html = f'''<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>投注选择指南 {base}</title><style>
 *{{box-sizing:border-box;margin:0;padding:0}}
@@ -414,6 +429,7 @@ h1{{font-size:21px;font-weight:800}}
 </style></head><body>
 <h1>🎯 投注选择指南</h1>
 <div class="sub">{base} · {len(cards)} 场 · 四档主推 + 首推参考</div>
+{_indep_banner}
 
 <div class="card"><div class="sec" style="margin-top:0">📖 四档图例（主推）</div>
 <div class="legend">

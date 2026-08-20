@@ -2,7 +2,7 @@
  "_meta": {
   "canonical": "sporttery",
   "version": 1,
-  "updated": "2026-08-18 08:49:55"
+  "updated": "2026-08-20 07:39:45"
  },
  "teams": {
   "金泉尚武": {
@@ -677,6 +677,9 @@
     ],
     "en": [
      "Atletico Madrid"
+    ],
+    "leisu": [
+     "马德里竞技"
     ]
    }
   },
@@ -707,7 +710,8 @@
    "sources": {
     "en": [
      "Real Sociedad"
-    ]
+    ],
+    "leisu": []
    }
   },
   "比利亚雷亚尔": {
@@ -1869,6 +1873,12 @@
     ],
     "en": [
      "Rosario Central"
+    ],
+    "qiumiwu": [
+     "罗萨里奥中央"
+    ],
+    "leisu": [
+     "罗萨里奥中央"
     ]
    }
   },
@@ -2188,11 +2198,15 @@
   },
   "纳什维尔": {
    "aliases": [
-    "Nashville SC"
+    "Nashville SC",
+    "迈阿密国际"
    ],
    "sources": {
     "en": [
      "Nashville SC"
+    ],
+    "leisu": [
+     "迈阿密国际"
     ]
    }
   },
@@ -2565,7 +2579,8 @@
     "en": [
      "Betis",
      "Real Betis"
-    ]
+    ],
+    "leisu": []
    }
   },
   "博莱斯拉": {
@@ -2669,7 +2684,11 @@
     ],
     "en": [
      "Al Qadsiah"
-    ]
+    ],
+    "qiumiwu": [
+     "卡迪西亚"
+    ],
+    "leisu": []
    }
   },
   "比亚韦": {
@@ -2745,6 +2764,12 @@
     ],
     "en": [
      "RB Salzburg"
+    ],
+    "qiumiwu": [
+     "萨尔茨堡红牛"
+    ],
+    "leisu": [
+     "萨尔茨堡红牛"
     ]
    }
   },
@@ -2761,6 +2786,12 @@
     ],
     "en": [
      "Anderlecht"
+    ],
+    "qiumiwu": [
+     "安德莱赫特"
+    ],
+    "leisu": [
+     "安德莱赫特"
     ]
    }
   },
@@ -2876,11 +2907,18 @@
   },
   "阿拉木图": {
    "aliases": [
-    "阿拉木图凯拉特"
+    "阿拉木图凯拉特",
+    "凯拉特"
    ],
    "sources": {
     "short": [
      "阿拉木图凯拉特"
+    ],
+    "qiumiwu": [
+     "阿拉木图凯拉特"
+    ],
+    "leisu": [
+     "凯拉特"
     ]
    }
   },
@@ -2900,6 +2938,12 @@
    ],
    "sources": {
     "short": [
+     "波兹南莱赫"
+    ],
+    "qiumiwu": [
+     "波兹南莱赫"
+    ],
+    "leisu": [
      "波兹南莱赫"
     ]
    }
@@ -3616,11 +3660,15 @@
   },
   "斯特拉斯": {
    "aliases": [
-    "Strasbourg"
+    "Strasbourg",
+    "斯特拉斯堡"
    ],
    "sources": {
     "en": [
      "Strasbourg"
+    ],
+    "leisu": [
+     "斯特拉斯堡"
     ]
    }
   },
@@ -3799,6 +3847,9 @@
    ],
    "sources": {
     "qiumiwu": [
+     "帕尔梅拉斯"
+    ],
+    "leisu": [
      "帕尔梅拉斯"
     ]
    }
@@ -4097,6 +4148,138 @@
    "sources": {
     "qiumiwu": [
      "萨格勒布迪纳摩"
+    ]
+   }
+  },
+  "波特诺": {
+   "aliases": [
+    "波特诺山丘"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "波特诺山丘"
+    ],
+    "leisu": [
+     "波特诺山丘"
+    ]
+   }
+  },
+  "LASK林茨": {
+   "aliases": [
+    "林茨"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "林茨"
+    ]
+   }
+  },
+  "纽约红牛": {
+   "aliases": [
+    "费城联合"
+   ],
+   "sources": {
+    "leisu": [
+     "费城联合"
+    ]
+   }
+  },
+  "迈季宽广": {
+   "aliases": [
+    "费哈"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "费哈"
+    ],
+    "leisu": [
+     "费哈"
+    ]
+   }
+  },
+  "利雅新月": {
+   "aliases": [
+    "利雅得新月"
+   ],
+   "sources": {
+    "leisu": [
+     "利雅得新月"
+    ]
+   }
+  },
+  "长崎航海": {
+   "aliases": [
+    "长崎成功丸"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "长崎成功丸"
+    ]
+   }
+  },
+  "利雅得": {
+   "aliases": [
+    "利雅得体育"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "利雅得体育"
+    ]
+   }
+  },
+  "费伦茨": {
+   "aliases": [
+    "费伦茨瓦罗斯"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "费伦茨瓦罗斯"
+    ],
+    "leisu": [
+     "费伦茨瓦罗斯"
+    ]
+   }
+  },
+  "贝红星": {
+   "aliases": [
+    "贝尔格莱德红星"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "贝尔格莱德红星"
+    ],
+    "leisu": [
+     "贝尔格莱德红星"
+    ]
+   }
+  },
+  "比尔森": {
+   "aliases": [
+    "比尔森胜利"
+   ],
+   "sources": {
+    "leisu": [
+     "比尔森胜利"
+    ]
+   }
+  },
+  "登博思": {
+   "aliases": [
+    "邓博施"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "邓博施"
+    ]
+   }
+  },
+  "埃因FC": {
+   "aliases": [
+    "FC埃因霍温"
+   ],
+   "sources": {
+    "qiumiwu": [
+     "FC埃因霍温"
     ]
    }
   }

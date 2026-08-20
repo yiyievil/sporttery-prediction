@@ -1,17 +1,36 @@
 {
-  "drift_detected": false,
-  "cusum_flagged": true,
-  "cusum_drift_point": "2026-08-10",
+  "drift_detected": true,
+  "drift_direction": "下降(准确率显著降低)",
+  "drift_point": "2026-08-10",
+  "baseline_hit_rate": 0.395,
+  "recent_hit_rate": 0.371,
+  "drift_magnitude_pp": 2.4,
   "weight_multipliers": {
-    "market": 1.0,
-    "power": 1.0,
+    "market": 1.05,
+    "power": 0.94,
     "poisson": 1.0,
-    "elo": 1.0
+    "elo": 0.88
   },
-  "measured_drift_pp": 0.8,
-  "pre_hit_rate": 0.395,
-  "post_hit_rate": 0.387,
-  "activated_at": "2026-08-18 01:46:11",
-  "source": "v215_verify.py CUSUM (Ultra 8.0)",
-  "note": "CUSUM累积量于2026-08-10越限, 但实测漂移+0.8pp<2.0pp(补录清洁赛果后漂移后38.7% vs 漂移前39.5%), 无实际退化 → 权重响应解除(全1.0)"
+  "multiplier_basis": {
+    "base": {
+      "market": 1.12,
+      "power": 0.85,
+      "poisson": 1.0,
+      "elo": 0.7
+    },
+    "base_drift_pp": 6.0,
+    "scale": 0.39,
+    "rule": "mult = 1 + (base-1) × min(1.5, drift_pp/6.0), 边界[0.50,1.30]"
+  },
+  "direction_weakness": {
+    "平": 0.1,
+    "胜": 0.44,
+    "负": 0.34
+  },
+  "cusum_pos": 2.3612,
+  "early_warning": true,
+  "consecutive_low": true,
+  "activated_at": "2026-08-19 01:12:28",
+  "source": "v215_verify.py CUSUM (Ultra 8.0) + regression.db 清洁数据 (跨周污染修复后)",
+  "note": "CUSUM漂移响应: 漂移2.4pp → 市场×1.05/Power×0.94/Elo×0.88 (缩放0.39×); 配合 recalibrate_model.py 同步重标定"
 }

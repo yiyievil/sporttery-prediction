@@ -1119,6 +1119,17 @@ def verify_prediction(pred_data, result_data):
     else:
         pb_hit = False
 
+    # Ultra 14.2: 影子对照 — 预测时记录的市场热门方向 (market_first.fav_dir, shadow_only)
+    # 赛后对账 "独立模型 vs 市场热门" 双方命中率, 检验独立模式价值的核心账本
+    market_first = pred_had.get('market_first') or {}
+    market_fav_dir = market_first.get('fav_dir') or ''
+    _fav_valid = market_fav_dir in ('胜', '平', '负')
+    market_fav_hit = ((market_fav_dir == actual_had)
+                      if (_fav_valid and actual_had in ('胜', '平', '负'))
+                      else (None if not _fav_valid else False))
+    model_vs_market = (('same' if pred_had_dir == market_fav_dir else 'diff')
+                       if (_had_valid and _fav_valid) else None)
+
     result = {
         'key': '',
         'home': result_data['home'],
@@ -1162,6 +1173,10 @@ def verify_prediction(pred_data, result_data):
         'prediction': pred,
         'difficulty': pred.get('difficulty', 0),
         'model_agreement': pred.get('model_agreement', 0),
+        # Ultra 14.2: 影子对照字段
+        'market_fav_dir': market_fav_dir,
+        'market_fav_hit': market_fav_hit,
+        'model_vs_market': model_vs_market,
     }
     # Pro 3.0: 计算单场投注ROI
     result['roi'] = calculate_roi(result)
@@ -2289,6 +2304,86 @@ footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--rule
 """
 
 
+def shadow_comparison_stats(verified_matches, include_db=True):
+    """Ultra 14.2: 影子对照统计 — 独立模型 vs 市场热门
+
+    数据源: 预测时记录的 market_first.fav_dir (shadow_only, 仅记录不决策)
+    分组:
+      same = 模型与市场同向 (跟随场次)
+      diff = 分歧场次 (模型逆市场) — 独立模式价值的核心检验
+    口径: 双方方向均有效 (胜/平/负) 且有赛果的场次; 模型命中率用 had_hit,
+          市场命中率用 market_fav_hit, 二者可比 (同一场同一赛果)。
+    include_db: 汇总 verify_history 中 model_vs_market 非空的历史行 (跨期累计)。
+    """
+    def _count(rows):
+        n = len(rows)
+        m_hit = sum(1 for r in rows if r.get('model_hit') is True)
+        f_hit = sum(1 for r in rows if r.get('fav_hit') is True)
+        return {'n': n, 'model_hits': m_hit, 'fav_hits': f_hit}
+
+    # 本期数据 → 统一行结构
+    cur_rows = []
+    for v in verified_matches:
+        if v.get('model_vs_market') is None:
+            continue
+        if v.get('had_hit') is None:
+            continue  # 赛果未知/无方向, 不参与
+        cur_rows.append({'grp': v['model_vs_market'],
+                         'model_hit': v.get('had_hit'),
+                         'fav_hit': v.get('market_fav_hit')})
+
+    out = {'current': {'all': _count(cur_rows),
+                       'same': _count([r for r in cur_rows if r['grp'] == 'same']),
+                       'diff': _count([r for r in cur_rows if r['grp'] == 'diff'])},
+           'cumulative': None}
+
+    # 跨期累计 (含本期: 验证先跑统计后入库时, 本期尚未入库, 用并集; 重复运行时以 DB 为准去重)
+    if include_db:
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            conn.execute("PRAGMA busy_timeout=5000")
+            c = conn.cursor()
+            hist = c.execute('''SELECT model_vs_market, had_hit, market_fav_hit, verify_date, match_key
+                                FROM verify_history
+                                WHERE model_vs_market IS NOT NULL
+                                  AND had_hit IS NOT NULL''').fetchall()
+            conn.close()
+            # 本期行以 (grp, 命中组合) 计入 — 用 key 去重 (DB 行含本期时自然覆盖)
+            hist_keys = {(r[3], r[4]) for r in hist}
+            merged = [{'grp': r[0], 'model_hit': bool(r[1]), 'fav_hit': None if r[2] is None else bool(r[2])}
+                      for r in hist]
+            for v in verified_matches:
+                if v.get('model_vs_market') is None or v.get('had_hit') is None:
+                    continue
+                # verify_date 未知, 用模型方向+命中近似去重不可靠 → 直接并集时仅当 DB 无本期
+                # (save_to_db 在本函数之后执行, 首跑时 DB 无本期; 重跑时 DB 已含本期, 跳过)
+                _vk = v.get('key', '')
+                _approx = any(hk[1] == _vk for hk in hist_keys)
+                if not _approx:
+                    merged.append({'grp': v['model_vs_market'],
+                                   'model_hit': v.get('had_hit'),
+                                   'fav_hit': v.get('market_fav_hit')})
+            out['cumulative'] = {'all': _count(merged),
+                                 'same': _count([r for r in merged if r['grp'] == 'same']),
+                                 'diff': _count([r for r in merged if r['grp'] == 'diff'])}
+        except Exception as e:
+            pass  # DB 不可用时仅报本期
+
+    # 可读摘要
+    parts = []
+    for scope, label in (('current', '本期'), ('cumulative', '累计')):
+        d = out.get(scope)
+        if not d or d['all']['n'] == 0:
+            continue
+        a, s, f = d['all'], d['same'], d['diff']
+        parts.append(
+            f"{label}: 模型{a['model_hits']}/{a['n']}({a['model_hits']/a['n']*100:.0f}%) "
+            f"vs 市场{a['fav_hits']}/{a['n']}({a['fav_hits']/a['n']*100:.0f}%) | "
+            f"同向{s['n']}场(模型{s['model_hits']}中) 分歧{f['n']}场(模型{f['model_hits']}中/市场{f['fav_hits']}中)")
+    out['interpretation'] = ' | '.join(parts) if parts else '影子对照: 本期无有效对照场次'
+    return out
+
+
 def _ultra61_html(cal_analysis, conf_matrix, boot_ci, bayes_overall, logistic_factors, cusum_out, sig_out, rps_out):
     """生成Ultra 6.1高级验证模型的HTML区块"""
 
@@ -2881,6 +2976,10 @@ def init_db():
     safe_alter(conn, 'verify_stats', 'primary_bets', 'INTEGER')
     safe_alter(conn, 'verify_stats', 'primary_hits', 'INTEGER')
     safe_alter(conn, 'verify_stats', 'primary_rate', 'REAL')
+    # Ultra 14.2: 影子对照列 (独立模式 vs 市场热门对账账本)
+    safe_alter(conn, 'verify_history', 'market_fav_dir', 'TEXT')     # 预测时市场热门方向
+    safe_alter(conn, 'verify_history', 'market_fav_hit', 'INTEGER')  # 市场热门是否命中
+    safe_alter(conn, 'verify_history', 'model_vs_market', 'TEXT')    # same=同向 / diff=分歧
     conn.commit()
     conn.close()
 
@@ -2994,6 +3093,14 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
                    None if _gh is None else (1 if _gh else 0),
                    v.get('primary_market', ''), v.get('primary_bet', ''),
                    None if _ph is None else (1 if _ph else 0),
+                   date_str, v['key']))
+        # Ultra 14.2: 影子对照数据 (独立模式 vs 市场热门; 无fav_dir记录的旧场次存NULL)
+        _mfh = v.get('market_fav_hit')
+        c.execute('''UPDATE verify_history SET market_fav_dir=?, market_fav_hit=?, model_vs_market=?
+                     WHERE verify_date=? AND match_key=?''',
+                  (v.get('market_fav_dir', '') or '',
+                   None if _mfh is None else (1 if _mfh else 0),
+                   v.get('model_vs_market'),
                    date_str, v['key']))
 
     # 保存汇总统计
@@ -3712,6 +3819,10 @@ def main():
             if d:
                 _pm_parts.append(f"{_pm_zh.get(mk, mk)}{d['hit']}/{d['n']}")
         print(f"  📌 首推参考(PDF主推): 命中{primary_hits}/{len(primary_bets)} ({primary_hits/len(primary_bets)*100:.1f}%) | " + " ".join(_pm_parts))
+
+    # Ultra 14.2: 影子对照 — 独立模型 vs 市场热门 (核心对账账本)
+    shadow_out = shadow_comparison_stats(verified_matches)
+    print(f"  👤 影子对照(模型vs市场热门): {shadow_out.get('interpretation', '无数据')}")
 
     # Pro 3.0: 高级指标 (计算一次, 供终端输出/HTML报告/数据库复用, 避免三重计算)
     brier_out = calculate_brier_score(verified_matches)

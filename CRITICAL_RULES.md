@@ -48,6 +48,12 @@
 - **行动**: fetch_nowscore_for_matches 返回 failed_keys, 仅对 failed_keys 请求 500.com。
 - **违反后果**: 重复请求浪费资源, 或数据源降级方向错误。
 
+### RULE-015: HAD未开盘但HHAD已开时, 直接以HHAD为主口径计算 (Ultra 14.2, 2026-08-20 用户裁决)
+- **触发**: 体彩某场 HAD 未开盘 (had.h 缺失/为0) 但 HHAD 已开盘 (hhad.h > 0), 如 260820周四009 本菲卡 vs 奥胡斯
+- **规则**: 该场不跳过、不标记降级、不等 HAD 开盘 — HHAD 用校准 Poisson + 体彩让球线全量计算 (方向/概率/置信度/EV/穿盘风险), 作为本场主推口径; 比分/半全场/总进球照常输出。
+- **行动**: 引擎已内建该路径: `had_open=false` 时 HAD 选项不进入主推候选池 (`compute_cross_market_value` 仅收录已开盘玩法), primary_bet 自动落位 HHAD 最优; SWOT 概率迁移对 `p='未开盘'` 自动跳过, HHAD 保持纯模型输出; PDF 主推卡片渲染 `cross_market.primary_bet`; 投注指南输出 "✅单选 让X @odds (让球·HAD未开盘)" 且置信度取 HHAD; 终端汇总行为 "HAD: 未开盘 → 主推 HHAD让X@odds"。汇报给用户时, 此类场次以 HHAD 预测为该场预测结论。
+- **违反后果**: 该场被视为"未开盘"而遗漏预测, 用户错过投注窗口; 或误报"未开盘"让用户以为无推荐。
+
 ---
 
 ## 数据完整性规则

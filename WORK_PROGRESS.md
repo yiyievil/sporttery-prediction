@@ -1,276 +1,206 @@
-# 足球预测系统 v215 — 工作进度文档
+# 足球预测系统 — 架构与工作进度
 
-> 更新时间: 2026-07-27 12:00
-> 系统版本: Ultra 6.10 (历史标定 + 双向让平校准)
-> 工作目录: `C:\Users\CCJ\OneDrive\Desktop\sporttery`
+> 系统版本: 1.0（Ultra 14.x 独立模式唯一架构, 2026-08-20 定稿）
+> 工作区定位: 环境变量 `SPORTTERY_WORKSPACE`, 缺省为脚本所在目录
 
 ---
 
-## 一、当前系统架构 (Ultra 6.10)
+## 一、系统定位
 
-> **核心原则: 所有预测围绕体彩(Sporttery)展开**
-> - Sporttery 是唯一预测目标: 体彩场次决定预测范围, 体彩赔率是预测基准
-> - nowscore / 500.com / leisu 均为辅助数据源, 旨在增强体彩预测精度
-> - 无体彩开盘的比赛不进入预测流程
+2026-08-20 用户裁决: 模型若以体彩赔率为输入, 最优解天然贴近市场热门, 本质是在复验赔率最低项的准确率, 违背预测初衷。自此**独立模式（赔率零输入）为唯一预测路径**; 原"市场 + Power + Poisson + Elo"四源含赔率融合不再是可选项, 仅保留 `--legacy-market` / `SPORTTERY_LEGACY=1` 应急回退, 用于排障与历史回测。
 
-```
-                        ┌─────────────────────────────────┐
-                        │     Sporttery (体彩) — 核心      │
-                        │  预测目标 + 赔率基准 + 场次范围    │
-                        │  HAD/HHAD赔率 + 固定奖金(比分/   │
-                        │  总进球/半全场) + 赛果验证        │
-                        └──────────────┬──────────────────┘
-                                       │ 为每场体彩比赛增强数据
-                    ┌──────────────────┼──────────────────┐
-                    ▼                  ▼                  ▼
-          ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-          │   nowscore      │ │   500.com       │ │   leisu         │
-          │  辅助数据源(主)  │ │  降级备用       │ │  SWOT情报源     │
-          │  三合一盘口+    │ │  欧指/亚赔/     │ │  有利/不利情报   │
-          │  近况+交锋+积分 │ │  大小球(仅降级) │ │  (概率迁移增强)  │
-          └─────────────────┘ └─────────────────┘ └─────────────────┘
-```
+体彩在系统中的角色:
 
-### 数据流 (以体彩为核心)
+| 职能 | 状态 |
+|------|------|
+| 比赛场次范围 (matchList 决定预测哪些比赛) | 保留 |
+| 玩法定义 (HAD / HHAD 让球线 / 比分 / 总进球 / 半全场) | 保留 |
+| 推荐方向的展示赔率 (投注参考, 不反馈进模型) | 保留 |
+| 固定奖金 EV 价值分析 (输出侧: 模型概率 × 官方赔率 − 1) | 保留 |
+| 概率融合、各类赔率校准、置信度调整 | 已剥离 (赔率零输入) |
+| 市场热门方向记录 (`market_first.fav_dir`, shadow_only) | 仅记录不决策, 供赛后对账 |
+
+平局解禁: 纯模型意见下 P平为 argmax 时允许平局作主推 (市场时代的禁平规则随之失效)。
+
+---
+
+## 二、预测架构 (三源对数融合 + 四模块校准 + SWOT 情报层)
 
 ```
-Phase 1: 体彩场次获取 (Sporttery API — 必须, 决定预测范围)
-  ├─ matchList API → 按周几+编号获取体彩在售比赛
-  ├─ HAD/HHAD赔率 → 预测基准赔率
-  └─ 固定奖金API → 比分/总进球/半全场官方赔率 (EV价值分析)
-    │
-Phase 1.5: 统计数据增强 (nowscore — 辅助, 为体彩预测提供数据)
-  ├─ 三合一盘口: 亚盘/欧赔/大小球 (校准λ和市场信号)
-  ├─ 近况战绩: 近5-6场form (指数衰减权重)
-  ├─ 对赛交锋: h2h历史 (交锋趋势)
-  └─ 积分榜: 场均进失球 (贝叶斯收缩参数)
-    │  (nowscore失败的场次 → 降级500.com, 最终保底用sporttery赔率)
-    │
-Phase 2: 预测引擎 (v215_e2e.py — 所有概率最终对标体彩赔率)
-  ├─ λ建模: 体彩大小球盘口校准总λ (target=0.65模型+0.35盘口)
-  ├─ 四源融合: 市场(体彩HAD)+Power+校准Poisson+Elo
-  ├─ 历史标定: 1452场历史数据校准联赛参数+平局率+让平率
-  ├─ 平局校准: HAD双信号(主赔+平赔) + HHAD让平率(-1/-2/+1盘口)
-  └─ 输出: HAD/HHAD/比分/半全场/总进球 — 全部对标体彩玩法
-    │
-Phase 3: SWOT情报融合 (leisu — 增强, 可选)
-  └─ 概率迁移: 胜/负间线性迁移, 平局固定不动
-    │
-Phase 4: 报告 — PDF (对标体彩官方玩法)
-Phase 5: 验证回归 (v215_verify.py — 赛果来自体彩官方)
+S1  xG-Poisson   λ链: xG / 近况 / 联赛贝叶斯收缩 / PPDA / H2H衰减λ / 排名 / 伤停
+S2  Elo 评分     历史Elo库 + 联赛主场优势换算Elo点数 (高精度库权重×1.3)
+S3  H2H 历史交锋  时间衰减加权 + 联赛先验平滑(k=6), 原始交锋 n≥2 启用
+                  w = 0.10 + 0.05×n, 上限 0.35 (n=2 → 0.20, n=5 → 0.35)
+                  n<4 时 note 标注 "⚠️小样本" (14.2: 实验证明无需降权, 见第八节)
+─────────────────────────────────────────────────────────
+对数空间融合 (xG真实→S1 w=1.2 主导; proxy xG→w=0.8; 漂移乘数照常作用)
+→ 概率护栏 (胜/负上限 85%, 溢出均分给平/另一侧)
+→ C1 半全场平局粘性  联赛 HT=D→FT=D 转移率 vs 全局 0.35, 权重15%, ±4pp界
+→ C2 休息天数效应    主客休息差≥3天档 vs 联赛均值, 权重20%, ±5pp界
+→ C3 近期状态差异    form 评分差分档(±1) vs similar 基准, 权重25%
+→ C4 模型校准偏差    3290场闭环, 按置信区间向实际命中率修正, 50%强度
+─────────────────────────────────────────────────────────
+SWOT 情报层 (赛后融合): 强信号可翻转方向 + 翻转后一致性重算 (见第三节)
+→ 输出: HAD / HHAD / 比分 / 半全场 / 总进球, 全部对标体彩玩法
 ```
 
-## 二、通用化约定 (本次优化核心约束)
+实现要点:
 
-- **不依赖 Kimi 专属能力**: 所有数据获取用纯 requests; WebBridge 仅作 nowscore matchID 发现的降级备份。
-- **路径通用**: 所有脚本用 `os.environ.get('SPORTTERY_WORKSPACE') or 脚本所在目录` 定位工作区; 不再硬编码 `/workspace`、`/data/user/work`。
-- **字体通用**: `gen_report_pdf.py` 字体回退链: `SPORTTERY_FONT_DIR` → `./fonts/` → 解释器 fonts/ → 系统字体(simhei/msyh/PingFang/Noto)。
-- **报告只出 PDF**, 不出 HTML。
+- 融合与校准接线位于 `v215_e2e.py` 独立分支主链路 (融合 → 护栏 → C1-C4 → v611_notes 透出); 源构建函数 `_build_h2h_independent_source()`, 校准函数 `apply_odds_free_calibration()`。
+- C1-C3 依赖 `advanced_calibration.json` 中的联赛数据 (当前覆盖: 瑞超/挪超/芬超/巴甲/英超/欧协联/欧罗巴/欧冠); 无数据的联赛 (日职/沙职等) 按设计跳过。C4 依赖 `model_calibration.json`。
+- HHAD 同样赔率零输入: 让球线为玩法定义保留, 概率仅由校准 Poisson 产生; 受让盘 (handicap>0) 术语统一为"受让胜/受让平/受让负" (`_hhad_display_label` 铁律)。
+- HAD 未开盘但 HHAD 已开 (RULE-015, 2026-08-20 用户裁决, 实例 260820周四009 本菲卡): 该场不跳过不等开盘, 直接以 HHAD 为主口径全量计算 (方向/概率/置信度/EV/穿盘风险), HAD 选项不进入主推候选池、primary_bet 自动落位 HHAD; SWOT 概率迁移对 `p='未开盘'` 自动跳过 (HHAD 保持纯模型输出); 指南按"✅单选 让X @odds (HAD未开盘)"输出, 置信度取 HHAD; 汇报口径以 HHAD 预测为该场结论。
+- 输出文件专属后缀 `pred_{日期码}_{周X}_indep.json`, 顶层 `independent_mode: true` 账本标记 (predict / update 两模式均写入)。
+- 模型漂移监控: `drift_state.json` 提供各源漂移乘数, 融合权重实时衰减; `gen_drift_state.py` 复核实测漂移并出具裁决。
 
-## 三、运行命令 (Windows 当前工作目录)
+---
+
+## 三、SWOT 情报层与翻转重算
+
+数据获取全自动 (leisu 情报卡片为主, 500/nowscore 统计数据型情报兜底), 融合在预测保存后执行:
+
+- 常规迁移: SWOT 评分差 ≥2 时在胜/负间迁移概率质量 (每评分点 1pp, 上限 ±20pp), 平局概率不动; 评分差 <2 视为指向平局, 从胜/负各抽最多 1.5pp 给平局。
+- 强信号翻转: 评分差 ≥6 且方向与模型相反时直接翻转方向, 迁移量使新方向反超 5pp 安全余量, 上限 35pp; 翻转后置信度 +1★, 原方向赔率置 None 并注明"以体彩当前盘口为准"。
+- **翻转后一致性重算** (`swot_fusion_v3._recompute_after_flip`): 翻转发生时 λ 镜像交换 (攻防强弱互换, 总量级保留); 若镜像后泊松 argmax 仍不符 SWOT 方向, 每轮按评分差 ×4% 迁移 λ (上限 25%, 最多 3 轮)。随后用新 λ 与引擎同源重算比分 Top3 / wdl / 大小球 / HHAD / 半全场, 消除"主推负但比分偏主队"的口径分裂。痕迹写入 `v611_flags.swot_flip_recomputed` 与 `lam_calibration`; 重算失败自动回退旧的 wdl 数值同步, 不阻断主链路。
+- 小样本标注: 球队 xG 样本 n<3 时, SWOT 条目中的统计性表述 (场均/失球/进球/xG) 追加"(小样本 n=X)"。
+
+### 3.1 情报卡匹配防线 (Ultra 14.1, 2026-08-20 错配事故修复)
+
+**事故**: 260821 周五批次运行时, leisu 无 周五006(胡巴卡德)/周五011(贝蒂斯) 的当日卡片, 上下文匹配把"同联赛+同时刻"的别场卡片误配给它们 (费哈/利雅得新月卡→周五006, 巴列卡诺/阿拉维斯卡→周五011), 且把错误队名对学入 `team_names_db.json` (胡巴卡德→费哈、吉达联合→利雅得新月、贝蒂斯→巴列卡诺、皇家社会→阿拉维斯), 学到的别名又绕过队名校验, 导致两场基于错误情报发生假翻转 (胜→负)。已清除污染别名并重跑修复。
+
+**三道防线** (全部通过单测与实场复验):
+
+| 防线 | 位置 | 机制 |
+|------|------|------|
+| 别名矛盾防护 | `match_utils._learn_alias_pair` | 待学别名若已归属另一支球队 (是其他标准名的别名, 或本身是已知标准名), 拒绝学习 — 一个真实队名不可能同时属于两支球队 |
+| 上下文同日收紧 | `match_utils.find_best_match_with_learning` 上下文路径 | 队名零证据的上下文匹配, 日期从"±1天容忍"收紧为同日 — 日期是上下文路径唯一强判别器 |
+| 调用方队名校验 | `qiumiwu_fetch` (与 swot_auto 对齐) | 上下文匹配且未学到新别名时, 队名信号须 ≥0.4 才接受, 否则拒绝 (防错配 game_id 污染 λ 链) |
+
+设计边界: 防线不影响合法学习 (同日+新译名场景如 迈季宽广→费哈 实测仍正常); 统计备用型情报 (📊 stats备用, 来自本场自身 nowscore/500 数据) 不经卡片匹配, 天然免疫此类错配。
+
+---
+
+## 四、数据流与数据源策略
+
+```
+Phase 1   体彩场次获取 (Sporttery API — 决定预测范围)
+          matchList → 周几+编号; HAD/HHAD 赔率(仅展示与影子对照); 固定奖金EV
+Phase 1.5 统计数据增强 (nowscore 主力, 500.com 降级备用)
+          三合一盘口 / 近况form / 对赛交锋 / 积分榜 → λ链与Elo输入
+Phase 2   qiumiwu 增强 (H2H 时间衰减 / PPDA / 近况修正)
+Phase 3   预测引擎 (v215_e2e.py — 独立模式, 见第二节)
+Phase 4   SWOT 自动获取+融合 (swot_auto → swot_fusion_v3)
+Phase 5   报告: PDF (gen_pred_pdf.py) + 投注指南 HTML (gen_bet_guide_html.py)
+赛后      验证回归 (v215_verify.py — 赛果来自体彩官方)
+```
+
+**数据源策略锁定 (所有者指令, 禁止更改):**
+
+sporttery 实时数据 = 绝对核心 → nowscore = 主力辅助 (不得随意禁用) → 500.com = 仅 nowscore 失败时降级 → sporttery 保底。`v215_e2e.py` 内置 `DATA_SOURCE_POLICY` 常量与运行时自检 (500.com 场次必须携带 fallback_reason 凭证); nowscore 导入失败自动重试一次并显著告警。人工情报 (source 以 manual 开头, 如首回合赛果修正) 不被自动获取覆盖。
+
+通用化约定: 所有脚本用 `SPORTTERY_WORKSPACE` 定位工作区, 不硬编码绝对路径; 数据获取纯 requests (WebBridge 仅作 matchID 发现的降级备份); PDF 字体回退链 `SPORTTERY_FONT_DIR` → `./fonts/` → 系统字体 (霞鹜文楷优先)。
+
+---
+
+## 五、运行命令
 
 ```bash
-cd "C:\Users\CCJ\OneDrive\Desktop\sporttery"
+# 预测 (默认即独立模式, 无需任何标志)
+python v215_e2e.py 260821 001,002,003             # 日期码 + 场次编号
+python v215_e2e.py 260821 001-003 --mode update   # 更新已有预测 (比对数据变化)
+# 自动产出: predictions/pred_20260821_周五_indep.json
+#           pred_20260821_周五_indep.pdf + bet_guide_20260821_周五_indep.html
 
-# 1. 预测全流程 (一条命令: sporttery+固定奖金 → nowscore → 预测 → SWOT自动获取+融合)
-#    修改 v215_e2e.py 顶部 TARGET_WEEKDAY / MATCH_NUMBERS 后运行; AUTO_SWOT=False 可关SWOT
-python v215_e2e.py
+# 赛后验证 (三种输入格式等价)
+python v215_verify.py "周五001-003"
+python v215_verify.py "2026-08-21 001,002,003"
+python v215_verify.py "260821001-003"
 
-# 2. PDF 报告
-python gen_report_pdf.py predictions\pred_20260726_周日.json
+# 漂移复核与裁决
+python gen_drift_state.py
 
-# 2b. M串N 复式模拟 (容错过关组合的中奖概率/期望盈亏/ROI)
-python msn_simulator.py predictions\pred_20260726_周日.json
+# M串N 复式模拟 (容错过关组合的中奖概率/期望盈亏/ROI)
+python msn_simulator.py predictions/pred_20260821_周五_indep.json
 
-# 3. 赛果验证 (赛后)
-python v215_verify.py "2026-07-26 201,202,203,204"
+# 应急回退旧四源含赔率模式 (仅排障/回测, 常规预测禁用)
+SPORTTERY_LEGACY=1 python v215_e2e.py 260821 001-003   # 或 CLI 加 --legacy-market
 ```
 
-### Ultra 6.5 新增模块
+无参数运行时读取脚本顶部 `TARGET_WEEKDAY` / `MATCH_NUMBERS` 配置 (当前默认在售池全量)。
+
+---
+
+## 六、文件与数据资产
+
+核心脚本:
 
 | 文件 | 功能 |
 |------|------|
-| `JINGCAI_RULES.md` | 竞彩官方规则知识库: 六大玩法/投注方式/32种M串N组合表/奖金计算/封顶与限额 |
-| `msn_simulator.py` | M串N容错过关模拟器: 32种官方组合枚举+泊松二项分布DP, 输出各组合中奖概率/期望盈亏/ROI (用法: `python msn_simulator.py predictions\pred_xxx.json`) |
-| `swot_auto.py` | SWOT全自动: leisu guide发现→队名匹配→批量获取→stats备用兜底→写swot_data_refreshed.json |
-| `leisu_session.py` | leisu会话工具: jsdom WAF自动求解 + 页面获取 |
-| `solve_waf_jsdom_v2.js` | 阿里云WAF acw_sc__v2 求解器 (jsdom, 需 `npm install jsdom`, 通用) |
-
-### 推荐规则 (hybrid 阈值-决胜法, 当前默认)
-
-- `RECOMMEND_MODE='hybrid'`: 候选 = 概率 ≥ p_max − `HYBRID_PROB_TOLERANCE`(默认3.0pp), 候选内取 EV 最高。
-- 原理: 模型概率存在 ±3pp 量级估计误差, 误差带内选项命中率等价 → 用 EV 决胜, 不牺牲命中率前提下兼顾赔率价值。取代旧 0.6×概率+0.4×EV 线性混合 (比例无理论依据)。
-- 报告侧: 第一/第二推荐 = HAD/HHAD 单选中概率最高/次高 (双选不进推荐位, 仅作"双选保险"信息行)。
-- 投注哲学: 每玩法本质是各选1, 全包必亏; 目标是"最可能命中 + 兼顾高赔率(EV)"。
-- `HYBRID_PROB_TOLERANCE` 可随 verify ECE 校准结果调整。
-
-### Ultra 6.5 Phase 1 增强
-
-- **sporttery 固定奖金**: `getFixedBonusV1.qry?matchId=` 纯requests获取官方 比分/总进球/半全场 赔率,
-  predict_match 内做 EV 价值分析 (模型概率×官方赔率-1), 输出 `sporttery_pools` + 摘要行
-- **sporttery 保底**: nowscore/500 双失败的场次不再丢弃, 用纯sporttery赔率基准预测 (data_source='sporttery(保底)')
-- match list/结果 API 均已记录 match_id
-
-### SWOT 自动化 (leisu为主, 500/nowscore stats为备)
-
-- leisu.com/guide 列表页自动发现当日情报卡片 (队名/时间/联赛/swot-ID), 无需人工提供URL
-- WAF: jsdom 真实DOM执行挑战脚本 (静态算法与纯Node桩对新版混淆WAF均无效, jsdom是必需依赖)
-- 500.com无免费SWOT情报 ("专家情报"为付费功能) → 备用方案改用 500/nowscore 已获取的
-  近况/交锋/积分统计数据生成"数据型情报" (source='stats'), 保证每场都有SWOT输入
-- 获取后自动调用 swot_fusion_v3 融合回预测文件 (Ultra 6.4 概率迁移规则)
-
-## 四、Ultra 6.4/6.5 回测与实测记录
-
-- 07-25 回测 (6.4): 命中 5/11 与 6.3 持平, Brier 7.202→7.204 (噪音级), 无回归。
-- 07-25 验证全流程: HAD 6/11, Brier 0.2724, ECE 0.239, 入库成功, sim 结算运行正常。
-- nowscore 全链路: 单场约 0.9s (缓存命中) / 9.8s (首次); bf1.js 覆盖今日+明日 605 场。
-- 平局偏差反馈 (6.5): 当前 n=50, 实际平局率 22.0% vs 预测均值 26.0% → 修正 -2.0pp (模型略高估平局, 自动下调)。
-- 历史贝叶斯反馈修复后: 65 样本, overall 49.2%, 韩职 49.7%/10场, 高置信 49.9%/30场 + calibration_warning。
-
-## 五、当前待办
-
-- [ ] 同步 skill 文档 `sporttery-betting-skill-ultra-6.1.md` → 6.10
-- [ ] 今日周日 201-204 已出 6.4 引擎+nowscore 全数据预测 (`pred_20260726_周日.json`), 赛后跑 verify 验证实战效果
-
----
-
-## 六、Ultra 6.6 ~ 6.10 历史标定集成 (2026-07-26 ~ 07-27)
-
-### 6.1 历史数据采集 (collect_historical.py)
-
-- 数据源: Sporttery API (matchList + matchResult) + 500.com (欧赔/亚赔/大小球)
-- 覆盖联赛: 瑞超、芬超、挪超、巴甲、韩K、英超、欧冠、欧罗巴、欧协联
-- 赛季: 2025赛季 + 2026赛季截至当前
-- 入库: `predictions/historical_odds.db` (SQLite)
-- 总量: 1452场比赛 (含HAD赔率、终赔、赛果、进球数、半场比分)
-
-### 6.2 联赛标定参数 (Ultra 6.6)
-
-- 输出: `predictions/league_calibration.json`
-- 内容: 每联赛的 H/D/A 胜率、均进球、主场优势、主客均进球
-- 集成: 替换 v215_e2e.py 中硬编码的 LEAGUE_HOME_ADV / LEAGUE_DRAW_RATE / LEAGUE_AVG_GF_MAP
-- 函数: `get_league_param()` / `get_league_odds_calibration()`
-
-### 6.3 融合后平局校准 — HAD (Ultra 6.9)
-
-- 函数: `post_fusion_draw_calibration(probs, had, league)`
-- 位置: 四源融合后、HAD方向确定前
-- 双信号: 主赔区间历史平局率(40%) + 平赔区间历史平局率(30%) + 联赛先验(30%)
-- 发现:
-  - 主赔3.5+区间: 实际平局率28.6% vs 隐含22.4% (+6.2pp)
-  - 平赔2.5-3.0: 实际平局率40.9% vs 隐含30.6% (+10.3pp)
-  - 主赔2.0-2.5区间: 实际20.0% vs 隐含27.6% (-7.6pp, 高估)
-- 修正: 双向有界, 上调70% gap cap 12pp, 下调50% gap cap 8pp
-- 势均力敌检测: |主赔-客赔|<0.3时额外+3pp
-
-### 6.4 让球盘口让平率标定 — HHAD (Ultra 6.10)
-
-#### 标定数据加载
-
-- 函数: `_load_league_calibration()` 中循环遍历 -1/-2/+1/+2 四个盘口
-- 每盘口按6个主赔区间 + 按联赛计算让平率
-- 让平判定:
-  - -1球: 主队恰好赢1球 (diff=1)
-  - -2球: 主队恰好赢2球 (diff=2)
-  - +1球: 主队恰好输1球 (diff=-1)
-  - +2球: 主队恰好输2球 (diff=-2)
-- 最小样本: -1用15场, -2用10场, +1用15场, +2用5场
-
-#### 标定结果
-
-| 盘口 | 场次 | 赔率区间数 | 联赛数 | 偏差模式 |
-|------|------|-----------|--------|---------|
-| -1球 | 839 | 6 | 8 | 低赔区间低估+4~5pp |
-| -2球 | 52 | 1 | 2 | 低赔区间低估+5.1pp |
-| +1球 | 469 | 2 | 7 | 高赔区间高估-2.4pp |
-| +2球 | 7 | 0 | 0 | 样本不足, 基础设施就绪 |
-
-#### 校准函数
-
-- 函数: `post_fusion_hhad_draw_calibration(probs, had, hhad, handicap, league)`
-- 位置: HHAD四源融合后、方向确定前
-- 双向校准:
-  - 正偏差(低估): 上调65% gap, cap 10pp (-1/-2球)
-  - 负偏差(高估): 下调50% gap, cap 8pp (+1球, 更保守)
-- 联赛名匹配: 支持去赛季后缀 (如 '挪超_2026' → '挪超')
-- 盘口key转换: 正数盘口加'+'前缀 (str(1) → '+1')
-
-#### 回测验证 (Brier Score 改善)
-
-| 盘口 | 场次 | 未校准 | 校准后 | 改善 |
-|------|------|--------|--------|------|
-| -1球 | 839 | 0.1804 | 0.1775 | +1.6% |
-| -2球 | 52 | 0.1572 | 0.1504 | +4.3% |
-| +1球 | 469 | 0.1759 | 0.1734 | +1.4% |
-
-### 6.5 高级标定模块 (Ultra 6.7)
-
-- 文件: `predictions/advanced_calibration.json`
-- 6大模块: 主场优势/近况修正/联赛进球特征/赔率概率偏差/平局信号/大小球校准
-- 函数: `apply_advanced_calibration()` 在四源融合后施加有界修正
-- 总修正量有界, 每子模块独立修正
-
-### 6.6 文件清单
-
-| 文件 | 说明 |
-|------|------|
-| `v215_e2e.py` | 核心预测引擎 (Ultra 7.1) |
-| `v215_verify.py` | 赛果验证+回归分析 |
-| `v215_simulate.py` | M串N模拟 |
+| `v215_e2e.py` | 预测引擎 (独立模式三源融合 + C1-C4 + 全流程编排) |
+| `v215_verify.py` | 赛果验证 + 回归分析 (RPS/LogLoss/CUSUM漂移/层次贝叶斯反馈) |
 | `v215_update.py` | 数据更新 |
-| `swot_fusion_v3.py` | SWOT融合 |
-| `swot_auto.py` | SWOT自动获取 |
-| `swot_fast_v3.py` | SWOT快速获取 |
-| `gen_report_pdf.py` | PDF报告生成 |
-| `gen_report_v2.py` | 报告逻辑库 |
-| `msn_simulator.py` | M串N容错模拟器 |
-| `leisu_session.py` | leisu会话工具 |
-| `nowscore_fetch.py` | nowscore数据获取 |
-| `predictions/historical_odds.db` | 历史数据库 (3099场 + 62294条赔率变动) |
-| `predictions/league_calibration.json` | 联赛标定参数 (静态快照, 引擎实际从DB实时重算) |
-| `predictions/advanced_calibration.json` | 高级标定参数 (基于1452场, 待按全量库重算) |
-| `predictions/regression.db` | 回归验证数据库 |
+| `nowscore_fetch.py` / `qiumiwu_fetch.py` | 统计数据获取 (近况/交锋/积分/xG/PPDA/H2H衰减) |
+| `swot_auto.py` / `swot_fusion_v3.py` / `swot_fast_v3.py` | SWOT 自动获取与融合 (含翻转重算) |
+| `leisu_session.py` / `solve_waf_jsdom_v2.js` | leisu 会话与阿里云 WAF 求解 (jsdom 必需) |
+| `gen_pred_pdf.py` / `pdf_fonts.py` | PDF 报告 (每场一页, 独立模式副标) |
+| `gen_bet_guide_html.py` | 投注选择指南 (四档显性化, 独立模式横幅) |
+| `gen_drift_state.py` | 漂移量复核与裁决 |
+| `msn_simulator.py` | M串N 容错模拟器 |
+| `match_utils.py` | 队名指纹匹配 (SWOT/数据对齐) |
+| `inject_first_leg.py` | 首回合赛果情报注入 (两回合淘汰赛必用) |
+| `version_archive.py` | 保存前全量版本归档 |
+| `collect_odds_history.py` 等 | 历史数据采集 |
+| `JINGCAI_RULES.md` / `CRITICAL_RULES.md` / `AGENT.md` / `LEARNINGS.md` | 规则与经验知识库 |
+
+数据资产 (`predictions/` 下):
+
+| 资产 | 用途 |
+|------|------|
+| `historical_odds.db` | 历史库 3099 场 + 62294 条赔率变动; 独立模式下取赛果侧参数 (联赛胜平负率/场均进球/主场优势/Elo 历史) |
+| `advanced_calibration.json` | C1-C3 非赔率校准参数 (联赛级, 见第二节覆盖清单) |
+| `model_calibration.json` | C4 模型偏差闭环 (3290 场) |
+| `drift_state.json` | 各源漂移乘数 |
+| `regression.db` | 验证历史与回归样本 |
+| `swot_data_refreshed.json` | SWOT 情报缓存 (累计滚动) |
+| `memory_store.json` / `first_leg_scores.json` | 长期记忆与首回合比分 |
+| `pred_*_indep.json` | 独立模式预测账本 (双账本对账的独立侧) |
 
 ---
 
-## 七、Ultra 7.0 ~ 7.1 (2026-07-28)
+## 七、验证与对账
 
-### 7.1 全量数据采集 (Ultra 7.0 数据基础)
+- 赛果来源为体彩官方; 验证按 `pred_file` 字段区分账本, `_indep` 文件即独立侧。
+- 影子对照 (Ultra 14.2 已落地): 预测时记录市场热门方向 (`market_first.fav_dir`, shadow_only); 验证时逐场计算 `market_fav_hit` 与 `model_vs_market` (same/diff) 落库 `verify_history`, 统计输出"本期 + 跨期累计"的模型 vs 市场双方命中率, 按"同向/分歧"分档 — 分歧组 (模型逆市场) 是独立模式价值的核心检验。统计函数 `shadow_comparison_stats`, 验证主链路自动打印。
+- 验证产出回写 `regression.db`, 驱动 C4 闭环与层次贝叶斯历史反馈 (验证 → 预测)。
+- 时区注意: 沙箱为 UTC, 赛程为北京时间; 美职场次验证须等北京时间次日上午赛毕。
 
-- `historical_odds.db`: 1452 → 3099 场 (2025-01 ~ 2026-07 全量体彩开盘), 新增 `odds_change_history` 表 62294 条赔率变动 (3055场)
-- 新增联赛: 意甲/西甲/德甲/法甲/韩职/日职/英冠/葡超/荷甲/德乙/美职联等
-- 采集脚本: `collect_odds_history.py` / `collect_mls.py` / `collect_mls_500.py` / `analyze_mls.py`
-
-### 7.2 经验校准函数 (Ultra 7.0)
-
-- `calibrate_global_odds_bias()`: 全局赔率区间偏差校准 (2.5-3.5区间跳过, 其余50%修正)
-- `calibrate_odds_change_signal()`: 初终赔变动信号校准 (微调15%/中等20%/大幅10%)
-- 回测 (2933场): 命中率 52.54% → 52.88% (全局偏差), 对数损失 0.9916 → 0.9911
-
-### 7.3 Ultra 7.1 修复 (2026-07-28 下午)
-
-- **严重**: 14:13 merge 将 25MB 全量库回退为 1452 场旧库 → 已从 git 历史 (8cda386) 恢复
-- **高影响 bug 修复**: `LEAGUE_AVG_GF_MAP` 语义混淆 — 原把"全场总进球"(2.4~3.3)当作贝叶斯收缩的"单队λ先验"(应~1.3), 导致 λ 系统性高估; 拆分为 `LEAGUE_AVG_GF_MAP`(单队, avg_goals/2) + `LEAGUE_AVG_GOALS_MAP`(全场)
-- `calibrate_odds_change_signal` 目标主胜率改为从标定库动态读取 (原硬编码, 数据更新不生效)
-- 回退参数表按 3099 场重算, 补 `美职联` 别名
-- 4个采集/回测脚本 `/workspace` 硬编码路径 → `SPORTTERY_WORKSPACE` 通用约定
-- 清理: 重复 sqlite3 导入 / 4处无用导入 / 3处同分支冗余 if-else / 函数内重复 import re
-
-### 7.4 待办参数建议 (见对话报告, 未应用)
-
-- home_adv clamp [1.05,1.35] 过窄 (7个联赛原始值<1.05)
-- 赔率变动 rise_medium/rise_large 修正回测为负收益
-- advanced_calibration.json 仍基于1452场, 建议按全量库重算
-
-### 7.5 Ultra 7.2 数据源策略锁定 (2026-07-28 下午, 所有者指令)
-
-- 🔒 **锁定层级 (禁止更改)**: sporttery实时数据=绝对核心 → nowscore=主力辅助(不得随意禁用) → 500.com=仅nowscore失败的降级 → sporttery保底
-- `v215_e2e.py`: 新增 `DATA_SOURCE_POLICY` 常量 + `_check_data_source_policy()` 运行时自检 (500.com场次必须有fallback_reason凭证); nowscore导入失败自动重试一次并显著告警
-- `v215_update.py`: fid=0 路径由"500优先"修正为"nowscore优先, 失败才500"
-- `swot_auto.py`: 人工情报 (source以manual开头, 如首回合赛果修正) 不被自动获取覆盖
-- AGENT.md 同步写入锁定策略
-- `inject_first_leg.py`: 首回合赛果情报注入工具 (两回合淘汰赛次回合必用)
+近期验证记录: 260819 周三 HAD 6 场 5 中 (001 安养负未中; 002 马竞胜 / 003 波特诺负 / 004 红牛负 / 006 凯尔特人胜 / 007 奈梅亨负均命中)。影子账本自 260820 周四批次起积累 (首批 9 场含 3 场分歧: 002/004/005)。
 
 ---
 
-*文档更新 — 2026-07-28*
+## 八、当前状态与待观察
+
+现行预测 (2026-08-20 产出, 全部独立模式):
+
+- **260820 周四001-009** (今晚 23:00 至明晨开球): 3 场沙职/西甲/解放者杯 + 6 场欧罗巴。周四002 巴列卡诺 vs 阿拉维斯触发 SWOT 翻转重算实场首验 (模型判胜→SWOT强信号判负, λ镜像 1.4/1.3→1.3/1.4, 比分/HHAD/半全场全链路对齐, 影子对照记录市场热门为胜 — 赛后重点对账场次)。周四009 本菲卡体彩侧未开盘, 模型侧 λ=3.7/0.3 就绪。
+- **260821 周五批次 001-011** (明晚至周六凌晨开球, 双文件结构): 周五001-003 (8-21 晚开球) 在 `pred_20260821_周五_indep.json`; 周五004-011 (matchDate=0822 凌晨开球) 按体彩日期码拆至 `pred_20260822_周五_indep.json`。其中 006/011 曾发生情报错配 (见 3.1), 修复后回归模型自身判断 (006 胜42%, 011 胜46%), 情报卡队名复验全部对齐。周五010 阿森纳 vs 考文垂体彩侧未开盘, 模型侧就绪。
+
+260819 周三批次验证闭环: HAD 5/7 (001 安养、005 科罗拉多未中); CUSUM 漂移警告中 Elo×0.88 降权乘数在新架构三源融合中继续生效, 市场源乘数随架构废弃自然失效。
+
+### 8.1 H2H S3 小样本权重评估结论 (Ultra 14.2, 2026-08-20)
+
+数值实验 (极端场景: n 场 H2H 全部反向 + 基线主队优势 57.6/18.7/23.7):
+
+| raw_n | 权重 w | 平滑后真实交锋信息占比 | 净信息注入 | 极端反向净偏移 |
+|-------|--------|------------------------|------------|----------------|
+| 2 | 0.20 | 22% | 1.8% | 1.4pp |
+| 3 | 0.25 | 30% | 3.0% | 2.8pp |
+| 5 | 0.35 | 41% | 5.7% | 6.3pp |
+| 10 | 0.35 | 59% | 8.0% | 9.0pp |
+
+**结论: 不降权**。k=6 联赛先验平滑已内建强收缩 (n=2 时 78% 内容为先验), 双重防护下小样本净影响 ≤2.8pp, 再降权将过度收缩、浪费合法样本; 真正影响放大的 n≥5 档样本本身可信, 属设计意图。落地改动: `_build_h2h_independent_source` 在 raw_n<4 时 note 前缀 "⚠️小样本" (与 SWOT sample_warning 同口径), 已通过单测 (n=2/3 标注, n≥5 不标, n<2 不启用)。
+
+待观察两项:
+
+- 独立模式 vs 市场热门的长期命中率对比 — 影子对照账本已落地 (14.2, 见第七节), 自 260820 周四批次起逐期积累; 周四批次含 3 场分歧 (002 模型负vs市场胜 / 004 / 005 模型胜vs市场负), 攒足样本后出对账结论。
+- SWOT 翻转重算已实场首验通过 (周四002), 持续观察后续翻转场次的对齐稳定性。

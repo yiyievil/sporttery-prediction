@@ -1022,14 +1022,22 @@ def _wdl_cell(m):
             parts.append(_hl(label) if i == 0 else label)
         base = ' '.join(parts) if parts else '-'
     # 优化③: 分歧警示 — 红色小字换行追加, 不挤占主推荐空间
+    # Ultra 13.17: 独立模式改标"影子对照" (市场只记录不决策)
+    _indep = bool((m.get('v611_flags') or {}).get('independent_mode'))
     md = m.get('market_divergence')
     if md and md.get('flagged'):
         arrow = '⇄' if md.get('dir_conflict') else '±'
-        base += (f'<br/><font name="CJKBold" color="#dc2626" size="9.5">'
-                 f'⚠️{arrow}市场{md.get("market_dir", "?")}{md.get("market_prob", 0):.0f}%'
-                 f' 分歧{md.get("max_diff_pp", 0):.0f}pp</font>')
+        if _indep:
+            base += (f'<br/><font name="CJKBold" color="#7c3aed" size="9.5">'
+                     f'🔭影子:市场{md.get("market_dir", "?")}{md.get("market_prob", 0):.0f}%'
+                     f' 差{md.get("max_diff_pp", 0):.0f}pp</font>')
+        else:
+            base += (f'<br/><font name="CJKBold" color="#dc2626" size="9.5">'
+                     f'⚠️{arrow}市场{md.get("market_dir", "?")}{md.get("market_prob", 0):.0f}%'
+                     f' 分歧{md.get("max_diff_pp", 0):.0f}pp</font>')
     # Ultra 13.12: 庄家意图行 — 资金动量×模型方向 (绿=确认 黄=警惕 红=弃赛)
-    bk = m.get('bookmaker_intent')
+    # Ultra 13.17: 独立模式不渲染 (赔率资金信号不参与决策, 且方向参照可能已被SWOT翻转)
+    bk = None if _indep else m.get('bookmaker_intent')
     if bk and bk.get('tier') not in (None, 'neutral'):
         _t = bk.get('tier')
         _c = {'strong_confirm': '#15803d', 'confirm': '#4d7c0f',
@@ -1060,7 +1068,7 @@ def _pool_cell(items, max_n=2):
     return ' '.join(parts)
 
 
-def build_overview_pages(matches, match_date=''):
+def build_overview_pages(matches, match_date='', mode_tag=''):
     """构建 8 列总览表 (Ultra 11.25): 一场一行, 紧凑直观, 替代每场一整页+旧汇总页
     Ultra 11.27: 标题加日期, 去掉副标题行, 配色更醒目高大上"""
     story = []
@@ -1072,6 +1080,13 @@ def build_overview_pages(matches, match_date=''):
     _title_style = make_style('OverviewTitle', bold=True, size=28, leading=36,
                               color=C_NAVY, align=TA_CENTER, space_after=0)
     story.append(Paragraph(title, _title_style))
+    # Ultra 13.17: 独立模式副标 — 标明本报告为赔率零输入账本
+    if mode_tag:
+        _tag_style = make_style('IndepTag', bold=True, size=11, leading=15,
+                                color=HexColor('#7c3aed'),
+                                align=TA_CENTER, space_after=0)
+        story.append(Spacer(1, 1.5 * mm))
+        story.append(Paragraph(mode_tag, _tag_style))
     story.append(Spacer(1, 2 * mm))
     gold_line_tbl = Table([['']], colWidths=[full_w])
     gold_line_tbl.setStyle(TableStyle([
@@ -1279,7 +1294,10 @@ def generate_pdf(data, output_path):
 
     # Ultra 11.26: 去掉封面, 只输出8列总览表 (用户要求: 简洁直观)
     full_story = []
-    full_story.extend(build_overview_pages(matches, match_date))
+    # Ultra 13.17: 独立模式副标 (赔率零输入账本标记)
+    _mode_tag = ('🔭 独立模式 · 赔率零输入 (xG-Poisson + Elo + SWOT情报) · 体彩赔率仅影子对照'
+                 if data.get('independent_mode') else '')
+    full_story.extend(build_overview_pages(matches, match_date, mode_tag=_mode_tag))
 
     doc.build(full_story, onFirstPage=draw_page_bg, onLaterPages=draw_page_bg)
     return output_path
