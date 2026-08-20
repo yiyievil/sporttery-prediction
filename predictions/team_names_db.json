@@ -2,7 +2,7 @@
  "_meta": {
   "canonical": "sporttery",
   "version": 1,
-  "updated": "2026-08-20 07:39:45"
+  "updated": "2026-08-20 20:22:13"
  },
  "teams": {
   "金泉尚武": {
@@ -2199,7 +2199,8 @@
   "纳什维尔": {
    "aliases": [
     "Nashville SC",
-    "迈阿密国际"
+    "迈阿密国际",
+    "纳什维尔SC"
    ],
    "sources": {
     "en": [
@@ -2207,6 +2208,9 @@
     ],
     "leisu": [
      "迈阿密国际"
+    ],
+    "short": [
+     "纳什维尔SC"
     ]
    }
   },
@@ -2356,11 +2360,15 @@
   },
   "科罗拉多": {
    "aliases": [
-    "Colorado Rapids"
+    "Colorado Rapids",
+    "科罗拉多急流"
    ],
    "sources": {
     "en": [
      "Colorado Rapids"
+    ],
+    "short": [
+     "科罗拉多急流"
     ]
    }
   },

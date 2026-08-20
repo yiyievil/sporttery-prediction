@@ -8602,8 +8602,10 @@ def predict_match(match_num, data):
             # P1-4: odds=None(SWOT翻转/档位停售)时不进kelly计算, 避免误报EV
             'HAD': kelly_criterion(p_for_had_dir, odds,
                                    pool_margin([had['h'], had['d'], had['a']]) if had_open else 0.0) if (had_open and odds) else {'stake_pct': 0, 'ev': 0, 'value': False},
+            # Ultra 14.0 fix: 独立模式下 HHAD 赔率缺失时 hhad_odds_val=None,
+            # 无条件调用会 None-1 崩溃 (kelly_criterion); 与 HAD 同口径守卫
             'HHAD': kelly_criterion(p_for_hhad_dir, hhad_odds_val,
-                                    pool_margin([hhad['h'], hhad['d'], hhad['a']]) if hhad and 'h' in hhad else 0.0),
+                                    pool_margin([hhad['h'], hhad['d'], hhad['a']]) if (hhad and all(hhad.get(k, 0) for k in ('h', 'd', 'a'))) else 0.0) if hhad_odds_val else {'stake_pct': 0, 'ev': 0, 'value': False},
         },
         'data_quality': dq,
         'difficulty': difficulty,  # Ultra 3.0: 比赛可预测性评分 0-100
