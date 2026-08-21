@@ -59,12 +59,23 @@ analysis_report_*.html
 renderData.json
 .wbtest_venv/
 
-# --- 生成报告与产物 ---
-# P2-9 (Ultra 13.10, 2026-08-16): 顶层 bet_guide_*.html / pred_*.pdf 是每日交付物,
-# 仓库策略=最新一期入库(此前每次都要 git add -f, 容易漏提交), 故不再忽略;
-# 历史积累由人工定期清理, 分析类HTML继续忽略
+# --- 生成报告与产物 (Ultra 15.9, 2026-08-21 用户裁决) ---
+# 用户裁决: "预测文件和投注指南文件全部删除, 今后永远不允许同步这类文件.
+#             同步只允许上传代码改动等"
+# 仓库仅保留代码/脚本/运行参数; 所有预测成品/投注指南/回测/差异分析 任何一期都不入库.
 prediction-analysis-*.html
 verify_analysis_*.html
+# 每日预测与投注指南成品 (顶层与子目录一律忽略)
+bet_guide_*.html
+bet_guide_*.pdf
+pred_*.pdf
+pred_*.json
+pred_report_*.html
+pred_report_*.pdf
+backtest_*.html
+backtest_*.pdf
+diff_analysis_*.html
+diff_analysis_*.pdf
 
 # 预测归档与 HTML 分析报告目录
 predictions/archive/
