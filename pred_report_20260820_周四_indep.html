@@ -1,0 +1,149 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>预测报告 20260820_周四_indep</title><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#f1f5f9;color:#1f2937;padding:14px;max-width:980px;margin:0 auto}
+h1{font-size:21px;font-weight:800}
+.sub{color:#64748b;font-size:12.5px;margin-top:4px}
+.card{background:#fff;border-radius:14px;padding:16px;margin:14px 0;box-shadow:0 1px 4px rgba(15,23,42,.07)}
+.stat{display:flex;gap:10px;margin-top:10px}
+.st{flex:1;text-align:center;background:#f8fafc;border-radius:10px;padding:10px}
+.st b{font-size:22px;display:block}
+.st span{font-size:11px;color:#64748b}
+.st.s1 b{color:#16a34a} .st.s2 b{color:#d97706} .st.s3 b{color:#dc2626}
+.mc{background:#fff;border-radius:12px;padding:13px 14px;margin:10px 0;border-left:5px solid #cbd5e1;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.mc.single{border-left-color:#16a34a} .mc.cover{border-left-color:#f59e0b}
+.mc-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mc-no{font-weight:800;color:#334155;background:#eef2f7;border-radius:6px;padding:2px 8px;font-size:12px}
+.mc-time{color:#0ea5e9;font-weight:700;font-size:12px;font-variant-numeric:tabular-nums}
+.mc-lg{color:#94a3b8;font-size:11px}
+.mc-teams{font-size:14px;flex:1}
+.mc-conf{color:#b45309;font-size:12px}
+.mc-tag{font-size:12px;font-weight:700;border-radius:6px;padding:3px 8px}
+.mc-tag.single{background:#dcfce7;color:#15803d} .mc-tag.cover{background:#fef3c7;color:#b45309}
+.mc-rec{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:10px 0 5px;padding:10px 13px;border-radius:10px;background:linear-gradient(135deg,#fffbeb,#fde68a);border:2px solid #f59e0b}
+.mc.single .mc-rec{background:linear-gradient(135deg,#f0fdf4,#bbf7d0);border-color:#16a34a}
+.rec-badge{font-size:12px;font-weight:800;color:#fff;background:#f59e0b;border-radius:6px;padding:3px 9px;letter-spacing:2px}
+.mc.single .rec-badge{background:#16a34a}
+.rec-opt{font-size:21px;font-weight:800;color:#0f172a;letter-spacing:.5px}
+.chip{font-size:12.5px;font-weight:700;color:#334155;background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:3px 10px;font-variant-numeric:tabular-nums}
+.chip.odds{color:#b45309;border-color:#fcd34d;background:#fffbeb}
+.chip.ev{color:#15803d;border-color:#86efac;background:#f0fdf4}
+.rec-sub{font-size:12px;color:#475569;font-weight:600}
+.mc-trap{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#fef2f2;border:1px solid #f87171;color:#b91c1c;font-weight:600}
+.mc-sub{font-size:12.5px;margin:5px 0;padding:7px 9px;border-radius:8px;line-height:1.6;background:#f8fafc;border:1px dashed #cbd5e1;color:#475569}
+.mc-sub b{color:#1f2937}
+.prob-grid{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 2px}
+.pcell{flex:1;min-width:200px;background:#f8fafc;border-radius:10px;padding:9px 11px}
+.ptitle{font-size:11.5px;font-weight:700;color:#64748b;margin-bottom:5px}
+.pclosed{font-size:12px;color:#94a3b8;padding:8px 0}
+.prow{display:flex;align-items:center;gap:7px;margin:3px 0}
+.plab{width:46px;font-size:11.5px;color:#475569;text-align:right}
+.ptrack{flex:1;background:#e2e8f0;border-radius:5px;height:11px;overflow:hidden}
+.pbar{display:block;height:100%;background:#94a3b8;border-radius:5px}
+.pbar.pb-hot{background:#2563eb}
+.pval{width:36px;font-size:11.5px;font-weight:700;color:#1f2937;font-variant-numeric:tabular-nums}
+.mdist{font-size:11.5px;color:#475569;line-height:1.7}
+.mc-misc{font-size:12px;color:#475569;background:#f0f9ff;border-radius:8px;padding:7px 9px;margin-top:6px;line-height:1.7}
+.mc-meta{font-size:11px;color:#94a3b8;margin-top:6px;line-height:1.7}
+.mc-swot{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#f5f3ff;border:1px solid #c4b5fd;color:#5b21b6}
+.mc-mkt-div{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#fef2f2;border:1px solid #f87171;color:#b91c1c;font-weight:600}
+.mc-reason{font-size:12px;color:#475569;margin-top:6px;line-height:1.6;background:#f8fafc;border-radius:8px;padding:8px 10px}
+.sec{font-size:15px;font-weight:800;margin:16px 0 4px}
+.ins{padding:11px 13px;border-radius:8px;font-size:12.5px;margin:8px 0;line-height:1.7;border-left:4px solid #94a3b8;background:#f8fafc}
+.foot{text-align:center;color:#94a3b8;font-size:11px;margin:18px 0}
+</style></head><body>
+<h1>📋 预测报告（统一主推）</h1>
+<div class="sub">20260820_周四_indep · 9 场 · 每场一个主推（命中率优先 · 同源概率 · 陷阱校准后）</div>
+
+<div class="card">
+  <div class="stat"><div class="st"><b>9</b><span>场次</span></div><div class="st s1"><b>1</b><span>✅ 主推·胜平负</span></div><div class="st s2"><b>8</b><span>🎯 主推·让球</span></div><div class="st s3"><b>4</b><span>P≥65% 高把握</span></div></div>
+  <div class="ins" style="margin-top:10px">🔗 <b>串关参考（Top3 概率）</b>：周四005 受让胜 + 周四001 受让胜 + 周四009 让负。2-3 关为宜，宁缺毋滥。</div>
+  <div class="ins">📌 <b>统一口径</b>：主推=概率最高单选（HAD锚×净胜球形状同源导出，深盘/需净2+球侧已按4412场回测基准收缩）。双选/纯方向/让平窗口为次选参考，与主推同一体系、互不打架。</div>
+</div>
+
+<div class="sec">📋 每场预测</div>
+<div class="mc cover">
+  <div class="mc-top"><span class="mc-no">周四001</span>
+    <span class="mc-time">02:00</span><span class="mc-lg">沙职</span>
+    <span class="mc-teams"><b>迈季宽广</b> vs 利雅新月</span>
+    <span class="mc-conf">★★★</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD受让胜</span><span class='chip odds'>@2.1</span><span class='chip'>P=72.2%</span><span class='chip ev'>EV=+51.6%</span></div>
+  <div class='mc-meta'>伪单选· 覆盖 胜+平 · 2元覆盖HAD胜平双选(4元), 省一半成本</div><div class='mc-trap'>⚠️ 深盘校准(历史基准64%):80%→72%</div><div class='mc-sub'>⑵ 双选: <b>HHAD受让胜受让平双选 @2.41</b> P=89.4% EV=+7.9% · 深盘(让+2.0)历史穿盘率仅36%,双选陷阱风险高</div><div class='mc-sub'>⑶ 纯方向: <b>HAD负 @1.15</b> P=41.7% EV=-52.0%</div>
+  <div class="prob-grid"><div class='pcell'><div class='ptitle'>胜平负 (锚)</div><div class="prow"><span class="plab">胜</span><span class="ptrack"><span class="pbar" style="width:51%"></span></span><span class="pval">25%</span></div><div class="prow"><span class="plab">平</span><span class="ptrack"><span class="pbar" style="width:53%"></span></span><span class="pval">26%</span></div><div class="prow"><span class="plab">负</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">49%</span></div></div><div class='pcell'><div class='ptitle'>让球盘 +2.0 (✓同源)</div><div class="prow"><span class="plab">受让胜</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">73%</span></div><div class="prow"><span class="plab">让平</span><span class="ptrack"><span class="pbar" style="width:26%"></span></span><span class="pval">19%</span></div><div class="prow"><span class="plab">受让负</span><span class="ptrack"><span class="pbar" style="width:12%"></span></span><span class="pval">9%</span></div></div><div class='pcell'><div class='ptitle'>净胜球分布</div><div class='mdist'>赢2+球 15% · 赢1球 19% · 平 26% · 负 40%</div><div class='mdist'>穿盘风险: 低 — 主队输恰好2球概率12%，穿盘风险低</div></div></div><div class='mc-misc'>比分 1-1:12.1 · 0-1:9.4 · 1-0:8.6 ｜ 半全场 负负(22.1%) ｜ 总进球 2球(24.0%) ｜ 大小 2.5/3盘 大40%</div><div class='mc-meta'>λ 1.3/1.4 (主1.3:客1.4) · 可预测性 50.6 · 一致性 67% · 数据99(高) · xG主1.4/1.4 客1.5/1.4</div><div class='mc-swot'>🧠 SWOT 客队占优 (评分 主-4.4/客2.2, ✅ SWOT与模型方向一致, 置信度上调+0.5★)</div><div class='mc-mkt-div'>🔭 影子对照(幅度偏离): 独立意见负42% vs 市场热门负86%, 差44pp</div><div class='mc-reason'>[命中优先]主推HHAD受让胜@2.1(P=72.2%,EV=51.6%)。HHAD主推HHAD受让胜@2.1(P=72.2%,EV=51.6%)。纯方向HAD负@1.15(P=41.7%,EV=-52.0%)。双选并列主推HHAD受让胜受让平双选@2.41(P=89.4%,EV=7.9%),平局盲区覆盖。⚠️ 让球陷阱: 深盘(让+2.0)历史穿盘率仅36…</div>
+</div><div class="mc cover">
+  <div class="mc-top"><span class="mc-no">周四002</span>
+    <span class="mc-time">03:00</span><span class="mc-lg">西甲</span>
+    <span class="mc-teams"><b>巴列卡诺</b> vs 阿拉维斯</span>
+    <span class="mc-conf">★★★</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD让负</span><span class='chip odds'>@1.58</span><span class='chip'>P=57.6%</span><span class='chip ev'>EV=-8.9%</span></div>
+  <div class='mc-meta'>伪单选· 覆盖 平+负 · 2元覆盖HAD平负双选(4元), 省一半成本</div><div class='mc-trap'>⚠️ 净2+球侧校准(无赔率,-5pp基准):10%→8%</div><div class='mc-sub'>⑵ 双选: <b>HHAD让平让负双选 @2.11</b> P=82.3% EV=-13.2%</div><div class='mc-sub'>⑶ 纯方向: <b>HAD胜 @2.07</b> P=43.4% EV=-10.2%</div>
+  <div class="prob-grid"><div class='pcell'><div class='ptitle'>胜平负 (锚)</div><div class="prow"><span class="plab">胜</span><span class="ptrack"><span class="pbar" style="width:50%"></span></span><span class="pval">24%</span></div><div class="prow"><span class="plab">平</span><span class="ptrack"><span class="pbar" style="width:56%"></span></span><span class="pval">27%</span></div><div class="prow"><span class="plab">负</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">48%</span></div></div><div class='pcell'><div class='ptitle'>让球盘 -1.0 (✓同源)</div><div class="prow"><span class="plab">让胜</span><span class="ptrack"><span class="pbar" style="width:10%"></span></span><span class="pval">8%</span></div><div class="prow"><span class="plab">让平</span><span class="ptrack"><span class="pbar" style="width:19%"></span></span><span class="pval">15%</span></div><div class="prow"><span class="plab">让负</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">78%</span></div></div><div class='pcell'><div class='ptitle'>净胜球分布</div><div class='mdist'>赢2+球 17% · 赢1球 21% · 平 27% · 负 35%</div><div class='mdist'>穿盘风险: 中 — 主队赢恰好1球概率21%，穿盘风险中等，让平有可能</div></div></div><div class='mc-misc'>比分 1-1:12.9 · 0-1:10.6 · 1-0:9.7 ｜ 半全场 负负(20.9%) ｜ 总进球 2球(25.0%) ｜ 大小 2/2.5盘 大58%</div><div class='mc-meta'>λ 1.2/1.3 (主1.3:客1.2) · 可预测性 63.0 · 一致性 100% · 数据99(高) · xG主1.4/1.3 客1.5/1.2</div><div class='mc-swot'>🧠 SWOT 客队占优 (评分 主-3.7/客6.2, 🔄 SWOT强信号翻转方向: 模型判胜→SWOT判负, 置信度上调+1★; λ/比分/HHAD/半全场已重算对齐(λ1.3/1.2→1.2/)</div><div class='mc-reason'>[命中优先]主推HHAD让负@1.58(P=57.6%,EV=-8.9%)。HHAD主推HHAD让负@1.58(P=57.6%,EV=-8.9%)。纯方向HAD胜@2.07(P=43.4%,EV=-10.2%)。双选并列主推HHAD让平让负双选@2.11(P=82.3%,EV=-13.2%),平局盲区覆盖。主推赔率1.58偏低, 建议小注。主队赢恰好1球概率…</div>
+</div><div class="mc cover">
+  <div class="mc-top"><span class="mc-no">周四003</span>
+    <span class="mc-time">08:30</span><span class="mc-lg">解放者杯</span>
+    <span class="mc-teams"><b>科林蒂安</b> vs 罗萨里奥</span>
+    <span class="mc-conf">★</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD让负</span><span class='chip odds'>@1.71</span><span class='chip'>P=60.4%</span><span class='chip ev'>EV=+3.2%</span></div>
+  <div class='mc-meta'>伪单选· 覆盖 平+负 · 2元覆盖HAD平负双选(4元), 省一半成本</div><div class='mc-trap'>⚠️ 净2+球侧校准(无赔率,-5pp基准):12%→9%</div><div class='mc-sub'>⑵ 双选: <b>HAD胜平双选 @2.21</b> P=69.8% EV=-22.9%</div><div class='mc-sub'>⑶ 纯方向: <b>HAD胜 @1.86</b> P=39.6% EV=-26.3%</div><div class='mc-sub'>👁 平局关注: <b>HAD平</b> P=30.2% </div>
+  <div class="prob-grid"><div class='pcell'><div class='ptitle'>胜平负 (锚)</div><div class="prow"><span class="plab">胜</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">35%</span></div><div class="prow"><span class="plab">平</span><span class="ptrack"><span class="pbar" style="width:85%"></span></span><span class="pval">30%</span></div><div class="prow"><span class="plab">负</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">35%</span></div></div><div class='pcell'><div class='ptitle'>让球盘 -1.0 (✓同源)</div><div class="prow"><span class="plab">让胜</span><span class="ptrack"><span class="pbar" style="width:13%"></span></span><span class="pval">9%</span></div><div class="prow"><span class="plab">让平</span><span class="ptrack"><span class="pbar" style="width:35%"></span></span><span class="pval">24%</span></div><div class="prow"><span class="plab">让负</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">67%</span></div></div><div class='pcell'><div class='ptitle'>净胜球分布</div><div class='mdist'>赢2+球 16% · 赢1球 23% · 平 30% · 负 30%</div><div class='mdist'>穿盘风险: 中 — 主队赢恰好1球概率23%，穿盘风险中等，让平有可能</div></div></div><div class='mc-misc'>比分 0-0:15.0 · 0-1:14.5 · 1-1:13.4 ｜ 半全场 平平(23.7%) ｜ 总进球 2球(26.3%) ｜ 大小 1.5/2盘 大46%</div><div class='mc-meta'>λ 0.9/1.1 (主1.1:客0.9) · 可预测性 55.9 · 一致性 100% · 数据89(高) · xG主1.3/1.1 客0.9/1.0</div><div class='mc-swot'>🧠 SWOT 客队占优 (评分 主-0.6/客4.5, ⚠️ SWOT与模型方向不一致, 置信度降低-0.5★)</div><div class='mc-reason'>[命中优先]主推HHAD让负@1.71(P=60.4%,EV=3.2%)。HHAD主推HHAD让负@1.71(P=60.4%,EV=3.2%)。纯方向HAD胜@1.86(P=39.6%,EV=-26.3%)。双选并列主推HHAD让平让负双选@2.08(P=83.7%,EV=-12.8%),平局盲区覆盖。EV参考: HAD负(EV=39.0%)比主推高36%,…</div>
+</div><div class="mc cover">
+  <div class="mc-top"><span class="mc-no">周四004</span>
+    <span class="mc-time">23:00</span><span class="mc-lg">欧罗巴</span>
+    <span class="mc-teams"><b>阿拉木图</b> vs 安德莱</span>
+    <span class="mc-conf">★½</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD受让胜</span><span class='chip odds'>@1.56</span><span class='chip'>P=66.3%</span><span class='chip ev'>EV=+3.4%</span></div>
+  <div class='mc-meta'>伪单选· 覆盖 胜+平 · 2元覆盖HAD胜平双选(4元), 省一半成本</div><div class='mc-sub'>⑵ 双选: <b>HHAD受让胜受让平双选 @2.0</b> P=84.5% EV=-15.5%</div><div class='mc-sub'>⑶ 纯方向: <b>HAD胜 @3.25</b> P=39.3% EV=+27.6%</div>
+  <div class="prob-grid"><div class='pcell'><div class='ptitle'>胜平负 (锚)</div><div class="prow"><span class="plab">胜</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">38%</span></div><div class="prow"><span class="plab">平</span><span class="ptrack"><span class="pbar" style="width:78%"></span></span><span class="pval">30%</span></div><div class="prow"><span class="plab">负</span><span class="ptrack"><span class="pbar" style="width:84%"></span></span><span class="pval">32%</span></div></div><div class='pcell'><div class='ptitle'>让球盘 +1.0 (✓同源)</div><div class="prow"><span class="plab">受让胜</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">68%</span></div><div class="prow"><span class="plab">让平</span><span class="ptrack"><span class="pbar" style="width:26%"></span></span><span class="pval">18%</span></div><div class="prow"><span class="plab">受让负</span><span class="ptrack"><span class="pbar" style="width:22%"></span></span><span class="pval">15%</span></div></div><div class='pcell'><div class='ptitle'>净胜球分布</div><div class='mdist'>赢2+球 19% · 赢1球 20% · 平 25% · 负 36%</div><div class='mdist'>穿盘风险: 中 — 主队输恰好1球概率19%，穿盘风险中等</div></div></div><div class='mc-misc'>比分 1-1:11.6 · 1-0:8.4 · 2-1:8.1 ｜ 半全场 胜胜(22.6%) ｜ 总进球 2球(23.1%) ｜ 大小 2/2.5盘 大65%</div><div class='mc-meta'>λ 1.5/1.4 (主1.5:客1.4) · 可预测性 52.4 · 一致性 100% · 数据89(高) · xG主1.6/1.7 客1.3/1.4</div><div class='mc-swot'>🧠 SWOT 势均力敌 (评分 主2.2/客2.0, ◐ SWOT与模型方向部分一致(含平局分歧), 置信度降低-0.5★)</div><div class='mc-reason'>[命中优先]主推HHAD受让胜@1.56(P=66.3%,EV=3.4%)。HHAD主推HHAD受让胜@1.56(P=66.3%,EV=3.4%)。纯方向HAD胜@3.25(P=39.3%,EV=27.6%)。双选并列主推HHAD受让胜受让平双选@2.0(P=84.5%,EV=-15.5%),平局盲区覆盖。EV参考: HAD胜(EV=27.6%)比主推高24…</div>
+</div><div class="mc cover">
+  <div class="mc-top"><span class="mc-no">周四005</span>
+    <span class="mc-time">00:00</span><span class="mc-lg">欧罗巴</span>
+    <span class="mc-teams"><b>米亚尔比</b> vs 萨尔茨堡</span>
+    <span class="mc-conf">★½</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD受让胜</span><span class='chip odds'>@2.04</span><span class='chip'>P=76.6%</span><span class='chip ev'>EV=+56.3%</span></div>
+  <div class='mc-meta'>伪单选· 覆盖 胜+平 · 2元覆盖HAD胜平双选(4元), 省一半成本</div><div class='mc-sub'>⑵ 双选: <b>HAD平负双选 @2.69</b> P=48.3% EV=-35.2%</div><div class='mc-sub'>⑶ 纯方向: <b>HAD胜 @4.2</b> P=51.7% EV=+117.3%</div>
+  <div class="prob-grid"><div class='pcell'><div class='ptitle'>胜平负 (锚)</div><div class="prow"><span class="plab">胜</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">47%</span></div><div class="prow"><span class="plab">平</span><span class="ptrack"><span class="pbar" style="width:53%"></span></span><span class="pval">25%</span></div><div class="prow"><span class="plab">负</span><span class="ptrack"><span class="pbar" style="width:59%"></span></span><span class="pval">28%</span></div></div><div class='pcell'><div class='ptitle'>让球盘 +1.0 (✓同源)</div><div class="prow"><span class="plab">受让胜</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">72%</span></div><div class="prow"><span class="plab">让平</span><span class="ptrack"><span class="pbar" style="width:23%"></span></span><span class="pval">17%</span></div><div class="prow"><span class="plab">受让负</span><span class="ptrack"><span class="pbar" style="width:16%"></span></span><span class="pval">12%</span></div></div><div class='pcell'><div class='ptitle'>净胜球分布</div><div class='mdist'>赢2+球 23% · 赢1球 22% · 平 25% · 负 30%</div><div class='mdist'>穿盘风险: 中 — 主队输恰好1球概率17%，穿盘风险中等</div></div></div><div class='mc-misc'>比分 1-1:11.5 · 1-0:9.9 · 2-1:8.7 ｜ 半全场 胜胜(30.6%) ｜ 总进球 2球(23.5%) ｜ 大小 3盘 大31%</div><div class='mc-meta'>λ 1.6/1.2 (主1.6:客1.2) · 可预测性 72.7 · 一致性 100% · 数据89(高) · xG主1.6/1.5 客1.3/1.5</div><div class='mc-swot'>🧠 SWOT 客队占优 (评分 主-1.9/客3.5, ⚠️ SWOT与模型方向不一致, 置信度降低-0.5★)</div><div class='mc-mkt-div'>🔭 影子对照(方向相反): 独立意见胜52% vs 市场热门负60%, 差36pp</div><div class='mc-reason'>[命中优先]主推HHAD受让胜@2.04(P=76.6%,EV=56.3%)。HHAD主推HHAD受让胜@2.04(P=76.6%,EV=56.3%)。纯方向HAD胜@4.2(P=51.7%,EV=117.3%)。双选保险HAD胜平双选@4.04(P=76.6%,EV=54.7%)。EV参考: HAD胜(EV=117.3%)比主推高61%, 命中率优先选概率…</div>
+</div><div class="mc cover">
+  <div class="mc-top"><span class="mc-no">周四006</span>
+    <span class="mc-time">01:00</span><span class="mc-lg">欧罗巴</span>
+    <span class="mc-teams"><b>特拉布宗</b> vs 费伦茨</span>
+    <span class="mc-conf">½</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD让负</span><span class='chip odds'>@2.19</span><span class='chip'>P=59.3%</span><span class='chip ev'>EV=+29.9%</span></div>
+  <div class='mc-meta'>伪单选· 覆盖 平+负 · 2元覆盖HAD平负双选(4元), 省一半成本</div><div class='mc-sub'>⑵ 双选: <b>HAD胜平双选 @2.44</b> P=67.7% EV=-17.4%</div><div class='mc-sub'>⑶ 纯方向: <b>HAD胜 @1.5</b> P=40.7% EV=-39.0%</div>
+  <div class="prob-grid"><div class='pcell'><div class='ptitle'>胜平负 (锚)</div><div class="prow"><span class="plab">胜</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">39%</span></div><div class="prow"><span class="plab">平</span><span class="ptrack"><span class="pbar" style="width:69%"></span></span><span class="pval">27%</span></div><div class="prow"><span class="plab">负</span><span class="ptrack"><span class="pbar" style="width:87%"></span></span><span class="pval">34%</span></div></div><div class='pcell'><div class='ptitle'>让球盘 -1.0 (✓同源)</div><div class="prow"><span class="plab">让胜</span><span class="ptrack"><span class="pbar" style="width:31%"></span></span><span class="pval">19%</span></div><div class="prow"><span class="plab">让平</span><span class="ptrack"><span class="pbar" style="width:32%"></span></span><span class="pval">20%</span></div><div class="prow"><span class="plab">让负</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">61%</span></div></div><div class='pcell'><div class='ptitle'>净胜球分布</div><div class='mdist'>赢2+球 21% · 赢1球 22% · 平 25% · 负 32%</div><div class='mdist'>穿盘风险: 中 — 主队赢恰好1球概率22%，穿盘风险中等，让平有可能</div></div></div><div class='mc-misc'>比分 1-1:11.8 · 1-0:9.6 · 2-1:8.4 ｜ 半全场 胜胜(23.7%) ｜ 总进球 2球(23.7%) ｜ 大小 2.5/3盘 大41%</div><div class='mc-meta'>λ 1.5/1.3 (主1.5:客1.3) · 可预测性 55.1 · 一致性 100% · 数据89(高)</div><div class='mc-swot'>🧠 SWOT 势均力敌 (评分 主0.9/客2.9, ◐ SWOT与模型方向部分一致(含平局分歧), 置信度降低-0.5★)</div><div class='mc-mkt-div'>🔭 影子对照(幅度偏离): 独立意见胜41% vs 市场热门胜64%, 差24pp</div><div class='mc-reason'>[命中优先]主推HHAD让负@2.19(P=59.3%,EV=29.9%)。HHAD主推HHAD让负@2.19(P=59.3%,EV=29.9%)。纯方向HAD胜@1.5(P=40.7%,EV=-39.0%)。双选并列主推HHAD让平让负双选@2.47(P=80.1%,EV=-0.9%),平局盲区覆盖。EV参考: HAD负(EV=59.6%)比主推高30%,…</div>
+</div><div class="mc single">
+  <div class="mc-top"><span class="mc-no">周四007</span>
+    <span class="mc-time">01:00</span><span class="mc-lg">欧罗巴</span>
+    <span class="mc-teams"><b>波兹南</b> vs 图恩</span>
+    <span class="mc-conf">★★½</span>
+    <span class="mc-tag single">✅ 主推·胜平负</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HAD胜</span><span class='chip odds'>@1.32</span><span class='chip'>P=53.8%</span><span class='chip ev'>EV=-29.0%</span></div>
+  <div class='mc-meta'>单选· 覆盖 胜</div><div class='mc-sub'>⑵ 双选: <b>HAD胜平双选 @2.3</b> P=77.2% EV=-11.2%</div>
+  <div class="prob-grid"><div class='pcell'><div class='ptitle'>胜平负 (锚)</div><div class="prow"><span class="plab">胜</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">60%</span></div><div class="prow"><span class="plab">平</span><span class="ptrack"><span class="pbar" style="width:38%"></span></span><span class="pval">23%</span></div><div class="prow"><span class="plab">负</span><span class="ptrack"><span class="pbar" style="width:28%"></span></span><span class="pval">17%</span></div></div><div class='pcell'><div class='ptitle'>让球盘 -1.0 (✓同源)</div><div class="prow"><span class="plab">让胜</span><span class="ptrack"><span class="pbar" style="width:75%"></span></span><span class="pval">30%</span></div><div class="prow"><span class="plab">让平</span><span class="ptrack"><span class="pbar" style="width:75%"></span></span><span class="pval">30%</span></div><div class="prow"><span class="plab">让负</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">40%</span></div></div><div class='pcell'><div class='ptitle'>净胜球分布</div><div class='mdist'>赢2+球 22% · 赢1球 22% · 平 25% · 负 31%</div><div class='mdist'>穿盘风险: 中 — 主队赢恰好1球概率22%，穿盘风险中等，让平有可能</div></div></div><div class='mc-misc'>比分 1-1:11.7 · 1-0:9.7 · 2-1:8.6 ｜ 半全场 胜胜(31.5%) ｜ 总进球 2球(23.6%) ｜ 大小 3/3.5盘 大41%</div><div class='mc-meta'>λ 1.5/1.2 (主1.5:客1.2) · 可预测性 76.2 · 一致性 100% · 数据89(高)</div><div class='mc-swot'>🧠 SWOT 主队占优 (评分 主3.0/客-3.4, ✅ SWOT与模型方向一致, 置信度上调+0.5★)</div><div class='mc-mkt-div'>🔭 影子对照(幅度偏离): 独立意见胜54% vs 市场热门胜74%, 差20pp</div><div class='mc-reason'>[命中优先]主推HAD胜@1.32(P=53.8%,EV=-29.0%)。HHAD主推HHAD让负@2.82(P=46.2%,EV=30.2%)。双选保险HAD胜平双选@2.3(P=77.2%,EV=-11.2%)。EV参考: HAD负(EV=50.2%)比主推高79%, 命中率优先选概率最高。主推赔率1.32偏低, 建议小注。主队赢恰好1球概率22%，穿盘…</div>
+</div><div class="mc cover">
+  <div class="mc-top"><span class="mc-no">周四008</span>
+    <span class="mc-time">02:00</span><span class="mc-lg">欧罗巴</span>
+    <span class="mc-teams"><b>贝红星</b> vs 比尔森</span>
+    <span class="mc-conf">★★</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD让负</span><span class='chip odds'>@2.01</span><span class='chip'>P=54.9%</span><span class='chip ev'>EV=+10.4%</span></div>
+  <div class='mc-meta'>伪单选· 覆盖 平+负 · 2元覆盖HAD平负双选(4元), 省一半成本</div><div class='mc-sub'>⑵ 双选: <b>HAD胜平双选 @2.36</b> P=70.5% EV=-16.7%</div><div class='mc-sub'>⑶ 纯方向: <b>HAD胜 @1.61</b> P=45.1% EV=-27.4%</div>
+  <div class="prob-grid"><div class='pcell'><div class='ptitle'>胜平负 (锚)</div><div class="prow"><span class="plab">胜</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">44%</span></div><div class="prow"><span class="plab">平</span><span class="ptrack"><span class="pbar" style="width:63%"></span></span><span class="pval">28%</span></div><div class="prow"><span class="plab">负</span><span class="ptrack"><span class="pbar" style="width:63%"></span></span><span class="pval">28%</span></div></div><div class='pcell'><div class='ptitle'>让球盘 -1.0 (✓同源)</div><div class="prow"><span class="plab">让胜</span><span class="ptrack"><span class="pbar" style="width:35%"></span></span><span class="pval">20%</span></div><div class="prow"><span class="plab">让平</span><span class="ptrack"><span class="pbar" style="width:42%"></span></span><span class="pval">24%</span></div><div class="prow"><span class="plab">让负</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">57%</span></div></div><div class='pcell'><div class='ptitle'>净胜球分布</div><div class='mdist'>赢2+球 17% · 赢1球 20% · 平 26% · 负 37%</div><div class='mdist'>穿盘风险: 中 — 主队赢恰好1球概率20%，穿盘风险中等，让平有可能</div></div></div><div class='mc-misc'>比分 1-1:12.1 · 1-0:9.1 · 0-1:9.0 ｜ 半全场 胜胜(25.6%) ｜ 总进球 2球(24.0%) ｜ 大小 3盘 大29%</div><div class='mc-meta'>λ 1.4/1.3 (主1.4:客1.3) · 可预测性 61.8 · 一致性 100% · 数据89(高) · xG主1.4/1.2 客1.3/1.3</div><div class='mc-swot'>🧠 SWOT 势均力敌 (评分 主0.2/客0.9, ◐ SWOT与模型方向部分一致(含平局分歧), 置信度降低-0.5★)</div><div class='mc-reason'>[命中优先]主推HHAD让负@2.01(P=54.9%,EV=10.4%)。HHAD主推HHAD让负@2.01(P=54.9%,EV=10.4%)。纯方向HAD胜@1.61(P=45.1%,EV=-27.4%)。双选并列主推HHAD让平让负双选@2.41(P=79.4%,EV=-4.4%),平局盲区覆盖。EV参考: HAD负(EV=23.9%)比主推高13%…</div>
+</div><div class="mc cover">
+  <div class="mc-top"><span class="mc-no">周四009</span>
+    <span class="mc-time">03:00</span><span class="mc-lg">欧罗巴</span>
+    <span class="mc-teams"><b>本菲卡</b> vs 奥胡斯</span>
+    <span class="mc-conf">★½</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD让负</span><span class='chip odds'>@2.66</span><span class='chip'>P=66.5%</span><span class='chip ev'>EV=+76.8%</span></div>
+  <div class='mc-meta'>伪单选· 覆盖 平+负 · 2元覆盖HAD平负双选(4元), 省一半成本</div><div class='mc-trap'>⚠️ 深盘校准(历史基准64%):69%→66%</div><div class='mc-sub'>⑵ 双选: <b>HHAD让平让负双选 @2.97</b> P=84.9% EV=+26.0% · 深盘(让-2.0)历史穿盘率仅36%,双选陷阱风险高</div>
+  <div class="prob-grid"><div class='pcell'><div class='ptitle'>胜平负</div><div class='pclosed'>未开盘</div></div><div class='pcell'><div class='ptitle'>让球盘 -2.0 (✓同源)</div><div class="prow"><span class="plab">让胜</span><span class="ptrack"><span class="pbar" style="width:22%"></span></span><span class="pval">15%</span></div><div class="prow"><span class="plab">让平</span><span class="ptrack"><span class="pbar" style="width:27%"></span></span><span class="pval">18%</span></div><div class="prow"><span class="plab">让负</span><span class="ptrack"><span class="pbar pb-hot" style="width:100%"></span></span><span class="pval">66%</span></div></div><div class='pcell'><div class='ptitle'>净胜球分布</div><div class='mdist'>赢2+球 30% · 赢1球 24% · 平 24% · 负 22%</div><div class='mdist'>穿盘风险: 中 — 主队赢恰好2球概率17%，穿盘风险中等，让平有可能</div></div></div><div class='mc-misc'>比分 1-0:11.4 · 1-1:11.1 · 2-0:9.3 ｜ 半全场 胜胜(34.6%) ｜ 总进球 2球(23.8%) ｜ 大小 3.5盘 大30%</div><div class='mc-meta'>λ 1.7/1.0 (主1.7:客1.0) · 可预测性 73.5 · 一致性 100% · 数据66(中) · xG主1.4/1.4 客1.8/1.5</div><div class='mc-swot'>🧠 SWOT 主队占优 (评分 主4.7/客-2.7, ⚠️ SWOT与模型方向不一致, 置信度降低-0.5★)</div><div class='mc-mkt-div'>🔭 影子对照(幅度偏离): 独立意见胜56% vs 市场热门胜88%, 差31pp</div><div class='mc-reason'>[命中优先]主推HHAD让负@2.66(P=66.5%,EV=76.8%)。HHAD主推HHAD让负@2.66(P=66.5%,EV=76.8%)。纯方向HHAD让平@4.08(P=18.4%,EV=-24.8%)。双选保险HHAD让平让负双选@2.97(P=84.9%,EV=26.0%)。⚠️ 让球陷阱: 深盘(让-2.0)历史穿盘率仅36%,双选陷阱风险…</div>
+</div>
+
+<div class="foot">基于 20260820_周四_indep 9 场预测 · 统一主推口径 (Ultra 15.5) · 仅供研究学习，不构成投注建议</div>
+</body></html>

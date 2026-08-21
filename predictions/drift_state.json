@@ -1,36 +1,14 @@
 {
-  "drift_detected": true,
-  "drift_direction": "下降(准确率显著降低)",
-  "drift_point": "2026-08-10",
-  "baseline_hit_rate": 0.395,
-  "recent_hit_rate": 0.371,
-  "drift_magnitude_pp": 2.4,
+  "drift_detected": false,
   "weight_multipliers": {
-    "market": 1.05,
-    "power": 0.94,
     "poisson": 1.0,
-    "elo": 0.88
+    "elo": 1.0
   },
-  "multiplier_basis": {
-    "base": {
-      "market": 1.12,
-      "power": 0.85,
-      "poisson": 1.0,
-      "elo": 0.7
-    },
-    "base_drift_pp": 6.0,
-    "scale": 0.39,
-    "rule": "mult = 1 + (base-1) × min(1.5, drift_pp/6.0), 边界[0.50,1.30]"
-  },
-  "direction_weakness": {
-    "平": 0.1,
-    "胜": 0.44,
-    "负": 0.34
-  },
-  "cusum_pos": 2.3612,
-  "early_warning": true,
-  "consecutive_low": true,
-  "activated_at": "2026-08-19 01:12:28",
-  "source": "v215_verify.py CUSUM (Ultra 8.0) + regression.db 清洁数据 (跨周污染修复后)",
-  "note": "CUSUM漂移响应: 漂移2.4pp → 市场×1.05/Power×0.94/Elo×0.88 (缩放0.39×); 配合 recalibrate_model.py 同步重标定"
+  "mode": "independent",
+  "restarted_at": "2026-08-20",
+  "accumulated_matches": 0,
+  "min_samples": 60,
+  "activated_at": "2026-08-20 09:27:59",
+  "source": "v215_verify.py CUSUM + regression.db (independent_mode=1 only)",
+  "note": "Ultra 14.3 冷启动: 独立模式 (2026-08-20启用) 验证场次 0/60 不足, 漂移响应中性 (全1.0)。 旧四源模式历史数据已按 RULE-016 隔离, 不参与新模型漂移计算。"
 }

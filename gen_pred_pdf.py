@@ -538,7 +538,8 @@ def build_match_page(m, page_num, total):
         inner.append([title_row])
         # option 已含市场前缀(HHAD让负/HAD胜平双选), 不再重复拼 mk
         inner.append([Paragraph(f'{_hhad_option_label(opt, m["hhad_h"])}', S['rec_main_odds'])])
-        detail_parts = [f'P = {prob:.1f}%', f'EV = {ev:+.1f}%']
+        # Ultra 15.1: ev=None(赔率未同步) → EV段省略, 原格式化会 TypeError 崩溃
+        detail_parts = [f'P = {prob:.1f}%'] + ([f'EV = {ev:+.1f}%'] if ev is not None else [])
         if val:
             detail_parts.append(val)
         # 添加概率说明
@@ -597,7 +598,8 @@ def build_match_page(m, page_num, total):
                 ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
             ]))
             inner.append([odds_row])
-            detail_parts = [f'P = {prob:.1f}%', f'EV = {ev:+.1f}%']
+            # Ultra 15.1: ev=None → EV段省略
+            detail_parts = [f'P = {prob:.1f}%'] + ([f'EV = {ev:+.1f}%'] if ev is not None else [])
             if val:
                 detail_parts.append(val)
             if dir_:
@@ -640,23 +642,26 @@ def build_match_page(m, page_num, total):
     ldr = m['let_draw_rec']
     if ldr and ldr.get('option') and ldr.get('let_draw_direct'):
         _ldr_prob = ldr.get('prob', 0)
-        _ldr_odds = ldr.get('odds', 0)
-        _ldr_ev = ldr.get('ev_pct', 0)
+        _ldr_odds = ldr.get('odds')
+        _ldr_ev = ldr.get('ev_pct')
         _ldr_label = _hhad_option_label(ldr.get('option', ''), m['hhad_h'])
-        _ldr_odds_disp = f'@{_ldr_odds}' if _ldr_odds else '(未开盘)'  # P1-4
+        _ldr_odds_disp = f'@{_ldr_odds}' if _ldr_odds else '(以盘口为准)'  # Ultra 15.1
+        # Ultra 15.1: ev=None → EV段省略 (原 {None:+.1f} 崩溃)
+        _ldr_ev_s = f'  |  EV = {_ldr_ev:+.1f}%' if _ldr_ev is not None else ''
         alert_rows.append(Paragraph(
-            f'▲ 让平直推  {_ldr_label} {_ldr_odds_disp}  |  P = {_ldr_prob:.1f}%  |  EV = {_ldr_ev:+.1f}%',
+            f'▲ 让平直推  {_ldr_label} {_ldr_odds_disp}  |  P = {_ldr_prob:.1f}%{_ldr_ev_s}',
             S['alert_line']))
 
     # 平局关注行 (Ultra 11.18)
     dar = m['draw_attention']
     if dar and dar.get('option') and dar.get('draw_attention'):
         _dar_prob = dar.get('prob', 0)
-        _dar_odds = dar.get('odds', 0)
-        _dar_ev = dar.get('ev_pct', 0)
-        _dar_odds_disp = f'@{_dar_odds}' if _dar_odds else '(未开盘)'  # P1-4
+        _dar_odds = dar.get('odds')
+        _dar_ev = dar.get('ev_pct')
+        _dar_odds_disp = f'@{_dar_odds}' if _dar_odds else '(以盘口为准)'  # Ultra 15.1
+        _dar_ev_s = f'  |  EV = {_dar_ev:+.1f}%' if _dar_ev is not None else ''
         alert_rows.append(Paragraph(
-            f'▲ 平局关注  HAD平 {_dar_odds_disp}  |  P = {_dar_prob:.1f}%  |  EV = {_dar_ev:+.1f}%  |  历史平局率≈25%',
+            f'▲ 平局关注  HAD平 {_dar_odds_disp}  |  P = {_dar_prob:.1f}%{_dar_ev_s}  |  历史平局率≈25%',
             S['alert_line_sub']))
 
     # 平局窗口HHAD优先行 (Ultra 11.19) — 平局场次让球盘判别力更强
@@ -718,13 +723,22 @@ def build_match_page(m, page_num, total):
     # 从结构化字段构建"项目+结论"表格行 (与对话中的"项目/结论"一致)
     verdict_rows = []
 
+    # Ultra 15.1: odds=None(赔率未同步) → "(以盘口为准)"; ev=None → EV段省略
+    # (原 f'EV={None:+.1f}%' 会 TypeError 崩溃, "@None" 渲染难看)
+    def _bet_desc_tail(bet):
+        _o = bet.get('odds')
+        _o_s = f'@{_o}' if _o else '(以盘口为准)'
+        _e = bet.get('ev_pct')
+        _e_s = f'  EV={_e:+.1f}%' if _e is not None else ''
+        return f'{_o_s}  P={bet.get("prob", 0):.1f}%{_e_s}'
+
     # 主推
     _pri = m['primary']
     if _pri and _pri.get('option'):
         _opt = _hhad_option_label(_pri.get('option', ''), m['hhad_h'])
         _mk = _pri.get('market', '')
         _tag = '主推' + (f'[{_mk}]' if _mk else '')
-        _desc = f'{_opt}@{_pri.get("odds",0)}  P={_pri.get("prob",0):.1f}%  EV={_pri.get("ev_pct",0):+.1f}%'
+        _desc = f'{_opt}{_bet_desc_tail(_pri)}'
         if _pri.get('value'):
             _desc += ' ★价值'
         verdict_rows.append((_tag, _desc))
@@ -734,7 +748,7 @@ def build_match_page(m, page_num, total):
     if _dr and _dr.get('option'):
         _opt = _hhad_option_label(_dr.get('option', ''), m['hhad_h'])
         _tag = '双选'
-        _desc = f'{_opt}@{_dr.get("odds",0)}  P={_dr.get("prob",0):.1f}%  EV={_dr.get("ev_pct",0):+.1f}%'
+        _desc = f'{_opt}{_bet_desc_tail(_dr)}'
         if _dr.get('value'):
             _desc += ' ★价值'
         if _dr.get('direction'):
@@ -745,7 +759,7 @@ def build_match_page(m, page_num, total):
     _hp = m['hhad_primary']
     if _hp and _hp.get('option') and (not _pri or _hp.get('option') != _pri.get('option')):
         _opt = _hhad_option_label(_hp.get('option', ''), m['hhad_h'])
-        _desc = f'{_opt}@{_hp.get("odds",0)}  P={_hp.get("prob",0):.1f}%  EV={_hp.get("ev_pct",0):+.1f}%'
+        _desc = f'{_opt}{_bet_desc_tail(_hp)}'
         if _hp.get('value'):
             _desc += ' ★价值'
         verdict_rows.append(('HHAD主推', _desc))
@@ -754,27 +768,26 @@ def build_match_page(m, page_num, total):
     _ldr = m['let_draw_rec']
     if _ldr and _ldr.get('option') and _ldr.get('let_draw_direct'):
         _opt = _hhad_option_label(_ldr.get('option', ''), m['hhad_h'])
-        verdict_rows.append((
-            '让平直推',
-            f'{_opt}@{_ldr.get("odds",0)}  P={_ldr.get("prob",0):.1f}%  EV={_ldr.get("ev_pct",0):+.1f}%'
-        ))
+        verdict_rows.append(('让平直推', f'{_opt}{_bet_desc_tail(_ldr)}'))
 
     # 平局关注
     _dar = m['draw_attention']
     if _dar and _dar.get('option') and _dar.get('draw_attention'):
         verdict_rows.append((
             '平局关注',
-            f'{_hhad_option_label(_dar.get("option",""), m["hhad_h"])}@{_dar.get("odds",0)}  '
-            f'P={_dar.get("prob",0):.1f}%  EV={_dar.get("ev_pct",0):+.1f}%'
+            f'{_hhad_option_label(_dar.get("option",""), m["hhad_h"])}{_bet_desc_tail(_dar)}'
         ))
 
     # 平局窗口HHAD优先
     if m.get('draw_window_priority'):
         _hhd = m.get('hhad_primary') or {}
         _hhd_dir = _hhd.get('option', '')
-        _hhd_odds = _hhd.get('odds', 0)
+        _hhd_odds = _hhd.get('odds')
         if _hhd_dir and _hhd_odds and _hhd_odds > 0:
             _dw_desc = f'HHAD参考{_hhad_option_label(_hhd_dir, m["hhad_h"])}@{_hhd_odds}'
+        elif _hhd_dir:
+            # Ultra 15.1: 主推存在但赔率未同步 → 显示方向+以盘口为准
+            _dw_desc = f'HHAD参考{_hhad_option_label(_hhd_dir, m["hhad_h"])}(以盘口为准)'
         else:
             _dw_desc = '让球盘未开盘, 平局概率偏高, 注意提防平局'
         verdict_rows.append(('平局窗口', f'HHAD优先  {_dw_desc}'))

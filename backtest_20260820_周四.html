@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>回测报告 2026-08-20 周四 · 独立模式首批</title>
+<style>
+:root{--navy:#0a1628;--navy2:#112240;--gold:#c7922e;--goldbg:#faf3e0;--green:#15803d;--greenbg:#dcfce7;--red:#b91c1c;--redbg:#fef2f2;--amber:#b45309;--amberbg:#fffbeb;--txt:#1f2937;--muted:#64748b;--line:#e2e8f0}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;background:#f1f5f9;color:var(--txt);padding:20px;font-size:14px}
+.wrap{max-width:1100px;margin:0 auto}
+.hd{background:linear-gradient(135deg,#0a1628,#1a2f4a);color:#fff;border-radius:12px;padding:24px 28px;margin-bottom:16px}
+.hd h1{font-size:20px;margin-bottom:6px}
+.hd .sub{color:#cbd5e1;font-size:12px}
+.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:16px}
+.stat{background:rgba(255,255,255,.08);border-radius:8px;padding:10px 8px;text-align:center}
+.stat b{display:block;font-size:18px}
+.stat span{font-size:11px;color:#94a3b8}
+.sec{background:#fff;border-radius:12px;padding:20px 24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.sec h2{font-size:16px;color:var(--navy);border-left:4px solid var(--gold);padding-left:10px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--navy);color:#fff;padding:7px 9px;text-align:left;font-weight:600}
+td{padding:7px 9px;border-bottom:1px solid var(--line)}
+tr:nth-child(even) td{background:#f8fafc}
+.ok{color:var(--green);font-weight:700}.miss{color:var(--red);font-weight:700}
+.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;margin:1px 2px}
+.tg-ok{background:var(--greenbg);color:var(--green)}.tg-miss{background:var(--redbg);color:var(--red)}
+.tg-gold{background:var(--goldbg);color:var(--gold)}.tg-amber{background:var(--amberbg);color:var(--amber)}
+.card{border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+.card-hd{background:var(--navy2);color:#fff;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;font-size:13px}
+.card-hd .mk{color:#fbbf24;font-weight:700}
+.banner{display:flex;align-items:center;gap:10px;padding:10px 14px;font-size:15px}
+.banner.win{background:var(--greenbg)}.banner.lose{background:var(--redbg)}
+.banner .opt{font-size:17px;font-weight:800;color:var(--navy)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 24px;padding:10px 14px;font-size:12.5px}
+.row{padding:3px 0;display:flex;justify-content:space-between;border-bottom:1px dashed #eef2f7}
+.row span:first-child{color:var(--muted)}
+.note{padding:8px 14px;font-size:12px;color:#475569;background:#f8fafc;border-top:1px solid var(--line)}
+.finding{display:flex;gap:10px;padding:12px 0;border-bottom:1px dashed var(--line)}
+.finding:last-child{border-bottom:none}
+.f-no{flex:none;width:26px;height:26px;border-radius:50%;background:var(--goldbg);color:var(--amber);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:13px}
+.f-body b{display:block;color:var(--navy);margin-bottom:3px}
+.f-body p{font-size:12.5px;color:#475569;line-height:1.7}
+.foot{text-align:center;color:var(--muted);font-size:11px;padding:12px}
+@media(max-width:700px){.stats{grid-template-columns:repeat(3,1fr)}.grid2{grid-template-columns:1fr}}
+</style></head><body><div class="wrap">
+<div class="hd">
+  <h1>📊 详细回测 · 2026-08-20 周四 (独立模式首批 9 场)</h1>
+  <div class="sub">独立模式(赔率零输入)上线后第一个完整批次 · 生成于 2026-08-21 · 数据源: pred_20260820_周四_indep.json × regression.db</div>
+  <div class="stats">
+    <div class="stat"><b>4/9</b><span>统一主推</span></div>
+    <div class="stat"><b>3/8</b><span>胜平负方向</span></div>
+    <div class="stat"><b>3/9</b><span>让球盘方向</span></div>
+    <div class="stat"><b>5/9</b><span>半全场</span></div>
+    <div class="stat"><b>2/9</b><span>比分</span></div>
+    <div class="stat"><b>1/9</b><span>总进球</span></div>
+  </div>
+</div>
+
+<div class="sec">
+<h2>一、总览与经济账</h2>
+<table>
+<tr><th>维度</th><th>结果</th><th>备注</th></tr>
+<tr><td>统一主推</td><td><b class="miss">4/9 (44.4%)</b></td><td>命中的4场: 002/003/006让负 + 007 HAD胜; 失败5场: 001/004/005受让胜 + 008/009让负</td></tr>
+<tr><td>主推投注ROI(每场1单位)</td><td class="miss">-24.4%</td><td>投9回6.80 (命中赔率 1.58/1.71/2.19/1.32)</td></tr>
+<tr><td>HAD方向投注ROI</td><td class="miss">-32.0%</td><td>6注 (001负✓/004✗/005✗/006✗/007胜✓/008胜✓)</td></tr>
+<tr><td>影子对照 (模型vs市场热门)</td><td>模型 3/8 vs 市场 5/8</td><td>同向4场: 模型3中/市场3中 · 分歧4场: 模型0中/市场2中</td></tr>
+<tr><td>概率质量</td><td>RPS均值 0.2112 · LogLoss均值 1.006</td><td>最好 007 (RPS 0.094) / 最差 005 (0.370) — 概率质量与主推命中高度同向</td></tr>
+</table>
+</div>
+
+<div class="sec">
+<h2>二、逐场全玩法明细</h2>
+
+<div class="card">
+  <div class="card-hd"><span>【周四001】迈季迈阿宽广 <b>0-3</b> 利雅得新月 <small>(半0-1)</small></span><span class="mk">沙职</span></div>
+  <div class="banner lose">
+    <span>主推 ❌</span><span class="opt">HHAD受让胜</span>
+    <span>P=72.2% @2.1</span><span>EV+51.6%</span>
+    <span style="margin-left:auto;font-size:12px;color:#64748b">覆盖[胜+平] · 置信★★★★</span>
+  </div>
+  <div class="grid2">
+    <div>
+      <div class="row"><span>胜平负</span><span>预测负 (25%/26%/49%) → 实际负 <span class="tag tg-ok">✓</span></span></div>
+      <div class="row"><span>让球盘(受让2)</span><span>预测受让胜 (73%/19%/9%) → 实际让负 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>比分top3</span><span>1-1:12.1 0-1:9.4 1-0:8.6 <span class="tag tg-miss">✗</span></span></div>
+    </div>
+    <div>
+      <div class="row"><span>半全场</span><span>负负 → 负负 <span class="tag tg-ok">✓</span></span></div>
+      <div class="row"><span>总进球</span><span>2球(24.0%) → 3球 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>市场热门</span><span>负 <span class="tag tg-ok">✓</span> · 同向</span></div>
+      <div class="row"><span>概率质量</span><span>RPS=0.1613 LL=0.7133</span></div>
+    </div>
+  </div>
+  <div class="note">🧠 SWOT 客队占优 — ✅ SWOT与模型方向一致, 置信度上调+0.5★</div>
+</div>
+<div class="card">
+  <div class="card-hd"><span>【周四002】巴列卡诺 <b>1-1</b> 阿拉维斯 <small>(半0-0)</small></span><span class="mk">西甲</span></div>
+  <div class="banner win">
+    <span>主推 ✅</span><span class="opt">HHAD让负</span>
+    <span>P=57.6% @1.58</span><span>EV-8.9%</span>
+    <span style="margin-left:auto;font-size:12px;color:#64748b">覆盖[平+负] · 置信★★★½</span>
+  </div>
+  <div class="grid2">
+    <div>
+      <div class="row"><span>胜平负</span><span>预测负 (24%/27%/48%) → 实际平 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>让球盘(让-1)</span><span>预测让负 (8%/15%/78%) → 实际让负 <span class="tag tg-ok">✓</span></span></div>
+      <div class="row"><span>比分top3</span><span>1-1:12.9 0-1:10.6 1-0:9.7 <span class="tag tg-ok">✓</span></span></div>
+    </div>
+    <div>
+      <div class="row"><span>半全场</span><span>负负 → 平平 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>总进球</span><span>2球(25.0%) → 2球 <span class="tag tg-ok">✓</span></span></div>
+      <div class="row"><span>市场热门</span><span>胜 <span class="tag tg-miss">✗</span> · 分歧</span></div>
+      <div class="row"><span>概率质量</span><span>RPS=0.1488 LL=1.3093</span></div>
+    </div>
+  </div>
+  <div class="note">🧠 SWOT 客队占优 — 🔄 SWOT强信号翻转方向: 模型判胜→SWOT判负, 置信度上调+1★; λ/比分/HHAD/半全场已重算对齐(λ1.</div>
+</div>
+<div class="card">
+  <div class="card-hd"><span>【周四003】科林蒂安 <b>0-0</b> 罗萨里奥中央 <small>(半0-0)</small></span><span class="mk">解放者杯</span></div>
+  <div class="banner win">
+    <span>主推 ✅</span><span class="opt">HHAD让负</span>
+    <span>P=60.4% @1.71</span><span>EV+3.2%</span>
+    <span style="margin-left:auto;font-size:12px;color:#64748b">覆盖[平+负] · 置信★★★½</span>
+  </div>
+  <div class="grid2">
+    <div>
+      <div class="row"><span>胜平负</span><span>预测负 (35%/30%/35%) → 实际平 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>让球盘(让-1)</span><span>预测让负 (9%/24%/67%) → 实际让负 <span class="tag tg-ok">✓</span></span></div>
+      <div class="row"><span>比分top3</span><span>0-0:15.0 0-1:14.5 1-1:13.4 <span class="tag tg-ok">✓</span></span></div>
+    </div>
+    <div>
+      <div class="row"><span>半全场</span><span>平平 → 平平 <span class="tag tg-ok">✓</span></span></div>
+      <div class="row"><span>总进球</span><span>2球(26.3%) → 0球 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>市场热门</span><span>胜 <span class="tag tg-miss">✗</span> · 分歧</span></div>
+      <div class="row"><span>概率质量</span><span>RPS=0.1225 LL=1.204</span></div>
+    </div>
+  </div>
+  <div class="note">🧠 SWOT 客队占优 — ⚠️ SWOT与模型方向不一致, 置信度降低-0.5★</div>
+</div>
+<div class="card">
+  <div class="card-hd"><span>【周四004】阿拉木图凯拉特 <b>0-3</b> 安德莱赫特 <small>(半0-3)</small></span><span class="mk">欧罗巴</span></div>
+  <div class="banner lose">
+    <span>主推 ❌</span><span class="opt">HHAD受让胜</span>
+    <span>P=66.3% @1.56</span><span>EV+3.4%</span>
+    <span style="margin-left:auto;font-size:12px;color:#64748b">覆盖[胜+平] · 置信★★★</span>
+  </div>
+  <div class="grid2">
+    <div>
+      <div class="row"><span>胜平负</span><span>预测胜 (38%/30%/32%) → 实际负 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>让球盘(受让1)</span><span>预测受让胜 (68%/18%/15%) → 实际让负 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>比分top3</span><span>1-1:11.6 1-0:8.4 2-1:8.1 <span class="tag tg-miss">✗</span></span></div>
+    </div>
+    <div>
+      <div class="row"><span>半全场</span><span>胜胜 → 负负 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>总进球</span><span>2球(23.1%) → 3球 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>市场热门</span><span>负 <span class="tag tg-ok">✓</span> · 分歧</span></div>
+      <div class="row"><span>概率质量</span><span>RPS=0.3034 LL=1.1394</span></div>
+    </div>
+  </div>
+  <div class="note">🧠 SWOT 势均力敌 — ◐ SWOT与模型方向部分一致(含平局分歧), 置信度降低-0.5★</div>
+</div>
+<div class="card">
+  <div class="card-hd"><span>【周四005】米亚尔比 <b>0-1</b> 萨尔茨堡 <small>(半0-0)</small></span><span class="mk">欧罗巴</span></div>
+  <div class="banner lose">
+    <span>主推 ❌</span><span class="opt">HHAD受让胜</span>
+    <span>P=76.6% @2.04</span><span>EV+56.3%</span>
+    <span style="margin-left:auto;font-size:12px;color:#64748b">覆盖[胜+平] · 置信★★</span>
+  </div>
+  <div class="grid2">
+    <div>
+      <div class="row"><span>胜平负</span><span>预测胜 (47%/25%/28%) → 实际负 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>让球盘(受让1)</span><span>预测受让胜 (72%/17%/12%) → 实际让平 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>比分top3</span><span>1-1:11.5 1-0:9.9 2-1:8.7 <span class="tag tg-miss">✗</span></span></div>
+    </div>
+    <div>
+      <div class="row"><span>半全场</span><span>胜胜 → 平负 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>总进球</span><span>2球(23.5%) → 1球 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>市场热门</span><span>负 <span class="tag tg-ok">✓</span> · 分歧</span></div>
+      <div class="row"><span>概率质量</span><span>RPS=0.3696 LL=1.273</span></div>
+    </div>
+  </div>
+  <div class="note">🧠 SWOT 客队占优 — ⚠️ SWOT与模型方向不一致, 置信度降低-0.5★</div>
+</div>
+<div class="card">
+  <div class="card-hd"><span>【周四006】特拉布宗体育 <b>0-1</b> 费伦茨瓦罗斯 <small>(半0-1)</small></span><span class="mk">欧罗巴</span></div>
+  <div class="banner win">
+    <span>主推 ✅</span><span class="opt">HHAD让负</span>
+    <span>P=59.3% @2.19</span><span>EV+29.9%</span>
+    <span style="margin-left:auto;font-size:12px;color:#64748b">覆盖[平+负] · 置信★★</span>
+  </div>
+  <div class="grid2">
+    <div>
+      <div class="row"><span>胜平负</span><span>预测胜 (39%/27%/34%) → 实际负 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>让球盘(让-1)</span><span>预测让负 (19%/20%/61%) → 实际让负 <span class="tag tg-ok">✓</span></span></div>
+      <div class="row"><span>比分top3</span><span>1-1:11.8 1-0:9.6 2-1:8.4 <span class="tag tg-miss">✗</span></span></div>
+    </div>
+    <div>
+      <div class="row"><span>半全场</span><span>胜胜 → 负负 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>总进球</span><span>2球(23.7%) → 1球 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>市场热门</span><span>胜 <span class="tag tg-miss">✗</span> · 同向</span></div>
+      <div class="row"><span>概率质量</span><span>RPS=0.2939 LL=1.0788</span></div>
+    </div>
+  </div>
+  <div class="note">🧠 SWOT 势均力敌 — ◐ SWOT与模型方向部分一致(含平局分歧), 置信度降低-0.5★</div>
+</div>
+<div class="card">
+  <div class="card-hd"><span>【周四007】波兹南莱赫 <b>7-0</b> 图恩 <small>(半5-0)</small></span><span class="mk">欧罗巴</span></div>
+  <div class="banner win">
+    <span>主推 ✅</span><span class="opt">HAD胜</span>
+    <span>P=53.8% @1.32</span><span>EV-29.0%</span>
+    <span style="margin-left:auto;font-size:12px;color:#64748b">覆盖[胜] · 置信★★</span>
+  </div>
+  <div class="grid2">
+    <div>
+      <div class="row"><span>胜平负</span><span>预测胜 (60%/23%/17%) → 实际胜 <span class="tag tg-ok">✓</span></span></div>
+      <div class="row"><span>让球盘(让-1)</span><span>预测让负 (30%/30%/40%) → 实际让胜 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>比分top3</span><span>1-1:11.7 1-0:9.7 2-1:8.6 <span class="tag tg-miss">✗</span></span></div>
+    </div>
+    <div>
+      <div class="row"><span>半全场</span><span>胜胜 → 胜胜 <span class="tag tg-ok">✓</span></span></div>
+      <div class="row"><span>总进球</span><span>2球(23.6%) → 7+球 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>市场热门</span><span>胜 <span class="tag tg-ok">✓</span> · 同向</span></div>
+      <div class="row"><span>概率质量</span><span>RPS=0.0945 LL=0.5108</span></div>
+    </div>
+  </div>
+  <div class="note">🧠 SWOT 主队占优 — ✅ SWOT与模型方向一致, 置信度上调+0.5★</div>
+</div>
+<div class="card">
+  <div class="card-hd"><span>【周四008】贝尔格莱德红星 <b>3-0</b> 比尔森 <small>(半1-0)</small></span><span class="mk">欧罗巴</span></div>
+  <div class="banner lose">
+    <span>主推 ❌</span><span class="opt">HHAD让负</span>
+    <span>P=54.9% @2.01</span><span>EV+10.4%</span>
+    <span style="margin-left:auto;font-size:12px;color:#64748b">覆盖[平+负] · 置信★★★</span>
+  </div>
+  <div class="grid2">
+    <div>
+      <div class="row"><span>胜平负</span><span>预测胜 (44%/28%/28%) → 实际胜 <span class="tag tg-ok">✓</span></span></div>
+      <div class="row"><span>让球盘(让-1)</span><span>预测让负 (20%/24%/57%) → 实际让胜 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>比分top3</span><span>1-1:12.1 1-0:9.1 0-1:9.0 <span class="tag tg-miss">✗</span></span></div>
+    </div>
+    <div>
+      <div class="row"><span>半全场</span><span>胜胜 → 胜胜 <span class="tag tg-ok">✓</span></span></div>
+      <div class="row"><span>总进球</span><span>2球(24.0%) → 3球 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>市场热门</span><span>胜 <span class="tag tg-ok">✓</span> · 同向</span></div>
+      <div class="row"><span>概率质量</span><span>RPS=0.196 LL=0.821</span></div>
+    </div>
+  </div>
+  <div class="note">🧠 SWOT 势均力敌 — ◐ SWOT与模型方向部分一致(含平局分歧), 置信度降低-0.5★</div>
+</div>
+<div class="card">
+  <div class="card-hd"><span>【周四009】本菲卡 <b>3-1</b> 奥胡斯 <small>(半3-1)</small></span><span class="mk">欧罗巴</span></div>
+  <div class="banner lose">
+    <span>主推 ❌</span><span class="opt">HHAD让负</span>
+    <span>P=66.5% @2.66</span><span>EV+76.8%</span>
+    <span style="margin-left:auto;font-size:12px;color:#64748b">覆盖[平+负] · 置信★½</span>
+  </div>
+  <div class="grid2">
+    <div>
+      <div class="row"><span>胜平负</span><span>预测未开盘 (未开盘) → 实际胜 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>让球盘(让-2)</span><span>预测让负 (15%/18%/66%) → 实际让平 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>比分top3</span><span>1-0:11.4 1-1:11.1 2-0:9.3 <span class="tag tg-miss">✗</span></span></div>
+    </div>
+    <div>
+      <div class="row"><span>半全场</span><span>胜胜 → 胜胜 <span class="tag tg-ok">✓</span></span></div>
+      <div class="row"><span>总进球</span><span>2球(23.8%) → 4球 <span class="tag tg-miss">✗</span></span></div>
+      <div class="row"><span>市场热门</span><span>— <span class="tag tg-amber">未开盘</span> · —</span></div>
+      <div class="row"><span>概率质量</span><span>RPS=None LL=None</span></div>
+    </div>
+  </div>
+  <div class="note">🧠 SWOT 主队占优 — ⚠️ SWOT与模型方向不一致, 置信度降低-0.5★</div>
+</div>
+</div>
+
+<div class="sec">
+<h2>三、主推概率校准 (置信度 vs 实际命中)</h2>
+<table>
+<tr><th>概率档</th><th>命中</th><th>实际</th><th>预测均值</th><th>偏差</th><th>明细</th></tr>
+<tr><td><b>≥70% (高置信)</b></td><td>0/2</td><td>0%</td>
+<td>74.4%</td>
+<td class="miss">-74.4pp</td><td style="font-size:11.5px">周四00172%✗ · 周四00577%✗</td></tr><tr><td><b>60-70% (中置信)</b></td><td>1/3</td><td>33%</td>
+<td>64.4%</td>
+<td class="miss">-31.1pp</td><td style="font-size:11.5px">周四00360%✓ · 周四00466%✗ · 周四00966%✗</td></tr><tr><td><b><60% (低置信)</b></td><td>3/4</td><td>75%</td>
+<td>56.4%</td>
+<td class="">+18.6pp</td><td style="font-size:11.5px">周四00258%✓ · 周四00659%✓ · 周四00754%✓ · 周四00855%✗</td></tr>
+</table>
+<p style="margin-top:10px;font-size:12.5px;color:#475569">校准曲线单调性完全破坏(低置信&gt;高置信75pp) — 独立模式概率校准闭环(需n≥100)尚未启动, 当前高置信数字不可作为加仓依据。让球盘argmax 9场仅4中(44%), 与主推命中率一致, 说明选推引擎本身排序正常, 问题出在概率本身。</p>
+</div>
+
+<div class="sec">
+<h2>四、六项模式发现</h2>
+
+<div class="finding"><div class="f-no">1</div><div class="f-body"><b>受让胜三连败 — 高置信覆盖单的系统性陷阱 (001/004/005, 全败)</b>
+<p>三场主推全是"受让方守住盘口"(P=66~77%), 实际强队全部净胜2球以上 (0-3 / 0-3 / 0-1受让平)。共同画像: 实力悬殊对决(沙职/欧罗巴资格赛)中, 模型对受让弱队的"受让存活"概率严重高估。001与005还是 EV+51.6%/+56.3% 的"价值单" — <b>EV 由模型概率算出, 概率高估必然制造假价值</b>, Kelly 11.7% 的重仓建议直接全损。</p></div></div>
+<div class="finding"><div class="f-no">2</div><div class="f-body"><b>概率校准完全反转: 越自信越不准</b>
+<p>主推概率 ≥70% 命中 0/2, 60-70% 命中 1/3, &lt;60% 命中 3/4 — 高置信组实际表现比低置信组差 75pp。本批 ECE=0.205(激进高估)的根因就在这几场高置信受让胜上。独立模式尚处冷启动 (概率校准需 n≥100), 概率尚未被历史命中率收缩, 高置信区间的数字本质是"未校准的原始模型输出"。</p></div></div>
+<div class="finding"><div class="f-no">3</div><div class="f-body"><b>SWOT强翻转是本批最大功臣 (002 全场最佳)</b>
+<p>002 巴列卡诺: 原模型判胜, SWOT 强信号翻转为负 (+1★), 翻转后主推让负@57.6%命中, 且比分1-1、总进球2球同步命中 — 该场三个玩法全对。若无 SWOT 翻转, 模型会顺着"胜"方向走(市场热门也是胜, 双双落平局)。独立模式首日, SWOT情报层证明了自己的增量价值。</p></div></div>
+<div class="finding"><div class="f-no">4</div><div class="f-body"><b>分歧场 HAD 方向 0/4, 但让负玩法救回两场</b>
+<p>与市场热门分歧的4场(002/003/004/005), 模型HAD方向全错(市场对2场)。但002/003两场实际是平局 → 让-1盘下让负照样赢 — 模型"方向错但玩法对"。反过来说: <b>分歧场的HAD直选是当前最弱项, 让球盘的容错结构才是主推命中的真实来源</b>。同向4场模型/市场各3中, 无增量。</p></div></div>
+<div class="finding"><div class="f-no">5</div><div class="f-body"><b>λ链整体低估强队火力 — 总进球1/9, 5场实际≥3球</b>
+<p>9场总进球预测全部是"2球"(23~26%), 实际出现 0/1/1/2/3/3/3/4/7+ — 5场≥3球全漏。007波兹南7-0、009本菲卡4球、004/008各3球: 欧战资格赛主强客弱的悬殊对决, λ链(xG/近况/联赛收缩)对强队进攻端估计系统性偏低。半全场反而5/9最好 — 方向对时净胜球分布形态基本正确, 说明是 λ 均值偏低而非结构错误。</p></div></div>
+<div class="finding"><div class="f-no">6</div><div class="f-body"><b>深盘让负的双刃: 平局红利 vs 打穿风险</b>
+<p>让负主推5场: 002/003/006命中(全是平局/小负场景), 008/009失败(强队大胜打穿: 3-0让胜、-2盘3-1让平差一球)。让-1盘的让负本质是"主队不赢2球" — 在强弱悬殊场次这个假设天然危险。008 HAD方向胜判对了(✓), 却因主推选了让负而错失 — <b>cross_market引擎在"方向已对"时倾向高赔让球盘, 牺牲了确定性</b>。</p></div></div>
+
+</div>
+
+<div class="sec">
+<h2>五、对后续批次的可执行修正方向</h2>
+<table>
+<tr><th>问题</th><th>建议动作</th><th>状态</th></tr>
+<tr><td>受让胜高置信陷阱 (3/3全败)</td><td>悬殊对决的受让覆盖单概率向历史"深盘受让存活率"收缩 (Ultra 15.2 已有深盘收缩框架, 需扩展到受让侧)</td><td class="miss">待办</td></tr>
+<tr><td>EV由未校准概率计算 → 假价值单</td><td>EV输出在概率校准闭环(n≥100)启动前标注"未校准", 价值单建议降级为观察单</td><td class="miss">待办</td></tr>
+<tr><td>λ低估强队火力 (5场≥3球全漏)</td><td>欧战/杯赛资格赛悬殊场次 λ 链加乘数或用净胜球分布(margin_shape)重标定 — 半全场5/9证明形态结构可用</td><td class="miss">待办</td></tr>
+<tr><td>方向已对时主推弃HAD选让球</td><td>cross_market 排序对"方向一致+高确定性"场次给 HAD 直选加权 (008 场景: HAD胜✓被让负✗替换)</td><td class="miss">待办</td></tr>
+<tr><td>SWOT强翻转价值已验证</td><td>保持现有翻转护栏(强信号+评分阈值), 继续观察分歧降星机制</td><td class="ok">已验证</td></tr>
+<tr><td>模式隔离后 CUSUM/累计统计干净起步</td><td>独立模式账本从本批起累积, 3批后启动漂移判断; 概率校准闭环 8/100</td><td class="ok">进行中</td></tr>
+</table>
+</div>
+
+<div class="foot">回测范围: 2026-08-20 周四001-009 · 预测时点数据(赛前) · 同日另有6场周三旧模式凌晨场次未计入本报告</div>
+</div></body></html>

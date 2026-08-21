@@ -32,7 +32,9 @@ import json, re, time, os, sys, sqlite3, math, html
 from datetime import datetime, timedelta
 import requests
 from v215_e2e import stars_to_score
-from gen_bet_guide_html import classify, _parse_probs
+# Ultra 15.6 (2026-08-20): 指南并轨统一主推后不再依赖四档 classify;
+# gen_bet_guide_html 仅余 _parse_probs 助手, 如需可从新脚本导入
+from gen_bet_guide_html import _parse_probs
 
 # ============================================================
 # Phase 0: 用户输入
@@ -1169,7 +1171,8 @@ def verify_prediction(pred_data, result_data):
         'pb_hit': pb_hit,
         'pb_option': primary_bet.get('option', '') if primary_bet else '',
         'pb_market': primary_bet.get('market', '') if primary_bet else '',
-        'pb_odds': primary_bet.get('odds', 0) if primary_bet else 0,
+        # Ultra 15.1: 主推赔率未同步(None) → 0, 避免DB存null
+        'pb_odds': (primary_bet.get('odds') or 0) if primary_bet else 0,
         'prediction': pred,
         'difficulty': pred.get('difficulty', 0),
         'model_agreement': pred.get('model_agreement', 0),
@@ -1184,76 +1187,42 @@ def verify_prediction(pred_data, result_data):
 
 
 def verify_bet_guide(pred_data, result_data):
-    """验证投注指南命中 — 四档(主推) + 首推(补充, PDF primary_bet)
+    """验证投注指南命中 — 统一主推版 (Ultra 15.6, 2026-08-20 并轨)
 
-    四档主推 (复刻 gen_bet_guide_html 原四档判定):
-      🎯 draw   → 买 HAD 平局
-      ✅ single → 买 HAD 主推方向
-      ⚠️ cover  → 买 HHAD 覆盖项(让负/受让胜)
-      🚫 avoid  → 不买 (hit=None, 不计入分母)
-    首推补充 (命中率优先 = 预测PDF primary_bet):
-      market=HAD  → 买 HAD 胜/平/负
-      market=HHAD → 买 HHAD 让胜/让负/受让胜/...
+    指南/预测报告/PDF 已统一口径: 每场唯一主推 = cross_market.primary_bet
+      market=HAD  → 买 HAD 胜/平/负, 按 HAD 结果验证
+      market=HHAD → 买 HHAD 让胜/让平/让负/受让胜..., 按 HHAD 结果验证
+      无主推(极端: 双盘全缺) → hit=None, 不计入分母
+
+    历史: 2026-08-20 前为四档体系(draw/single/cover/avoid), 旧库 guide_level
+    值为四档名, 新值为 primary_market ('HAD'/'HHAD') — 对账时按日期区分。
 
     返回 {level, bet, hit, primary_market, primary_bet, primary_hit}
     """
     pred = pred_data.get('prediction', {})
-    meta = pred_data.get('meta', {})
     had = pred.get('HAD', {})
     hh = pred.get('HHAD', {})
-    league = meta.get('league', '')
-    handicap = hh.get('handicap')
-    had_open = had.get('had_open', True)
 
     actual_had = result_data.get('had_result', '')
     actual_hhad = result_data.get('hhad_result', '')
 
-    # ===== 四档主推 =====
-    if not had_open:
-        hh_dir = hh.get('dir', '')
-        if hh_dir:
-            level, bet = 'single', hh_dir
-            hit = (hh_dir == actual_hhad) if actual_hhad else False
-        else:
-            level, bet, hit = 'avoid', '', None
-    else:
-        w, dr, l = _parse_probs(had.get('p', '0/0/0'))
-        argmax_p = max(w, dr, l)
-        level, _reason, _ds, _dsr, _dv, _dvr = classify(dr, argmax_p, w, l, league)
-        if level == 'draw':
-            bet = '平'
-            hit = (actual_had == '平') if actual_had else False
-        elif level == 'single':
-            bet = had.get('dir', '')
-            hit = (bet == actual_had) if bet and actual_had else False
-        elif level == 'cover':
-            if handicap is not None:
-                try:
-                    bet = '受让胜' if float(handicap) > 0 else '让负'
-                except Exception:
-                    bet = hh.get('dir', '')
-            else:
-                bet = hh.get('dir', '')
-            hit = (bet == actual_hhad) if bet and actual_hhad else False
-        else:  # avoid
-            bet = ''
-            hit = None
-
-    # ===== 首推补充 (PDF primary_bet, 命中率优先) =====
+    # ===== 统一主推 (cross_market.primary_bet) =====
     cmb = pred.get('cross_market') or {}
     pb = cmb.get('primary_bet') or {}
     primary_market = pb.get('market', '')
     primary_opt = pb.get('option', '')
+    # 前缀剥离: 先HHAD后HAD (replace顺序反了会把HHAD吃成"H")
     if primary_market == 'HAD':
-        primary_bet = primary_opt.replace('HAD', '')
-        primary_hit = (primary_bet == actual_had) if actual_had else False
+        primary_bet = primary_opt.replace('HAD', '', 1) if primary_opt.startswith('HAD') else primary_opt
+        primary_hit = (primary_bet == actual_had) if primary_bet and actual_had else False
     elif primary_market == 'HHAD':
-        primary_bet = primary_opt.replace('HHAD', '')
-        primary_hit = (primary_bet == actual_hhad) if actual_hhad else False
+        primary_bet = primary_opt.replace('HHAD', '', 1) if primary_opt.startswith('HHAD') else primary_opt
+        primary_hit = (primary_bet == actual_hhad) if primary_bet and actual_hhad else False
     else:
         primary_bet, primary_hit = '', None
 
-    return {'level': level, 'bet': bet, 'hit': hit,
+    level = primary_market if primary_market else 'none'
+    return {'level': level, 'bet': primary_bet, 'hit': primary_hit,
             'primary_market': primary_market, 'primary_bet': primary_bet, 'primary_hit': primary_hit}
 
 
@@ -2908,9 +2877,15 @@ def init_db():
         pred_top3 TEXT, pred_score_main TEXT,
         had_hit INTEGER, hhad_hit INTEGER, score_hit INTEGER,
         pred_file TEXT, data_source TEXT,
+        independent_mode INTEGER DEFAULT 0,
         created_at TEXT,
         UNIQUE(verify_date, match_key)
     )''')
+    # Ultra 14.3: 旧库补列 (幂等) — 模式标记用于漂移/CUSUM 数据隔离 (RULE-016)
+    try:
+        c.execute("ALTER TABLE verify_history ADD COLUMN independent_mode INTEGER DEFAULT 0")
+    except Exception:
+        pass  # 列已存在
     c.execute('''CREATE TABLE IF NOT EXISTS verify_stats (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         verify_date TEXT UNIQUE,
@@ -2980,8 +2955,173 @@ def init_db():
     safe_alter(conn, 'verify_history', 'market_fav_dir', 'TEXT')     # 预测时市场热门方向
     safe_alter(conn, 'verify_history', 'market_fav_hit', 'INTEGER')  # 市场热门是否命中
     safe_alter(conn, 'verify_history', 'model_vs_market', 'TEXT')    # same=同向 / diff=分歧
+    # Ultra 15.0 (进化三层-第二层): 融合源逐源概率存档 — 供 learn_fusion_weights 回放各源真实预测力
+    # 格式 "55.2/28.1/16.7" (胜/平/负); 仅独立模式场次写入 (旧模式源结构不同, 不具可比性)
+    safe_alter(conn, 'verify_history', 'src_poisson', 'TEXT')   # S1 xG-Poisson (校准后)
+    safe_alter(conn, 'verify_history', 'src_elo', 'TEXT')       # S2 Elo
+    safe_alter(conn, 'verify_history', 'src_h2h', 'TEXT')       # S3 H2H (无源时空)
+    # Ultra 15.7.1 (RULE-016 落实): verify_stats 批次模式标记 — CUSUM/累计统计按模式隔离
+    # 之前只有 verify_history 有逐场标记, CUSUM 消费的 verify_stats 批次表没有,
+    # 导致独立模式首次验证(2026-08-20)仍报出旧模式时代的漂移(起始点2026-08-15)
+    safe_alter(conn, 'verify_stats', 'independent_mode', 'INTEGER')
+    # 回填: 已入库批次按同日期 verify_history 的逐场模式标记补齐 (幂等, 重复验证自动覆盖)
+    c.execute('''UPDATE verify_stats SET independent_mode = COALESCE(
+        (SELECT MAX(independent_mode) FROM verify_history
+         WHERE verify_history.verify_date = verify_stats.verify_date), 0)''')
+    # Ultra 15.0 (进化三层-第一层): 模式账本 — 每期验证后按模式回写, 独立命中率三线对照的数据底座
+    c.execute('''CREATE TABLE IF NOT EXISTS mode_ledger (
+        verify_date TEXT,
+        mode TEXT,                    -- 'independent' | 'legacy'
+        had_n INTEGER, had_hit INTEGER,
+        hhad_n INTEGER, hhad_hit INTEGER,
+        mkt_had_n INTEGER, mkt_had_hit INTEGER,   -- 同批场次市场热门命中率 (仅independent行有意义)
+        indep_n_diff INTEGER, indep_hit_diff INTEGER, indep_mkt_hit_diff INTEGER,  -- 分歧场次拆分
+        updated_at TEXT,
+        UNIQUE(verify_date, mode)
+    )''')
     conn.commit()
     conn.close()
+
+
+def _fmt_src_probs(probs):
+    """Ultra 15.0: 源概率 [0.55, 0.28, 0.17] → '55.0/28.0/17.0'; None/非法 → NULL"""
+    if not probs or not isinstance(probs, (list, tuple)) or len(probs) != 3:
+        return None
+    try:
+        p = [float(x) for x in probs]
+    except (TypeError, ValueError):
+        return None
+    if min(p) < 0.01 or max(p) > 0.99:
+        return None  # 极端值不入库 (防脏数据污染权重学习)
+    return '/'.join(f'{x*100:.1f}' for x in p)
+
+
+def update_mode_ledger(date_str):
+    """Ultra 15.0 (进化三层-第一层): 模式账本回写 — 每期验证后按模式聚合
+
+    从 verify_history 聚合本期 (verify_date=date_str) 场次:
+      - independent: 独立模式 HAD/HHAD 命中 + 同批市场热门命中 + 分歧场次拆分
+      - legacy:      旧四源模式 HAD/HHAD 命中
+    幂等 (INSERT OR REPLACE), 重复验证自动覆盖。
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA busy_timeout=5000")
+    c = conn.cursor()
+    now = time.strftime('%Y-%m-%d %H:%M:%S')
+    rows = c.execute('''SELECT independent_mode, had_hit, hhad_hit, market_fav_hit, model_vs_market
+                        FROM verify_history WHERE verify_date=?''', (date_str,)).fetchall()
+    for mode_flag, agg in ((1, 'independent'), (0, 'legacy')):
+        m_rows = [r for r in rows if r[0] == mode_flag]
+        had = [r for r in m_rows if r[1] is not None]
+        hhad = [r for r in m_rows if r[2] is not None]
+        # 市场热门命中: 仅统计有 fav_dir 记录的场次 (影子对照口径)
+        mkt = [r for r in m_rows if r[3] is not None and r[1] is not None]
+        # 分歧场次 (模型≠市场): 独立模式价值的核心检验
+        diff = [r for r in mkt if r[4] == 'diff']
+        c.execute('''INSERT OR REPLACE INTO mode_ledger
+                     (verify_date, mode, had_n, had_hit, hhad_n, hhad_hit,
+                      mkt_had_n, mkt_had_hit, indep_n_diff, indep_hit_diff, indep_mkt_hit_diff, updated_at)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
+                  (date_str, agg,
+                   len(had), sum(r[1] for r in had),
+                   len(hhad), sum(r[2] for r in hhad),
+                   len(mkt), sum(r[3] for r in mkt),
+                   len(diff), sum(r[1] for r in diff), sum(r[3] for r in diff),
+                   now))
+    conn.commit()
+    conn.close()
+
+
+def indep_evolution_stats():
+    """Ultra 15.0 (进化三层-第一层): 独立模式进化曲线 — 三线对照数据
+
+    线1 独立模式 HAD 累计命中率 (账本核心指标)
+    线2 同批市场热门累计命中率 (基准线: 独立意见必须长期跑赢才有存在价值)
+    线3 旧模式同期累计命中率 (架构切换前后可比参照)
+    返回: {'rows': [{date, indep_n, indep_rate, mkt_rate, legacy_rate, ...}], 'cumulative': {...}}
+    """
+    out = {'rows': [], 'cumulative': None}
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout=5000")
+        c = conn.cursor()
+        led = c.execute('''SELECT verify_date, mode, had_n, had_hit, hhad_n, hhad_hit,
+                                  mkt_had_n, mkt_had_hit, indep_n_diff, indep_hit_diff, indep_mkt_hit_diff
+                           FROM mode_ledger ORDER BY verify_date''').fetchall()
+        conn.close()
+    except Exception:
+        return out
+    if not led:
+        return out
+
+    dates = sorted({r[0] for r in led})
+    cum = {'indep_n': 0, 'indep_hit': 0, 'hhad_n': 0, 'hhad_hit': 0,
+           'mkt_n': 0, 'mkt_hit': 0, 'legacy_n': 0, 'legacy_hit': 0,
+           'diff_n': 0, 'diff_hit': 0, 'diff_mkt_hit': 0}
+    for d in dates:
+        day = {r[1]: r for r in led if r[0] == d}
+        row = {'date': d}
+        ind = day.get('independent')
+        leg = day.get('legacy')
+        if ind:
+            cum['indep_n'] += ind[2]; cum['indep_hit'] += ind[3]
+            cum['hhad_n'] += ind[4];  cum['hhad_hit'] += ind[5]
+            cum['mkt_n'] += ind[6];   cum['mkt_hit'] += ind[7]
+            cum['diff_n'] += ind[8];  cum['diff_hit'] += ind[9]; cum['diff_mkt_hit'] += ind[10]
+            row.update(indep_n=ind[2], indep_day=ind[3],
+                       indep_rate=round(cum['indep_hit']/cum['indep_n']*100, 1) if cum['indep_n'] else None,
+                       mkt_rate=round(cum['mkt_hit']/cum['mkt_n']*100, 1) if cum['mkt_n'] else None)
+        if leg:
+            cum['legacy_n'] += leg[2]; cum['legacy_hit'] += leg[3]
+            row.update(legacy_rate=round(cum['legacy_hit']/cum['legacy_n']*100, 1) if cum['legacy_n'] else None)
+        out['rows'].append(row)
+    out['cumulative'] = {
+        **cum,
+        'indep_rate': round(cum['indep_hit']/cum['indep_n']*100, 1) if cum['indep_n'] else None,
+        'hhad_rate': round(cum['hhad_hit']/cum['hhad_n']*100, 1) if cum['hhad_n'] else None,
+        'mkt_rate': round(cum['mkt_hit']/cum['mkt_n']*100, 1) if cum['mkt_n'] else None,
+        'legacy_rate': round(cum['legacy_hit']/cum['legacy_n']*100, 1) if cum['legacy_n'] else None,
+        'diff_model_rate': round(cum['diff_hit']/cum['diff_n']*100, 1) if cum['diff_n'] else None,
+        'diff_mkt_rate': round(cum['diff_mkt_hit']/cum['diff_n']*100, 1) if cum['diff_n'] else None,
+    }
+    return out
+
+
+def _indep_evolution_html(evo):
+    """Ultra 15.0: 进化账本报告段 (PDF表格友好, 不依赖CSS/SVG渲染)"""
+    cum = evo.get('cumulative') or {}
+    if not evo.get('rows'):
+        return '<p>独立模式账本暂无数据 (自独立模式验证入库起积累)</p>'
+    bars = '▁▂▃▄▅▆▇█'
+    def _bar(pct):
+        if pct is None:
+            return '—'
+        idx = min(7, max(0, int((pct - 30) / 10))) if pct >= 30 else 0
+        return f"{bars[idx]} {pct:.1f}%"
+    rows_html = ''
+    for r in evo['rows']:
+        rows_html += (f"<tr><td>{r['date']}</td>"
+                      f"<td>{r.get('indep_n', 0)}</td>"
+                      f"<td>{_bar(r.get('indep_rate'))}</td>"
+                      f"<td>{_bar(r.get('mkt_rate'))}</td>"
+                      f"<td>{_bar(r.get('legacy_rate'))}</td></tr>")
+    c = cum
+    summary = (f"独立模式 HAD {c['indep_hit']}/{c['indep_n']}"
+               f" ({c['indep_rate']}%)" if c.get('indep_n') else '独立模式暂无场次')
+    mkt_s = f"市场热门 {c['mkt_hit']}/{c['mkt_n']} ({c['mkt_rate']}%)" if c.get('mkt_n') else '市场热门无数据'
+    leg_s = f"旧模式 {c['legacy_hit']}/{c['legacy_n']} ({c['legacy_rate']}%)" if c.get('legacy_n') else '旧模式无数据'
+    diff_s = ''
+    if c.get('diff_n'):
+        diff_s = (f" | 分歧场次({c['diff_n']}场): 模型{c.get('diff_model_rate')}% "
+                  f"vs 市场{c.get('diff_mkt_rate')}%")
+    return f"""
+<table>
+<tr><th>验证日</th><th>独立场次</th><th>独立HAD(累计)</th><th>市场热门(累计)</th><th>旧模式(累计)</th></tr>
+{rows_html}
+</table>
+<p>累计对照: {summary} vs {mkt_s} vs {leg_s}{diff_s}</p>
+<p>HHAD累计: {c['hhad_hit']}/{c['hhad_n']} ({c.get('hhad_rate')}%)</p>
+"""
 
 
 def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=None):
@@ -3011,8 +3151,8 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
              pred_had_dir, pred_had_odds, pred_hhad_dir, pred_hhad_odds,
              pred_top3, pred_score_main,
              had_hit, hhad_hit, score_hit,
-             pred_file, data_source, created_at, roi_return)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+             pred_file, data_source, independent_mode, created_at, roi_return)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
             (date_str, v['key'], date_str,
              v.get('home', ''), v.get('away', ''), v.get('league', ''),
              int(score_parts[0]) if len(score_parts) > 0 and score_parts[0].isdigit() else 0,
@@ -3028,7 +3168,10 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
              None if v.get('had_hit') is None else (1 if v.get('had_hit') else 0),
              None if v.get('hhad_hit') is None else (1 if v.get('hhad_hit') else 0),
              None if v.get('score_hit') is None else (1 if v.get('score_hit') else 0),
-             v.get('pred_file', ''), v.get('source', '500.com'), now, roi_return))
+             v.get('pred_file', ''), v.get('source', '500.com'),
+             # Ultra 14.3 (RULE-016): 独立模式标记随场次入库 — 漂移/CUSUM 只消费同模式数据
+             1 if '_indep' in (v.get('pred_file') or '') else 0,
+             now, roi_return))
         # Ultra 6.0: 扩展数据 (概率向量/难度/一致性/RPS/主推)
         pred = v.get('prediction', {})
         had_p = v.get('pred_had_p', '')
@@ -3102,6 +3245,17 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
                    None if _mfh is None else (1 if _mfh else 0),
                    v.get('model_vs_market'),
                    date_str, v['key']))
+        # Ultra 15.0 (进化三层-第二层): 融合源逐源概率入库 — learn_fusion_weights 回放的原料
+        # 仅当预测存档含 src_probs (独立模式 Ultra 15.0 起产出) 时写入, 旧场次保持NULL
+        try:
+            _src = (pred.get('src_probs') or {}) if isinstance(pred, dict) else {}
+            c.execute('''UPDATE verify_history SET src_poisson=?, src_elo=?, src_h2h=?
+                         WHERE verify_date=? AND match_key=?''',
+                      (_fmt_src_probs(_src.get('poisson')), _fmt_src_probs(_src.get('elo')),
+                       _fmt_src_probs(_src.get('h2h')),
+                       date_str, v['key']))
+        except Exception:
+            pass
 
     # 保存汇总统计
     total = stats.get('total', 0)
@@ -3132,14 +3286,18 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
         brier_result = calculate_brier_score(verified_matches)
     brier_score = brier_result.get('brier')
 
+    # Ultra 15.7.1 (RULE-016): 批次级模式标记 — 该批任一场次用 _indep 预测文件即为独立模式
+    # (与 verify_history 逐场 '_indep' 判定同口径)
+    _batch_indep = 1 if any('_indep' in (v.get('pred_file') or '')
+                            for v in verified_matches) else 0
     c.execute('''INSERT OR REPLACE INTO verify_stats
         (verify_date, total, has_pred, had_hits, hhad_hits, score_hits,
          had_rate, hhad_rate, score_rate, avg_goals, over25, under25,
-         lessons, created_at, avg_roi, brier_score)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+         lessons, created_at, avg_roi, brier_score, independent_mode)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
         (date_str, total, has_pred, had_hits, hhad_hits, score_hits,
          had_rate, hhad_rate, score_rate, avg_goals, over25, under25,
-         lessons_text, now, avg_roi, brier_score))
+         lessons_text, now, avg_roi, brier_score, _batch_indep))
     # Pro 3.2: 半全场统计 (单独UPDATE, 兼容旧库)
     hf_hits_val = sum(1 for v in verified_matches if v.get('hf_hit'))
     hf_rate_val = hf_hits_val / has_pred * 100 if has_pred else 0
@@ -3187,13 +3345,24 @@ def save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=Non
     conn.close()
 
 
-def get_historical_stats():
-    """从数据库获取历史累计统计"""
+def get_historical_stats(mode_filter=None):
+    """从数据库获取历史累计统计
+
+    Ultra 15.7.1 (RULE-016): mode_filter 模式隔离
+      None  = 不过滤 (向后兼容, 全部模式混合 — 旧调用方)
+      1     = 只统计独立模式批次 (当前独立模式验证的主路径)
+      0     = 只统计旧四源模式批次
+    CUSUM 漂移检测与连续低命中判断消费 recent — 必须与当前验证批次同模式,
+    否则独立模式首验会报出旧模式时代的漂移(实例 2026-08-20 起始点 2026-08-15)。
+    """
     if not os.path.exists(DB_PATH):
         return None
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA busy_timeout=5000")
     c = conn.cursor()
+    # 拼接约定: 全部查询已含 WHERE (无 WHERE 的用 WHERE 1=1 兜底), 此处只追加 AND 条件
+    _wf = ' AND independent_mode = ?' if mode_filter is not None else ''
+    _args = (mode_filter,) if mode_filter is not None else ()
 
     # 累计统计
     c.execute('''SELECT
@@ -3205,7 +3374,7 @@ def get_historical_stats():
         AVG(avg_goals) as avg_goals,
         SUM(over25) as total_over25,
         SUM(under25) as total_under25
-        FROM verify_stats''')
+        FROM verify_stats WHERE 1=1''' + _wf, _args)
     row = c.fetchone()
 
     # 逐场详细统计(有预测的)
@@ -3217,34 +3386,34 @@ def get_historical_stats():
         SUM(hf_hit) as hf_hits,
         SUM(tg_hit) as tg_hits,
         AVG(total_goals) as avg_goals
-        FROM verify_history WHERE pred_file != '无' AND pred_file != '' ''')
+        FROM verify_history WHERE pred_file != '无' AND pred_file != '' ''' + _wf, _args)
     detail = c.fetchone()
 
     # 按HAD方向统计
     c.execute('''SELECT pred_had_dir, COUNT(*), SUM(had_hit)
-        FROM verify_history WHERE pred_had_dir != '' AND pred_had_dir != '无预测'
-        GROUP BY pred_had_dir''')
+        FROM verify_history WHERE pred_had_dir != '' AND pred_had_dir != '无预测' ''' + _wf
+        + ' GROUP BY pred_had_dir', _args)
     had_dirs = c.fetchall()
 
     # 按HHAD方向统计
     c.execute('''SELECT pred_hhad_dir, COUNT(*), SUM(hhad_hit)
-        FROM verify_history WHERE pred_hhad_dir != '' AND pred_hhad_dir != '无预测'
-        GROUP BY pred_hhad_dir''')
+        FROM verify_history WHERE pred_hhad_dir != '' AND pred_hhad_dir != '无预测' ''' + _wf
+        + ' GROUP BY pred_hhad_dir', _args)
     hhad_dirs = c.fetchall()
 
     # Ultra 6.0: RPS和Log Loss历史
-    c.execute('''SELECT AVG(rps_score), AVG(log_loss) 
-        FROM verify_history WHERE rps_score IS NOT NULL''')
+    c.execute('''SELECT AVG(rps_score), AVG(log_loss)
+        FROM verify_history WHERE rps_score IS NOT NULL''' + _wf, _args)
     rps_row = c.fetchone()
-    
+
     # Ultra 6.0: 主推命中率
-    c.execute('''SELECT COUNT(*), SUM(pb_hit) 
-        FROM verify_history WHERE pb_option IS NOT NULL AND pb_option != '' ''')
+    c.execute('''SELECT COUNT(*), SUM(pb_hit)
+        FROM verify_history WHERE pb_option IS NOT NULL AND pb_option != '' ''' + _wf, _args)
     pb_row = c.fetchone()
 
-    # 最近的验证记录
+    # 最近的验证记录 (CUSUM/连续低命中的输入 — 严格同模式)
     c.execute('''SELECT verify_date, total, has_pred, had_hits, hhad_hits, score_hits, had_rate
-        FROM verify_stats ORDER BY created_at DESC LIMIT 10''')
+        FROM verify_stats WHERE 1=1''' + _wf + ' ORDER BY created_at DESC LIMIT 10', _args)
     recent_cols = ['verify_date', 'total', 'has_pred', 'had_hits', 'hhad_hits', 'score_hits', 'had_rate']
     recent = [dict(zip(recent_cols, row)) for row in c.fetchall()]
     # 修复: 查询是 created_at DESC(最新在前), 但 CUSUM 漂移检测与连续低命中判断
@@ -3675,12 +3844,12 @@ def main():
             v = verify_prediction(predictions[key], result)
             v['key'] = key
             v['source'] = result.get('source', 'sporttery')
-            # ★ 投注指南验证: 四档(主推) + 首推(补充=PDF主推)
+            # ★ 投注指南验证: 统一主推 (Ultra 15.6 并轨, 同指南/报告/PDF)
             g = verify_bet_guide(predictions[key], result)
-            v['guide_level'] = g['level']            # 四档
-            v['guide_market'] = g['primary_market']  # 首推市场 (存库用)
-            v['guide_bet'] = g['bet']                # 四档方向
-            v['guide_hit'] = g['hit']                # 四档命中
+            v['guide_level'] = g['level']            # 主推市场 HAD/HHAD
+            v['guide_market'] = g['primary_market']  # 同上 (存库用)
+            v['guide_bet'] = g['bet']                # 主推选项
+            v['guide_hit'] = g['hit']                # 主推命中
             v['primary_market'] = g['primary_market']
             v['primary_bet'] = g['primary_bet']
             v['primary_hit'] = g['primary_hit']
@@ -3698,7 +3867,7 @@ def main():
             print(f"  {key} {v['home']} {v['actual_score']} {v['away']} | "
                   f"HAD:{v['pred_had_dir']}→{v['actual_had']} {had_str} | "
                   f"HHAD:{v['pred_hhad_dir']}→{v['actual_hhad']} {hhad_str} | "
-                  f"四档[{g['level']}]{guide_str} | 首推[{g['primary_market']}]{prim_str}")
+                  f"主推[{g['level']}]{guide_str}")
         else:
             print(f"  {key} {result['home']} {result['home_score']}-{result['away_score']} {result['away']} | ⚠️ 无预测数据")
             verified_matches.append({
@@ -3758,8 +3927,8 @@ def main():
     score_hits = sum(1 for v in has_pred if v['score_hit'])
     hf_hits = sum(1 for v in has_pred if v.get('hf_hit'))
     tg_hits = sum(1 for v in has_pred if v.get('tg_hit'))
-    # ★ 投注指南统计: 四档(主推) + 首推(补充=PDF主推)
-    guide_bets = [v for v in has_pred if v.get('guide_hit') is not None]  # 四档有推荐(非avoid)
+    # ★ 投注指南统计: 统一主推 (Ultra 15.6 并轨; level=HAD/HHAD)
+    guide_bets = [v for v in has_pred if v.get('guide_hit') is not None]  # 有主推(可验)
     guide_hits = sum(1 for v in guide_bets if v['guide_hit'])
     guide_by_level = {}
     for v in guide_bets:
@@ -3769,7 +3938,7 @@ def main():
         if v['guide_hit']:
             d['hit'] += 1
     n_avoid = sum(1 for v in has_pred if v.get('guide_hit') is None)
-    # 首推补充统计
+    # 首推统计 (并轨后与主推同源, 保留列以兼容历史对账)
     primary_bets = [v for v in has_pred if v.get('primary_hit') is not None]
     primary_hits = sum(1 for v in primary_bets if v['primary_hit'])
     primary_by_market = {}
@@ -3802,15 +3971,16 @@ def main():
           f"HHAD命中{hhad_hits}/{len(hhad_denom)} ({hhad_hits/len(hhad_denom)*100:.0f}%), "
           f"比分命中{score_hits}, 半全场命中{hf_hits}, 总进球命中{tg_hits}")
     if guide_bets:
-        _lv_zh = {'draw': '🎯平局直击', 'single': '✅单选', 'cover': '⚠️双选兜底', 'avoid': '🚫避开'}
+        _lv_zh = {'HAD': '✅胜平负', 'HHAD': '🎯让球', 'draw': '🎯平局直击',
+                  'single': '✅单选', 'cover': '⚠️双选兜底', 'avoid': '🚫避开'}
         _lv_parts = []
-        for lv in ('draw', 'single', 'cover'):
+        for lv in list(guide_by_level.keys()):
             d = guide_by_level.get(lv)
             if d:
                 _lv_parts.append(f"{_lv_zh.get(lv, lv)}{d['hit']}/{d['n']}")
-        print(f"  🎯 四档主推: 命中{guide_hits}/{len(guide_bets)} ({guide_hits/len(guide_bets)*100:.1f}%, 另有🚫避开{n_avoid}场) | " + " ".join(_lv_parts))
+        print(f"  🏆 统一主推: 命中{guide_hits}/{len(guide_bets)} ({guide_hits/len(guide_bets)*100:.1f}%, 另有🚫无主推{n_avoid}场) | " + " ".join(_lv_parts))
     else:
-        print(f"  🎯 四档主推: 无可验证场次(避开{n_avoid}场)")
+        print(f"  🏆 统一主推: 无可验证场次(无主推{n_avoid}场)")
     if primary_bets:
         _pm_zh = {'HAD': '✅胜平负', 'HHAD': '🎯让球'}
         _pm_parts = []
@@ -3874,7 +4044,38 @@ def main():
     # 先入库, 再获取历史数据(含本次)
     init_db()
     save_to_db(verified_matches, stats, date_str, lessons_text, brier_result=brier_out)
-    hist_stats = get_historical_stats()
+    # Ultra 15.7.1 (RULE-016): 历史统计/CUSUM 只消费与当前批次同模式的数据 —
+    # 独立模式首验不再被旧四源模式的漂移累积污染 (此前混表报出 2026-08-15 漂移)
+    _cur_indep = 1 if any('_indep' in (v.get('pred_file') or '')
+                          for v in verified_matches) else 0
+    hist_stats = get_historical_stats(mode_filter=_cur_indep)
+
+    # Ultra 15.0 (进化三层-第一层): 独立模式账本回写 + 进化曲线 (三线对照)
+    update_mode_ledger(date_str)
+    evo_out = indep_evolution_stats()
+    _evo_cum = evo_out.get('cumulative') or {}
+    if _evo_cum.get('indep_n'):
+        _evo_diff = ''
+        if _evo_cum.get('diff_n'):
+            _evo_diff = (f" | 分歧{_evo_cum['diff_n']}场: 模型{_evo_cum.get('diff_model_rate')}%"
+                         f" vs 市场{_evo_cum.get('diff_mkt_rate')}%")
+        print(f"  📈 独立模式账本: HAD {_evo_cum['indep_hit']}/{_evo_cum['indep_n']}"
+              f"({_evo_cum.get('indep_rate')}%)"
+              f" vs 市场{_evo_cum.get('mkt_rate')}% vs 旧模式{_evo_cum.get('legacy_rate')}%"
+              f" | HHAD {_evo_cum['hhad_hit']}/{_evo_cum['hhad_n']}({_evo_cum.get('hhad_rate')}%)"
+              f"{_evo_diff}")
+    # Ultra 15.0 (进化三层-第二/三层): 验证后自动重训学习权重 + 概率校准 (冷启动护栏在各自脚本内)
+    for _mod, _label in (('learn_fusion_weights', '融合权重'),
+                         ('calibrate_indep_probs', '概率校准')):
+        try:
+            _m = __import__(_mod)
+            _msg = _m.retrain()
+            if _msg:
+                print(f"  🧠 [{_label}重训] {_msg}")
+        except ImportError:
+            pass  # 模块不存在时静默 (部署顺序无关)
+        except Exception as _e:
+            print(f"  ⚠️ [{_label}重训] 失败: {_e}")
 
     # Ultra 6.1: CUSUM模型漂移检测 (使用历史统计)
     cusum_out = None
@@ -3899,6 +4100,14 @@ def main():
 </div>"""
     html = html.replace('</div>\n</body>', regression_section + '\n\n</div>\n</body>')
 
+    # Ultra 15.0: 独立模式进化账本段 (三线对照曲线表)
+    evolution_section = f"""
+<div class="section">
+  <h2><span class="num">07</span> 独立模式进化账本 (三线对照)</h2>
+  {_indep_evolution_html(evo_out)}
+</div>"""
+    html = html.replace('</body>', evolution_section + '\n</body>')
+
     # Ultra 8.2: 直接从HTML字符串生成PDF (不保存HTML文件)
     pdf_file = os.path.join(REPORT_DIR, f'verify_{date_str.replace("-","")}.pdf')
     try:
@@ -3917,6 +4126,17 @@ def main():
             print(f"  直观版报告: {_html_report}")
     except Exception as e:
         print(f"  ⚠️ 直观版报告生成异常: {e}")
+
+    # Ultra 15.8 (2026-08-21 用户裁决): 详细回测报告 — 标准验证流程固定输出
+    # "今后的验证流程都按照这个详细回测来" — 逐场全玩法对账+概率校准分桶+
+    # 影子对照+经济账+数据驱动模式发现, 每次验证自动产出 backtest_<date>.html
+    try:
+        from gen_backtest_report import generate as _gen_backtest
+        _bt_report = _gen_backtest(date_str)
+        if _bt_report:
+            print(f"  详细回测: {_bt_report}")
+    except Exception as e:
+        print(f"  ⚠️ 详细回测报告生成异常: {e}")
 
     # Phase 6: 回归分析输出
     print("\n[Phase6] 回归分析...")

@@ -1,0 +1,36 @@
+{
+ "version": "ultra15.0-l2",
+ "trained_at": "2026-08-21 01:45:32",
+ "n_matches": 9,
+ "n_h2h": 2,
+ "min_n": 60,
+ "full_n": 150,
+ "prior_weights": {
+  "poisson": 0.5,
+  "elo": 0.4167,
+  "h2h": 0.0833
+ },
+ "half_life_days": 90,
+ "sample_range": "2026-08-20~2026-08-20",
+ "sources": {
+  "poisson": {
+   "n": 9,
+   "hit_rate": 0.4444,
+   "log_loss": 0.9589
+  },
+  "elo": {
+   "n": 9,
+   "hit_rate": 0.4444,
+   "log_loss": 1.064
+  },
+  "h2h": {
+   "n": 2,
+   "hit_rate": 0.0,
+   "log_loss": 1.2006
+  }
+ },
+ "applied": false,
+ "reason": "cold_start",
+ "progress": "9/60",
+ "note": "冷启动积累中 9/60, 启发式权重继续服役"
+}

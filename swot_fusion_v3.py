@@ -75,9 +75,18 @@ def determine_swot_lean_v3(swot_data):
     def check_key_intel(items):
         bonus = 0
         for item in items:
+            # xG量化条目 (Ultra 15.9: xG多头信号接入) — 放在最前防误匹配
+            # 中等权重1.2: λ建模已用xG(被贝叶斯收缩+市场锚稀释), 此处只对
+            # 明显差距(≥0.4/0.3)补强, 与λ通道互补而非重复计分
+            if 'xG进攻占优' in item:
+                bonus += 1.2
+            elif 'xG防守占优' in item:
+                bonus += 1.2
+            elif 'xG压迫占优' in item:
+                bonus += 0.8
             # 联赛排名相关 (第1/第2 = 强信号)
             # 修复: 用负向前瞻排除 "第10"/"第20" 等双位数误匹配 (原 '第1' in 会命中'第10')
-            if re.search(r'排名联赛第[12](?!\d)', item):
+            elif re.search(r'排名联赛第[12](?!\d)', item):
                 bonus += 2.0
             # 进攻/防守极端值
             elif '进球数第1多' in item or '进球数第2多' in item:
@@ -255,7 +264,53 @@ def _score_to_conf(score):
     return '★' * full + ('½' if score > full else '')
 
 
-def _recompute_after_flip(result, swot_dir, home_score, away_score, league=None):
+def _propagate_hhad_same_source(result, new_wdl):
+    """Ultra 15.3 (2026-08-20): SWOT迁移同源传导 — 用新HAD锚重导出HHAD展示概率
+
+    一个体系铁律: HHAD = HAD锚 × 净胜球条件形状 (margin_shape, 预测时已存)。
+    SWOT改写了HAD锚, HHAD若不跟着重导出就退回"两个世界"(HAD改了HHAD没改的旧病,
+    实例: 260820周四007 HAD胜53.8%→60% 而HHAD纹丝不动, 同场两套口径)。
+    翻转路径已由 _recompute_after_flip 整体重算(λ镜像+全量重导出), 本函数只管非翻转。
+    陷阱校准同规则复推 (15.2), 保持降级语义连续; 传导失败静默保持原展示。
+
+    Ultra 15.7: 返回新HHAD概率list[3] (未传导/失败返回None) — 供主推同源重选取用,
+    保证重选基准与展示概率严格同源; 陷阱复推优先用 resel_ctx 真实赔率(EV基准,
+    与e2e同口径), 旧批次无ctx时退回"-5pp基准+仅e2e触发过才复推"的保守行为。
+    """
+    _hh = result.get('HHAD') or {}
+    if not _hh.get('same_source'):
+        return None  # 非同源批次(旧文件/对齐失败): 保持原行为, 不强改
+    _ms = _hh.get('margin_shape')
+    try:
+        _hcap = float(_hh.get('handicap'))
+    except (TypeError, ValueError):
+        return None
+    if not _ms:
+        return None
+    try:
+        import v215_e2e as engine
+        _new_hhad, _ok = engine.align_hhad_to_had(new_wdl, None, _hcap, _ms)
+        if not _ok:
+            return None
+        # Ultra 15.7: 陷阱校准 — 有resel_ctx真实赔率按当前条件判定(与e2e同口径);
+        # 无ctx(旧批次)仅当预测时触发过才复推(保守, 退化-5pp基准)
+        _ctx_odds = ((result.get('cross_market') or {}).get('resel_ctx') or {}).get('hhad_odds')
+        if _ctx_odds or _hh.get('trap_cal_note'):
+            _new_hhad, _tn = engine.hhad_trap_downgrade(_new_hhad, _ctx_odds, _hcap)
+            _hh['trap_cal_note'] = _tn  # None=本次未触发, 诚实清掉旧注记
+        _old_p = _hh.get('p', '')
+        _hh['p'] = f"{_new_hhad[0]:.0%}/{_new_hhad[1]:.0%}/{_new_hhad[2]:.0%}"
+        if 'p_pre_swot' not in _hh:  # 幂等: 重跑不覆盖真原值
+            _hh['p_pre_swot'] = _old_p
+        _idx = _new_hhad.index(max(_new_hhad))
+        _base = ['让胜', '让平', '让负']
+        _hh['dir'] = engine._hhad_display_label(_base[_idx], _hcap)
+        return list(_new_hhad)
+    except Exception:
+        return None  # 传导失败保持原展示, 不影响主链路
+
+
+def _recompute_after_flip(result, swot_dir, home_score, away_score, league=None, had_anchor=None):
     """Ultra 14.0 (2026-08-20): SWOT翻转后 λ/比分Top3/HHAD/半全场 一致性重算
 
     修复已知瑕疵 (260819复盘#002): SWOT强信号翻转HAD方向后, lam/score.top3/HHAD/
@@ -337,8 +392,23 @@ def _recompute_after_flip(result, swot_dir, home_score, away_score, league=None)
         sc['over_high'] = scores['over_high']
 
     # --- 3. HHAD 重算 (让球线不变, 概率随新λ; 受让标签映射同引擎铁律) ---
+    # Ultra 15.3: 重算后同样走同源对齐 — HHAD = 翻转后HAD锚 × 新margin_shape,
+    # 不再直接用裸Poisson hhad_wdl (避免翻转路径回到双体系)。
     hhad_wdl = scores['hhad_wdl']  # [让胜/让平/让负] 百分数
     hhad_probs = [v / 100.0 for v in hhad_wdl]
+    _ss_ok, _al_note, _tc_note = False, None, None
+    if had_anchor:
+        try:
+            _ap, _ss_ok = engine.align_hhad_to_had(had_anchor, hhad_probs, goal_line,
+                                                   scores.get('margin_shape'))
+            if _ss_ok:
+                _al_note = (f"同源对齐: 顶概率{max(hhad_probs)*100:.0f}%→{max(_ap)*100:.0f}%")
+                hhad_probs = list(_ap)
+                _tp2, _tc_note = engine.hhad_trap_downgrade(hhad_probs, None, goal_line)
+                if _tc_note:
+                    hhad_probs = list(_tp2)
+        except Exception:
+            _ss_ok = False
     idx = hhad_probs.index(max(hhad_probs))
     hhad_base_dirs = ['让胜', '让平', '让负']
     new_hhad_dir = engine._hhad_display_label(hhad_base_dirs[idx], goal_line)
@@ -351,6 +421,11 @@ def _recompute_after_flip(result, swot_dir, home_score, away_score, league=None)
         'conf_hit_rate': hhad.get('conf_hit_rate'),
         'p': f"{hhad_probs[0]:.0%}/{hhad_probs[1]:.0%}/{hhad_probs[2]:.0%}",
         'poisson': '/'.join(f"{v}" for v in hhad_wdl),
+        # Ultra 15.2/15.3: 同源体系痕迹 (与主链路字段口径一致)
+        'same_source': _ss_ok,
+        'align_note': _al_note,
+        'trap_cal_note': _tc_note,
+        'margin_shape': scores.get('margin_shape'),
     }
 
     # --- 4. 半全场重算 (方向类玩法一并对齐) ---
@@ -380,7 +455,89 @@ def _recompute_after_flip(result, swot_dir, home_score, away_score, league=None)
         'score_top3': sc.get('top3', '') if isinstance(sc, dict) else '',
         'hhad_dir': new_hhad_dir,
         'boosted': boosted,
+        # Ultra 15.7: 翻转路径重选基准 — 同源对齐+陷阱校准后的HHAD概率
+        # (与result['HHAD']['p']展示严格同源; 对齐失败为None → 跳过主推重选)
+        'hhad_probs': list(hhad_probs) if _ss_ok else None,
+        'same_source': _ss_ok,
     }
+
+
+def _reselect_cross_market(result, new_wdl, new_hhad_probs):
+    """Ultra 15.7 (2026-08-20 用户裁决): SWOT迁移后主推同源重选 — 消灭选推/展示两时点分裂
+
+    根因: e2e在SWOT迁移【前】完成cross_market选推(主推/双选/纯方向/洞察), 融合改写
+    HAD/HHAD展示概率后, 主推仍是旧概率世界的产物 — 同一份报告里 "主推76.6%" 与
+    "让球盘72%" 并存 (实例260820周四005); 严重时主推选项本身已不是迁移后体系的
+    argmax (周四007: HAD胜53.8%→60% 后仍主推HHAD让负54.8%→40%)。
+
+    方案 (轻量·零逻辑分叉): e2e把重选上下文(两盘h/d/a赔率+λ)存入 cross_market.resel_ctx,
+    融合侧调用【同一个引擎函数】compute_cross_market_value 以迁移后概率整体重算 —
+    排序规则/陷阱护栏/双选对齐/洞察文案与e2e完全同源, 不存在第二套选推逻辑;
+    重算后的cross_market自带新resel_ctx (重选自身可同源重跑; 注意整体重跑融合脚本
+    会对HAD p二次迁移, 手动重融合应以未融合的预测文件为基准)。
+
+    守卫(任一不满足→返回None, 保持原推荐, 与旧行为一致):
+      · 无 resel_ctx (旧批次文件)
+      · HHAD非同源 (对齐失败/未传导 — 概率两世界, 重选无意义)
+      · 引擎调用异常
+
+    返回重选痕迹dict {from, to, changed, note} 或 None。
+    """
+    cm = result.get('cross_market') or {}
+    ctx = cm.get('resel_ctx')
+    if not ctx or not new_wdl or not new_hhad_probs:
+        return None
+    hh = result.get('HHAD') or {}
+    if not hh.get('same_source'):
+        return None
+    try:
+        import v215_e2e as engine
+        # λ: 翻转路径已被 _recompute_after_flip 更新, 优先读 result 当前值
+        lam_h, lam_a = (ctx.get('lam') or [None, None])
+        try:
+            _lh, _la = [float(x) for x in str(result.get('lam', '')).split('/')]
+            lam_h, lam_a = _lh, _la
+        except (ValueError, TypeError):
+            pass
+        # handicap 归一化: JSON里的 goalLine 可能为字符串, 引擎 is_integer_handicap
+        # 判定要求数值 — 字符串会 TypeError 被 except 吞掉导致重选静默失效
+        _hcap = float(hh.get('handicap'))
+        new_cm = engine.compute_cross_market_value(
+            list(new_wdl), ctx.get('had_odds'), list(new_hhad_probs),
+            ctx.get('hhad_odds'), _hcap, lam_h, lam_a,
+            mode='prob', difficulty=result.get('difficulty'))
+    except Exception:
+        return None
+    if not isinstance(new_cm, dict) or not new_cm.get('primary_bet'):
+        return None
+    old_pb = cm.get('primary_bet') or {}
+    new_pb = new_cm.get('primary_bet') or {}
+    # Ultra 15.8-C (2026-08-21): EV未校准标注跨SWOT重选传递 —
+    # ev_uncalibrated/ev_calib_n 由e2e在compute_cross_market_value【之后】单独注入,
+    # 重算的new_cm不含这两键; 不回填则SWOT重选过的场次渲染层丢失"⚠未校准"警示
+    # (实证260821周五: 11场仅1场带标注, 其余均为SWOT重选清除了标志)。
+    for _k in ('ev_uncalibrated', 'ev_calib_n'):
+        if _k in cm:
+            new_cm[_k] = cm[_k]
+    # 痕迹: 预迁移主推存档 (审计/渲染层可追溯"重选前后")
+    new_cm['pre_swot_primary'] = {
+        'market': old_pb.get('market'), 'option': old_pb.get('option'),
+        'prob': old_pb.get('prob')}
+    new_cm['swot_resel'] = True
+    result['cross_market'] = new_cm
+    changed = (old_pb.get('option') != new_pb.get('option'))
+    _op, _np = old_pb.get('prob'), new_pb.get('prob')
+    if changed:
+        note = (f"主推重选: {old_pb.get('option','')}({_op}%)→"
+                f"{new_pb.get('option','')}({_np}%)")
+    elif (isinstance(_op, (int, float)) and isinstance(_np, (int, float))
+            and abs(_np - _op) >= 0.5):
+        note = f"主推概率同步: {_op}%→{_np}%"
+    else:
+        note = ''
+    return {'from': f"{old_pb.get('option','')}@{_op}%",
+            'to': f"{new_pb.get('option','')}@{_np}%",
+            'changed': changed, 'note': note}
 
 
 def fuse_swot_into_predictions(pred_file):
@@ -512,11 +669,22 @@ def fuse_swot_into_predictions(pred_file):
                     try:
                         _rc = _recompute_after_flip(
                             result, _flip_dir, home_score, away_score,
-                            m.get('league', ''))
+                            m.get('league', ''), had_anchor=new_wdl)
                     except Exception:
                         _rc = None
                     if _rc:
                         prob_adjust['recomputed'] = _rc
+                # ===== Ultra 15.3 (2026-08-20): SWOT迁移同源传导 =====
+                # 非翻转路径: HAD锚迁移后, HHAD按 margin_shape 同源重导出, 消灭
+                # "HAD改了HHAD没改"的双体系展示。翻转路径已由 _recompute_after_flip
+                # 整体重算(λ镜像+HHAD重导出), 不走此分支。
+                # Ultra 15.7: 捕获重导出后的HHAD概率(None=未传导/失败/对齐失败) —
+                # 主推重选的基准, 与展示概率严格同源。
+                _resel_hhad = None
+                if not prob_adjust['flipped']:
+                    _resel_hhad = _propagate_hhad_same_source(result, new_wdl)
+                else:
+                    _resel_hhad = (prob_adjust.get('recomputed') or {}).get('hhad_probs')
                 # 同步调整比分矩阵的wdl汇总 (保持顶层一致)
                 # Ultra 14.0: 翻转且重算成功时 score 已整体重算(含wdl), 此处仅未翻转/
                 # 重算失败时做旧式数值同步
@@ -529,6 +697,18 @@ def fuse_swot_into_predictions(pred_file):
                             if all(v > 0 for v in sc_vals):
                                 new_sc, _, _ = apply_swot_prob_shift(sc_vals, home_score, away_score)
                                 sc['wdl'] = f"{new_sc[0]*100:.1f}/{new_sc[1]*100:.1f}/{new_sc[2]*100:.1f}"
+                # ===== Ultra 15.7 (2026-08-20 用户裁决): SWOT迁移后主推同源重选 =====
+                # 消灭选推/展示两时点分裂: 主推以迁移后(HAD, HHAD)概率用同一引擎函数
+                # 整体重算 — 选项可能变(周四007型: HAD胜53.8%→60%后仍主推HHAD让负
+                # 54.8%→40%), 也可能只同步概率(周四005型: 主推76.6% vs 展示72%)。
+                # 任一守卫不满足 → 保持原推荐, 与旧行为完全一致。
+                try:
+                    _resel = _reselect_cross_market(result, new_wdl, _resel_hhad)
+                except Exception:
+                    _resel = None
+                if _resel:
+                    prob_adjust['primary_reselect'] = _resel
+                    result.setdefault('v611_flags', {})['swot_primary_reselected'] = True
         
         # 当前模型方向 (概率调整后)
         model_dir = had.get('dir', '')
@@ -578,6 +758,12 @@ def fuse_swot_into_predictions(pred_file):
             consistency = '不一致'
             conf_adjust = '-0.5★'
             fusion_advice = '⚠️ SWOT与模型方向不一致, 置信度降低-0.5★'
+        
+        # Ultra 15.7: 主推重选痕迹透出 (选推/展示两时点分裂修复的可见性 —
+        # 选项变更与概率同步两种场景都让用户在融合建议里看得到)
+        _rs_note = ((prob_adjust or {}).get('primary_reselect') or {}).get('note')
+        if _rs_note:
+            fusion_advice += f" [{_rs_note}]"
         
         # Ultra 6.4: 置信度调整实际生效 (不再只是建议文案)
         conf_score = _conf_to_score(had.get('conf', ''))
@@ -670,6 +856,11 @@ def fuse_swot_into_predictions(pred_file):
             'conf_adjust': conf_adjust,
             'fusion_advice': fusion_advice,
             'source_url': swot_data.get('swot_url', ''),
+            # Ultra 15.9: 情报源构成 (leisu+stats+xg 多源交叉 / 单源) —
+            # 多源共识的倾向比单源叙述更可信, 报告层展示
+            'intel_source': swot_data.get('source', ''),
+            'intel_items': (len(_swot_out['home_strengths']) + len(_swot_out['home_weaknesses']) +
+                            len(_swot_out['away_strengths']) + len(_swot_out['away_weaknesses'])),
             'fused_at': now_str,
             'trend': trend,
             'sample_warning': sample_warning,  # 优化②: 小样本警示(None=样本充足)

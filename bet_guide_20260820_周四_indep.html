@@ -5,36 +5,35 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 h1{font-size:21px;font-weight:800}
 .sub{color:#64748b;font-size:12.5px;margin-top:4px}
 .card{background:#fff;border-radius:14px;padding:16px;margin:14px 0;box-shadow:0 1px 4px rgba(15,23,42,.07)}
-.legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.lg{flex:1;min-width:150px;border-radius:10px;padding:10px;font-size:12px;line-height:1.5}
-.lg.single{background:#f0fdf4;border:1px solid #86efac}
-.lg.cover{background:#fffbeb;border:1px solid #fcd34d}
-.lg.avoid{background:#fef2f2;border:1px solid #fca5a5}
-.lg.draw{background:#fefce8;border:1px solid #facc15}
-.lg b{font-size:14px;display:block;margin-bottom:3px}
 .stat{display:flex;gap:10px;margin-top:10px}
 .st{flex:1;text-align:center;background:#f8fafc;border-radius:10px;padding:10px}
 .st b{font-size:22px;display:block}
 .st span{font-size:11px;color:#64748b}
 .st.s1 b{color:#16a34a} .st.s2 b{color:#d97706} .st.s3 b{color:#dc2626}
 .mc{background:#fff;border-radius:12px;padding:13px 14px;margin:10px 0;border-left:5px solid #cbd5e1;box-shadow:0 1px 3px rgba(15,23,42,.06)}
-.mc.single{border-left-color:#16a34a} .mc.cover{border-left-color:#f59e0b} .mc.avoid{border-left-color:#dc2626;background:#fafafa} .mc.draw{border-left-color:#eab308;background:linear-gradient(135deg,#fffbeb,#fefce8)}
+.mc.single{border-left-color:#16a34a} .mc.cover{border-left-color:#f59e0b}
 .mc-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .mc-no{font-weight:800;color:#334155;background:#eef2f7;border-radius:6px;padding:2px 8px;font-size:12px}
 .mc-time{color:#0ea5e9;font-weight:700;font-size:12px;font-variant-numeric:tabular-nums}
 .mc-lg{color:#94a3b8;font-size:11px}
 .mc-teams{font-size:14px;flex:1}
+.mc-conf{color:#b45309;font-size:12px}
 .mc-tag{font-size:12px;font-weight:700;border-radius:6px;padding:3px 8px}
-.mc-tag.single{background:#dcfce7;color:#15803d} .mc-tag.cover{background:#fef3c7;color:#b45309} .mc-tag.avoid{background:#fee2e2;color:#b91c1c} .mc-tag.draw{background:#fef9c3;color:#92400e}
-.mc-rec{font-size:17px;font-weight:800;color:#0f172a;margin:9px 0 4px}
-.mc.avoid .mc-rec{color:#9ca3af}
-.mc-draw-strike{background:linear-gradient(135deg,#fef3c7,#fef9c3);border:1px solid #f59e0b;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;color:#92400e;line-height:1.5}
+.mc-tag.single{background:#dcfce7;color:#15803d} .mc-tag.cover{background:#fef3c7;color:#b45309}
+.mc-rec{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:10px 0 5px;padding:10px 13px;border-radius:10px;background:linear-gradient(135deg,#fffbeb,#fde68a);border:2px solid #f59e0b}
+.mc.single .mc-rec{background:linear-gradient(135deg,#f0fdf4,#bbf7d0);border-color:#16a34a}
+.rec-badge{font-size:12px;font-weight:800;color:#fff;background:#f59e0b;border-radius:6px;padding:3px 9px;letter-spacing:2px}
+.mc.single .rec-badge{background:#16a34a}
+.rec-opt{font-size:21px;font-weight:800;color:#0f172a;letter-spacing:.5px}
+.chip{font-size:12.5px;font-weight:700;color:#334155;background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:3px 10px;font-variant-numeric:tabular-nums}
+.chip.odds{color:#b45309;border-color:#fcd34d;background:#fffbeb}
+.chip.ev{color:#15803d;border-color:#86efac;background:#f0fdf4}
+.mc-trap{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#fef2f2;border:1px solid #f87171;color:#b91c1c;font-weight:600}
+.mc-sub{font-size:12.5px;margin:5px 0;padding:7px 9px;border-radius:8px;line-height:1.6;background:#f8fafc;border:1px dashed #cbd5e1;color:#475569}
+.mc-sub b{color:#1f2937}
+.mc-draw-strike{background:linear-gradient(135deg,#fef3c7,#fef9c3);border:1px solid #f59e0b;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:12.5px;color:#92400e;line-height:1.6}
 .mc-draw-strike b{color:#b45309}
-.mc-draw-value{background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1px solid #7dd3fc;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;color:#0c4a6e;line-height:1.5}
-.mc-draw-value b{color:#0369a1}
-.mc-meta{font-size:11px;color:#94a3b8}
-.mc-reason{font-size:12px;color:#475569;margin-top:6px;line-height:1.6;background:#f8fafc;border-radius:8px;padding:8px 10px}
-.mc-primary{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#f0f9ff;border:1px dashed #93c5fd;color:#1d4ed8}
+.mc-meta{font-size:11px;color:#94a3b8;margin-top:6px;line-height:1.7}
 .mc-mkt-div{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#fef2f2;border:1px solid #f87171;color:#b91c1c;font-weight:600}
 .mc-sample{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;background:#fff7ed;border:1px dashed #fb923c;color:#c2410c}
 .mc-intent{font-size:12px;margin:6px 0;padding:7px 9px;border-radius:8px;line-height:1.5;font-weight:600}
@@ -42,171 +41,112 @@ h1{font-size:21px;font-weight:800}
 .mc-intent.bk-confirm{background:#f7fee7;border:1px solid #a3e635;color:#4d7c0f}
 .mc-intent.bk-caution{background:#fffbeb;border:1px solid #fbbf24;color:#b45309}
 .mc-intent.bk-fade{background:#fef2f2;border:2px solid #dc2626;color:#b91c1c}
+.mc-reason{font-size:12px;color:#475569;margin-top:6px;line-height:1.6;background:#f8fafc;border-radius:8px;padding:8px 10px}
 .sec{font-size:15px;font-weight:800;margin:16px 0 4px}
-.ins{padding:11px 13px;border-radius:8px;font-size:12.5px;margin:8px 0;line-height:1.7;border-left:4px solid}
-.ins.good{background:#f0fdf4;border-color:#16a34a} .ins.warn{background:#fffbeb;border-color:#f59e0b} .ins.bad{background:#fef2f2;border-color:#dc2626}
+.ins{padding:11px 13px;border-radius:8px;font-size:12.5px;margin:8px 0;line-height:1.7;border-left:4px solid #94a3b8;background:#f8fafc}
 .foot{text-align:center;color:#94a3b8;font-size:11px;margin:18px 0}
 </style></head><body>
-<h1>🎯 投注选择指南</h1>
-<div class="sub">20260820_周四_indep · 9 场 · 四档主推 + 首推参考</div>
-<div class="ins warn" style="margin:10px 0">🔭 <b>独立模式账本</b>：本指南由独立预测生成 — 赔率零输入，仅 xG-Poisson + Elo + SWOT情报 三要素决策；体彩赔率只作"影子对照"记录，赛后与市场热门双账本对账，检验独立模型 vs 市场谁更准。</div>
+<h1>🎯 投注选择指南（统一主推）</h1>
+<div class="sub">20260820_周四_indep · 9 场 · 与预测报告同一主推口径（命中率优先 · 同源概率 · 陷阱校准）</div>
 
-<div class="card"><div class="sec" style="margin-top:0">📖 四档图例（主推）</div>
-<div class="legend">
-  <div class="lg draw"><b>🎯 平局直击</b>平局为最高概率，直接买平局</div>
-  <div class="lg single"><b>✅ 单选</b>方向明确，照主推买</div>
-  <div class="lg cover"><b>⚠️ 双选兜底</b>平局高发，买 HHAD 覆盖项（含平局）</div>
-  <div class="lg avoid"><b>🚫 避开</b>方向性误判高发，不买</div>
+<div class="card">
+  <div class="stat"><div class="st"><b>9</b><span>场次</span></div><div class="st s1"><b>1</b><span>✅ 主推·胜平负</span></div><div class="st s2"><b>8</b><span>🎯 主推·让球</span></div><div class="st s3"><b>4</b><span>P≥65% 高把握</span></div></div>
+  <div class="ins" style="margin-top:10px">🔗 <b>串关参考（Top3 概率）</b>：周四005 受让胜 + 周四001 受让胜 + 周四009 让负。2-3 关为宜，宁缺毋滥。</div>
+  <div class="ins">📌 <b>口径说明</b>：每场唯一主推=概率最高单选；双选/纯方向/平局参考为次选补充，同一体系。平局玩法仅为小注参考（🎯直击/💡价值），不占主推位。</div>
 </div>
-<div class="stat">
-  <div class="st s1"><b>0</b><span>🎯 平局直击</span></div>
-  <div class="st s1"><b>8</b><span>✅ 可单选</span></div>
-  <div class="st s2"><b>1</b><span>⚠️ 双选兜底</span></div>
-  <div class="st s3"><b>0</b><span>🚫 避开</span></div>
-</div>
-<div class="ins" style="margin-top:10px">📌 <b>首推参考（命中率优先，仅补充）</b>：✅胜平负 2 场 · 🎯让球 7 场。首推=预测PDF「主推」，与四档主推并存，仅供参考。</div>
-</div>
-
-<div class="card"><div class="sec" style="margin-top:0">🎯 投注建议</div><div class="ins good">✅ <b>可单选 8 场</b>：周四001(负 @1.17) + 周四002(负) + 周四003(胜 @1.86) + 周四005(胜 @4.25) + 周四006(胜 @1.53) + 周四007(胜 @1.4) + 周四008(胜 @1.61) + 周四009(让胜 @2.08)。建议 <b>2-3 关</b> 组合（容错高），不要 6 场全选。</div><div class="ins warn">⚠️ <b>双选兜底 1 场</b>：周四004(受让胜 @1.68)。平局高发，务必买 HHAD 覆盖项而非胜平负单选。</div><div class="ins draw">💡 <b>平局价值 1 场</b>：周四004(平@3.00)。回测该档(平P≥26%且差≤10pp)平局率33%、优于热门方向EV，平局@~3.0接近正期望值。建议用主推的<b>1/3本金</b>小注博高赔，不影响主推收益。</div><div class="ins">📌 <b>首推参考(命中率优先)</b>：✅胜平负2场 · 🎯让球7场。首推=预测PDF「主推」，仅作补充参考，主推以四档为准。</div></div>
 
 <div class="sec">📋 每场选择</div>
-<div class="mc single">
+<div class="mc cover">
   <div class="mc-top"><span class="mc-no">周四001</span>
     <span class="mc-time">02:00</span><span class="mc-lg">沙职</span>
     <span class="mc-teams"><b>迈季宽广</b> vs 利雅新月</span>
-    <span class="mc-tag single">✅ 单选</span></div>
-  <div class="mc-rec">负 @1.17 (胜平负)</div>
-  <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD受让胜 @2.03</b> P=74%</div>
-  <div class="mc-mkt-div">🔭 影子对照(幅度偏离): 独立意见负42% vs 市场热门负84%, 差42pp — 独立模式: 赔率仅作对照记录, 不参与决策, 赛后双账本对账</div>
-  
-  
-  
-  
-  <div class="mc-meta">概率 25/25/49% · ★★★½ · 可预测性 50.6 · 一致性 67%</div>
-  <div class="mc-reason">方向P49%明确, 平P25%可控</div>
-</div><div class="mc single">
+    <span class="mc-conf">★★★</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD受让胜</span><span class='chip odds'>@2.1</span><span class='chip'>P=72.2%</span><span class='chip ev'>EV=+51.6%</span></div>
+  <div class='mc-sub'>⑵ 双选: <b>HHAD受让胜受让平双选 @2.41</b> P=89.4% EV=+7.9% · 深盘(让+2.0)历史穿盘率仅36%,双选陷阱风险高</div><div class='mc-sub'>⑶ 纯方向: <b>HAD负 @1.15</b> P=41.7% EV=-52.0%</div><div class='mc-mkt-div'>🔭 影子对照(幅度偏离): 独立意见负42% vs 市场热门负86%, 差44pp</div>
+  <div class="mc-meta">概率(胜/平/负) 25/26/49 | 让球 73/19/9% · ★★★ · 可预测性 50.6 · 一致性 67%</div>
+  <div class="mc-reason">[命中优先]主推HHAD受让胜@2.1(P=72.2%,EV=51.6%)。HHAD主推HHAD受让胜@2.1(P=72.2%,EV=51.6%)。纯方向HAD负@1.15(P=41.7%,EV=-52.0%)。双选并列主推HHAD受让胜受让平双选@2.41(P=89.4%,EV…</div>
+</div><div class="mc cover">
   <div class="mc-top"><span class="mc-no">周四002</span>
     <span class="mc-time">03:00</span><span class="mc-lg">西甲</span>
     <span class="mc-teams"><b>巴列卡诺</b> vs 阿拉维斯</span>
-    <span class="mc-tag single">✅ 单选</span></div>
-  <div class="mc-rec">负 (赔率以盘口为准) (胜平负)</div>
-  <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让负 @1.61</b> P=58%</div>
-  
-  
-  
-  
-  
-  <div class="mc-meta">概率 25/27/48% · ★★★½ · 可预测性 62.3 · 一致性 100%</div>
-  <div class="mc-reason">方向P48%明确, 平P27%可控</div>
-</div><div class="mc single">
+    <span class="mc-conf">★★★</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD让负</span><span class='chip odds'>@1.58</span><span class='chip'>P=57.6%</span><span class='chip ev'>EV=-8.9%</span></div>
+  <div class='mc-sub'>⑵ 双选: <b>HHAD让平让负双选 @2.11</b> P=82.3% EV=-13.2%</div><div class='mc-sub'>⑶ 纯方向: <b>HAD胜 @2.07</b> P=43.4% EV=-10.2%</div>
+  <div class="mc-meta">概率(胜/平/负) 24/27/48 | 让球 8/15/78% · ★★★ · 可预测性 63.0 · 一致性 100%</div>
+  <div class="mc-reason">[命中优先]主推HHAD让负@1.58(P=57.6%,EV=-8.9%)。HHAD主推HHAD让负@1.58(P=57.6%,EV=-8.9%)。纯方向HAD胜@2.07(P=43.4%,EV=-10.2%)。双选并列主推HHAD让平让负双选@2.11(P=82.3%,EV=-…</div>
+</div><div class="mc cover">
   <div class="mc-top"><span class="mc-no">周四003</span>
     <span class="mc-time">08:30</span><span class="mc-lg">解放者杯</span>
     <span class="mc-teams"><b>科林蒂安</b> vs 罗萨里奥</span>
-    <span class="mc-tag single">✅ 单选</span></div>
-  <div class="mc-rec">胜 @1.86 (胜平负)</div>
-  <div class="mc-primary">📌 首推参考(命中率优先): <b>HAD胜 @1.86</b> P=52%</div>
-  
-  
-  <div class="mc-sample">⚠️ 小样本警示: 罗萨里奥(n=2) xG样本不足3场, 其统计性优劣势已标注(共2条), 参考价值有限</div>
-  
-  
-  <div class="mc-meta">概率 47/27/27% · ★½ · 可预测性 71.2 · 一致性 100%</div>
-  <div class="mc-reason">方向P47%明确, 平P27%可控</div>
+    <span class="mc-conf">★</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD让负</span><span class='chip odds'>@1.71</span><span class='chip'>P=60.4%</span><span class='chip ev'>EV=+3.2%</span></div>
+  <div class='mc-sub'>⑵ 双选: <b>HAD胜平双选 @2.21</b> P=69.8% EV=-22.9%</div><div class='mc-sub'>⑶ 纯方向: <b>HAD胜 @1.86</b> P=39.6% EV=-26.3%</div><div class='mc-draw-strike'>💡 平局价值参考: <b>平 @3.00</b> (胜平负) — 平P30%距最高方向35%仅0pp — 回测该档平局率33%, 优于热门方向EV, 建议1/3本金小注</div><div class='mc-sample'>⚠️ 小样本警示: 罗萨里奥(n=2) xG样本不足3场, 其统计性优劣势已标注(共2条), 参考价值有限</div>
+  <div class="mc-meta">概率(胜/平/负) 35/30/35 | 让球 9/24/67% · ★ · 可预测性 55.9 · 一致性 100%</div>
+  <div class="mc-reason">[命中优先]主推HHAD让负@1.71(P=60.4%,EV=3.2%)。HHAD主推HHAD让负@1.71(P=60.4%,EV=3.2%)。纯方向HAD胜@1.86(P=39.6%,EV=-26.3%)。双选并列主推HHAD让平让负双选@2.08(P=83.7%,EV=-12…</div>
 </div><div class="mc cover">
   <div class="mc-top"><span class="mc-no">周四004</span>
     <span class="mc-time">23:00</span><span class="mc-lg">欧罗巴</span>
     <span class="mc-teams"><b>阿拉木图</b> vs 安德莱</span>
-    <span class="mc-tag cover">⚠️ 双选兜底</span></div>
-  <div class="mc-rec">受让胜 @1.68 (让球·覆盖平局)</div>
-  <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD受让胜 @1.68</b> P=61%</div>
-  <div class="mc-mkt-div">🔭 影子对照(方向相反): 独立意见胜40% vs 市场热门负49%, 差15pp — 独立模式: 赔率仅作对照记录, 不参与决策, 赛后双账本对账</div>
-  
-  
-  
-  <div class="mc-draw-value">💡 平局价值: <b>平 @3.00</b> (胜平负·小注) — 平P30%距胜P38% 8pp — 回测该档平局率33%, 优于热门方向EV, 建议1/3本金小注博平 [杯赛]</div>
-  <div class="mc-meta">概率 38/30/32% · ★½ · 可预测性 52.6 · 一致性 100%</div>
-  <div class="mc-reason">平P30%且方向P38%模糊 — 平局高发, HAD单选易漏平 [杯赛]</div>
-</div><div class="mc single">
+    <span class="mc-conf">★½</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD受让胜</span><span class='chip odds'>@1.56</span><span class='chip'>P=66.3%</span><span class='chip ev'>EV=+3.4%</span></div>
+  <div class='mc-sub'>⑵ 双选: <b>HHAD受让胜受让平双选 @2.0</b> P=84.5% EV=-15.5%</div><div class='mc-sub'>⑶ 纯方向: <b>HAD胜 @3.25</b> P=39.3% EV=+27.6%</div><div class='mc-draw-strike'>💡 平局价值参考: <b>平 @3.00</b> (胜平负) — 平P30%距最高方向38%仅0pp — 回测该档平局率33%, 优于热门方向EV, 建议1/3本金小注</div>
+  <div class="mc-meta">概率(胜/平/负) 38/30/32 | 让球 68/18/15% · ★½ · 可预测性 52.4 · 一致性 100%</div>
+  <div class="mc-reason">[命中优先]主推HHAD受让胜@1.56(P=66.3%,EV=3.4%)。HHAD主推HHAD受让胜@1.56(P=66.3%,EV=3.4%)。纯方向HAD胜@3.25(P=39.3%,EV=27.6%)。双选并列主推HHAD受让胜受让平双选@2.0(P=84.5%,EV=-…</div>
+</div><div class="mc cover">
   <div class="mc-top"><span class="mc-no">周四005</span>
     <span class="mc-time">00:00</span><span class="mc-lg">欧罗巴</span>
     <span class="mc-teams"><b>米亚尔比</b> vs 萨尔茨堡</span>
-    <span class="mc-tag single">✅ 单选</span></div>
-  <div class="mc-rec">胜 @4.25 (胜平负)</div>
-  <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD受让胜 @2.09</b> P=69%</div>
-  <div class="mc-mkt-div">🔭 影子对照(方向相反): 独立意见胜52% vs 市场热门负62%, 差38pp — 独立模式: 赔率仅作对照记录, 不参与决策, 赛后双账本对账</div>
-  
-  
-  
-  
-  <div class="mc-meta">概率 47/24/29% · ★½ · 可预测性 73.7 · 一致性 100%</div>
-  <div class="mc-reason">方向P47%明确, 平P24%可控</div>
-</div><div class="mc single">
+    <span class="mc-conf">★½</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD受让胜</span><span class='chip odds'>@2.04</span><span class='chip'>P=76.6%</span><span class='chip ev'>EV=+56.3%</span></div>
+  <div class='mc-sub'>⑵ 双选: <b>HAD平负双选 @2.69</b> P=48.3% EV=-35.2%</div><div class='mc-sub'>⑶ 纯方向: <b>HAD胜 @4.2</b> P=51.7% EV=+117.3%</div><div class='mc-mkt-div'>🔭 影子对照(方向相反): 独立意见胜52% vs 市场热门负60%, 差36pp</div>
+  <div class="mc-meta">概率(胜/平/负) 47/25/28 | 让球 72/17/12% · ★½ · 可预测性 72.7 · 一致性 100%</div>
+  <div class="mc-reason">[命中优先]主推HHAD受让胜@2.04(P=76.6%,EV=56.3%)。HHAD主推HHAD受让胜@2.04(P=76.6%,EV=56.3%)。纯方向HAD胜@4.2(P=51.7%,EV=117.3%)。双选保险HAD胜平双选@4.04(P=76.6%,EV=54.7%…</div>
+</div><div class="mc cover">
   <div class="mc-top"><span class="mc-no">周四006</span>
     <span class="mc-time">01:00</span><span class="mc-lg">欧罗巴</span>
     <span class="mc-teams"><b>特拉布宗</b> vs 费伦茨</span>
-    <span class="mc-tag single">✅ 单选</span></div>
-  <div class="mc-rec">胜 @1.53 (胜平负)</div>
-  <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让胜 @2.65</b> P=66%</div>
-  
-  
-  
-  
-  
-  <div class="mc-meta">概率 57/26/17% · ★ · 可预测性 79.8 · 一致性 100%</div>
-  <div class="mc-reason">方向P57%明确, 平P26%可控</div>
+    <span class="mc-conf">½</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD让负</span><span class='chip odds'>@2.19</span><span class='chip'>P=59.3%</span><span class='chip ev'>EV=+29.9%</span></div>
+  <div class='mc-sub'>⑵ 双选: <b>HAD胜平双选 @2.44</b> P=67.7% EV=-17.4%</div><div class='mc-sub'>⑶ 纯方向: <b>HAD胜 @1.5</b> P=40.7% EV=-39.0%</div><div class='mc-mkt-div'>🔭 影子对照(幅度偏离): 独立意见胜41% vs 市场热门胜64%, 差24pp</div>
+  <div class="mc-meta">概率(胜/平/负) 39/27/34 | 让球 19/20/61% · ½ · 可预测性 55.1 · 一致性 100%</div>
+  <div class="mc-reason">[命中优先]主推HHAD让负@2.19(P=59.3%,EV=29.9%)。HHAD主推HHAD让负@2.19(P=59.3%,EV=29.9%)。纯方向HAD胜@1.5(P=40.7%,EV=-39.0%)。双选并列主推HHAD让平让负双选@2.47(P=80.1%,EV=-0…</div>
 </div><div class="mc single">
   <div class="mc-top"><span class="mc-no">周四007</span>
     <span class="mc-time">01:00</span><span class="mc-lg">欧罗巴</span>
     <span class="mc-teams"><b>波兹南</b> vs 图恩</span>
-    <span class="mc-tag single">✅ 单选</span></div>
-  <div class="mc-rec">胜 @1.4 (胜平负)</div>
-  <div class="mc-primary">📌 首推参考(命中率优先): <b>HAD胜 @1.4</b> P=75%</div>
-  
-  
-  
-  
-  
-  <div class="mc-meta">概率 78/20/2% · ★★½ · 可预测性 84.8 · 一致性 100%</div>
-  <div class="mc-reason">方向P78%明确, 平P20%可控</div>
-</div><div class="mc single">
+    <span class="mc-conf">★★½</span>
+    <span class="mc-tag single">✅ 主推·胜平负</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HAD胜</span><span class='chip odds'>@1.32</span><span class='chip'>P=53.8%</span><span class='chip ev'>EV=-29.0%</span></div>
+  <div class='mc-sub'>⑵ 双选: <b>HAD胜平双选 @2.3</b> P=77.2% EV=-11.2%</div><div class='mc-mkt-div'>🔭 影子对照(幅度偏离): 独立意见胜54% vs 市场热门胜74%, 差20pp</div>
+  <div class="mc-meta">概率(胜/平/负) 60/23/17 | 让球 30/30/40% · ★★½ · 可预测性 76.2 · 一致性 100%</div>
+  <div class="mc-reason">[命中优先]主推HAD胜@1.32(P=53.8%,EV=-29.0%)。HHAD主推HHAD让负@2.82(P=46.2%,EV=30.2%)。双选保险HAD胜平双选@2.3(P=77.2%,EV=-11.2%)。EV参考: HAD负(EV=50.2%)比主推高79%, 命中率…</div>
+</div><div class="mc cover">
   <div class="mc-top"><span class="mc-no">周四008</span>
     <span class="mc-time">02:00</span><span class="mc-lg">欧罗巴</span>
     <span class="mc-teams"><b>贝红星</b> vs 比尔森</span>
-    <span class="mc-tag single">✅ 单选</span></div>
-  <div class="mc-rec">胜 @1.61 (胜平负)</div>
-  <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让负 @2.01</b> P=59%</div>
-  
-  
-  
-  
-  
-  <div class="mc-meta">概率 44/27/28% · ★½ · 可预测性 62.6 · 一致性 100%</div>
-  <div class="mc-reason">方向P44%明确, 平P27%可控</div>
-</div><div class="mc single">
+    <span class="mc-conf">★★</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD让负</span><span class='chip odds'>@2.01</span><span class='chip'>P=54.9%</span><span class='chip ev'>EV=+10.4%</span></div>
+  <div class='mc-sub'>⑵ 双选: <b>HAD胜平双选 @2.36</b> P=70.5% EV=-16.7%</div><div class='mc-sub'>⑶ 纯方向: <b>HAD胜 @1.61</b> P=45.1% EV=-27.4%</div>
+  <div class="mc-meta">概率(胜/平/负) 44/28/28 | 让球 20/24/57% · ★★ · 可预测性 61.8 · 一致性 100%</div>
+  <div class="mc-reason">[命中优先]主推HHAD让负@2.01(P=54.9%,EV=10.4%)。HHAD主推HHAD让负@2.01(P=54.9%,EV=10.4%)。纯方向HAD胜@1.61(P=45.1%,EV=-27.4%)。双选并列主推HHAD让平让负双选@2.41(P=79.4%,EV=-…</div>
+</div><div class="mc cover">
   <div class="mc-top"><span class="mc-no">周四009</span>
     <span class="mc-time">03:00</span><span class="mc-lg">欧罗巴</span>
     <span class="mc-teams"><b>本菲卡</b> vs 奥胡斯</span>
-    <span class="mc-tag single">✅ 单选</span></div>
-  <div class="mc-rec">让胜 @2.08 (让球·HAD未开盘)</div>
-  <div class="mc-primary">📌 首推参考(命中率优先): <b>HHAD让胜 @2.08</b> P=54%</div>
-  <div class="mc-mkt-div">🔭 影子对照(幅度偏离): 独立意见胜64% vs 市场热门胜88%, 差23pp — 独立模式: 赔率仅作对照记录, 不参与决策, 赛后双账本对账</div>
-  
-  
-  
-  
-  <div class="mc-meta">概率 54/20/26% · ★★½ · 可预测性 75.5 · 一致性 100%</div>
-  <div class="mc-reason">HAD未开盘, 仅HHAD可选: 让胜 (HHAD P=54%/20%/26%)</div>
+    <span class="mc-conf">★½</span>
+    <span class="mc-tag cover">🎯 主推·让球</span></div>
+  <div class="mc-rec"><span class='rec-badge'>🏆 主推</span><span class='rec-opt'>HHAD让负</span><span class='chip odds'>@2.66</span><span class='chip'>P=66.5%</span><span class='chip ev'>EV=+76.8%</span></div>
+  <div class='mc-sub'>⑵ 双选: <b>HHAD让平让负双选 @2.97</b> P=84.9% EV=+26.0% · 深盘(让-2.0)历史穿盘率仅36%,双选陷阱风险高</div><div class='mc-mkt-div'>🔭 影子对照(幅度偏离): 独立意见胜56% vs 市场热门胜88%, 差31pp</div>
+  <div class="mc-meta">概率(胜/平/负) — | 让球 15/18/66% · ★½ · 可预测性 73.5 · 一致性 100%</div>
+  <div class="mc-reason">[命中优先]主推HHAD让负@2.66(P=66.5%,EV=76.8%)。HHAD主推HHAD让负@2.66(P=66.5%,EV=76.8%)。纯方向HHAD让平@4.08(P=18.4%,EV=-24.8%)。双选保险HHAD让平让负双选@2.97(P=84.9%,EV=2…</div>
 </div>
 
-<div class="card"><div class="sec" style="margin-top:0">📏 判定规则</div>
-<div class="ins warn" style="border-color:#94a3b8;background:#f8fafc">
-<b>四档主推</b>：<br>
-· <b>🎯 平局直击</b>：平P为argmax（≥25%） — 模型最看好平局，直接买平局（赔率~3.0，收益远超HHAD覆盖项）<br>
-· <b>🎯 平局紧贴</b>：联赛平P≥30%/杯赛≥32% 且距argmax≤10pp — 回测该档平局率40%、平局正EV，可博高赔平局<br>
-· <b>💡 平局价值</b>：联赛平P≥26%/杯赛≥28% 且距argmax≤10pp — 回测该档平局率33%、优于热门方向EV，建议1/3本金小注<br>
-· <b>✅ 单选</b>：方向P≥50 且非误判高发 · <b>⚠️ 双选兜底</b>：平P≥28(联赛)/≥30(杯赛) 且 方向P&lt;50（平局窗口，改买HHAD覆盖项） · <b>🚫 避开</b>：胜P≥60 且 平P≥25（强主场方向性误判黑天鹅）<br>
-<b>杯赛策略</b>：杯赛实际平局率18.7%低于联赛25.8%（674场回测），故杯赛阈值高于联赛，不再单独下调。<br>
-<b>首推参考</b>：卡片上的「首推参考」=预测PDF「主推(命中率优先)」，仅作补充，不改变四档主推。<br>
-<b>过关</b>：优先 2-3 关，忌 6 场全选（容错为0）。命中率第一，宁缺毋滥。</div></div>
-<div class="foot">基于 20260820_周四_indep 9 场预测 · 四档主推 + 首推参考 · 仅供研究学习，不构成投注建议</div>
+<div class="foot">基于 20260820_周四_indep 9 场预测 · 统一主推口径 (Ultra 15.6) · 仅供研究学习，不构成投注建议</div>
 </body></html>

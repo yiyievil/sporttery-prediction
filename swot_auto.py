@@ -206,20 +206,28 @@ def build_stats_swot(match_data):
                 as_.append(f"交锋占优: 历史{aw_}胜{d_}平{hw_}负")
 
     # 积分榜: stats_<队名> 含排名/场均进失
+    # Ultra 15.9: 小样本护栏 — 赛季初played<3时 场均进失/排名近乎随机
+    # (260821实证: 马赛n=1"场均仅失0.0球"/敦刻尔克n=2"场均进3.5球"均为失真条目)
     for team, s_list, w_list in ((home, hs, hw), (away, as_, aw)):
         st = shuju.get(f'stats_{team}') or {}
         rank = st.get('rank')
         avg_gf, avg_ga = st.get('avg_gf'), st.get('avg_ga')
+        try:
+            played = int(st.get('played') or 0)
+        except (ValueError, TypeError):
+            played = 0
+        small_sample = played < 3
         if rank:
             try:
                 r = int(rank)
-                if r <= 3:
-                    s_list.append(f"联赛排名第{r}, 处于争冠集团")
-                elif r >= 15:
-                    w_list.append(f"联赛排名第{r}, 深陷降级区")
+                if not small_sample:
+                    if r <= 3:
+                        s_list.append(f"联赛排名第{r}, 处于争冠集团")
+                    elif r >= 15:
+                        w_list.append(f"联赛排名第{r}, 深陷降级区")
             except (ValueError, TypeError):
                 pass
-        if avg_gf is not None and avg_ga is not None:
+        if avg_gf is not None and avg_ga is not None and not small_sample:
             try:
                 gf, ga = float(avg_gf), float(avg_ga)
                 if gf >= 2.0:
@@ -241,6 +249,144 @@ def build_stats_swot(match_data):
         'swot_url': '',
         'source': 'stats',
     }
+
+
+# ============ Ultra 15.9: xG量化情报 (方向2) + 多源合并 (方向1) ============
+
+def build_xg_swot(match_data, home_xg=None, away_xg=None):
+    """用Understat滚动xG数据生成量化情报条目 (Ultra 15.9, 2026-08-21 用户裁决)
+
+    背景: 昨日回测证明SWOT强翻转是核心胜负手, 但情报单源leisu覆盖不稳。
+    xG滚动数据(Understat本地库)是独立量化源 — λ建模已用但其对WDL的影响被
+    贝叶斯收缩(k=10/30)+市场锚大幅稀释; 此处只对【明显差距】打中等权重条目,
+    作为SWOT评分的补强信号, 与λ通道互补而非重复计分。
+
+    触发门槛 (双方都有数据才可比, 且样本/质量达标):
+      · 进攻占优: 场均xG差 ≥ 0.40 (如 2.14 vs 1.42)
+      · 防守占优: 场均xGA差 ≥ 0.30
+      · 压迫优势: PPDA差 ≥ 2.0 (压迫更激进方, 仅双方有PPDA时)
+    质量门槛: 双方 n_games ≥ 4 (小样本不产生条目, 与λ的小样本降权同哲学)
+
+    参数: home_xg/away_xg 可外部传入(避免重复查库), 缺省按队名查库
+    返回: SWOT格式dict(source='xg')或None
+    """
+    if home_xg is None or away_xg is None:
+        home = match_data.get('home', '')
+        away = match_data.get('away', '')
+        if not home or not away:
+            return None
+        try:
+            # 惰性导入引擎 (swot_auto被v215_e2e调用, 顶层import会循环依赖;
+            # 同进程时sys.modules已有该模块, import即时返回 — swot_fusion_v3同模式)
+            import v215_e2e as engine
+            md = match_data.get('match_date', '9999')
+            lg = match_data.get('league', '')
+            if home_xg is None:
+                home_xg = engine.fetch_xg_rolling_stats(home, md, lg)
+            if away_xg is None:
+                away_xg = engine.fetch_xg_rolling_stats(away, md, lg)
+        except Exception:
+            return None
+    if not home_xg or not away_xg:
+        return None
+    if home_xg.get('n_games', 0) < 4 or away_xg.get('n_games', 0) < 4:
+        return None  # 小样本不产生条目
+
+    hs, hw, as_, aw = [], [], [], []
+    h_att, a_att = home_xg['avg_xg_for'], away_xg['avg_xg_for']
+    h_def, a_def = home_xg['avg_xg_against'], away_xg['avg_xg_against']
+
+    # 进攻对比 (阈值0.40: 联赛平均xG约1.3, 0.4差≈30%火力差, 明显但非极端)
+    if h_att - a_att >= 0.40:
+        hs.append(f"xG进攻占优: 场均xG {h_att:.2f} vs 对手{a_att:.2f} (近{home_xg['n_games']}场)")
+    elif a_att - h_att >= 0.40:
+        as_.append(f"xG进攻占优: 场均xG {a_att:.2f} vs 对手{h_att:.2f} (近{away_xg['n_games']}场)")
+
+    # 防守对比 (阈值0.30: 失球端差距通常小于进攻端)
+    if a_def - h_def >= 0.30:
+        hs.append(f"xG防守占优: 场均失xG仅{h_def:.2f}, 对手失{a_def:.2f}")
+    elif h_def - a_def >= 0.30:
+        as_.append(f"xG防守占优: 场均失xG仅{a_def:.2f}, 对手失{h_def:.2f}")
+
+    # 压迫对比 (PPDA越低越激进, 仅双方有数据)
+    h_ppda, a_ppda = home_xg.get('avg_ppda'), away_xg.get('avg_ppda')
+    if h_ppda and a_ppda:
+        if a_ppda - h_ppda >= 2.0:
+            hs.append(f"xG压迫占优: PPDA {h_ppda:.1f} vs 对手{a_ppda:.1f}, 高位逼抢更激进")
+        elif h_ppda - a_ppda >= 2.0:
+            as_.append(f"xG压迫占优: PPDA {a_ppda:.1f} vs 对手{h_ppda:.1f}, 高位逼抢更激进")
+
+    if not (hs or hw or as_ or aw):
+        return None
+    return {
+        'home_strengths': hs, 'home_weaknesses': hw,
+        'away_strengths': as_, 'away_weaknesses': aw,
+        'trend': {},
+        'swot_url': '',
+        'source': 'xg',
+    }
+
+
+# 语义类别 (用于合并去重: leisu叙述已覆盖的类别不再叠加数字条目)
+_DIR_S = ('出色', '占优', '优势', '稳固', '争冠', '不败', '火力强')
+_DIR_W = ('低迷', '不佳', '漏洞', '深陷', '降级', '下风', '劣势')
+
+
+def _item_category(text):
+    """条目语义分类: form近况/h2h交锋/rank排名/firepower火力防守/xg量化/other"""
+    t = str(text)
+    if 'xG' in t or 'PPDA' in t:
+        return 'xg'
+    if '交锋' in t or '面对' in t:
+        return 'h2h'
+    if '排名' in t or '争冠' in t or '降级' in t:
+        return 'rank'
+    if any(k in t for k in ('场均', '火力', '失球', '零封', '防守', '进攻')):
+        return 'firepower'
+    # 近况类: leisu叙述格式多样 ("6场比赛5胜0平"/"近10场正赛"/"近况出色"/"连胜"),
+    # 单靠'近'字漏判 → leisu已写近况时stats近况条目会重复并入 (单测#4实证)
+    if ('近' in t and '场' in t) or '近况' in t or '连胜' in t or '连败' in t \
+            or re.search(r'\d+场.{0,10}\d+[胜平负]', t):
+        return 'form'
+    return 'other'
+
+
+def _is_directional(item):
+    """条目是否携带明确方向信号 (中性描述条目合并时跳过 — 纯上下文无方向,
+    进条目列表只会+1计分噪音; fallback独用时保留完整上下文)"""
+    t = str(item)
+    return any(k in t for k in _DIR_S) or any(k in t for k in _DIR_W)
+
+
+def merge_extra_swot(base, extra):
+    """把数据型条目(extra)合并进leisu条目(base) — 类别去重 + 方向过滤
+
+    规则:
+      1. extra条目须携带方向信号 (中性"近况: 3胜2平1负"类不并入)
+      2. 类别去重: leisu同侧已覆盖该类别 → 跳过 (叙述+数字各一份=重复计分)
+      3. xG类别例外: 量化源与叙述天然无重叠, 永远并入
+    返回合并后的base (原地修改); extra为空返回base原样
+    """
+    if not extra:
+        return base
+    if not base:
+        return extra
+    for side in ('home_strengths', 'home_weaknesses', 'away_strengths', 'away_weaknesses'):
+        base_items = base.setdefault(side, [])
+        base_cats = {_item_category(it) for it in base_items}
+        for it in extra.get(side, []):
+            cat = _item_category(it)
+            if cat != 'xg' and (cat in base_cats or not _is_directional(it)):
+                continue
+            if it in base_items:
+                continue
+            base_items.append(it)
+            base_cats.add(cat)
+    _src = base.get('source', 'leisu')
+    _esrc = extra.get('source', 'stats')
+    if _esrc not in str(_src):
+        base['source'] = f"{_src}+{_esrc}"
+    return base
 
 
 # ============ 主入口 ============
@@ -297,13 +443,47 @@ def fetch_swot_auto(matches, all_data=None):
             else:
                 print(f"  [SWOT] ⚠️ {key} leisu页解析为空, 转stats备用")
 
-    # 4. stats 备用兜底 (每场都保证有SWOT输入)
+    # 4. Ultra 15.9: 数据型情报每场都构建并合并 (stats+xg → leisu)
+    # 旧版: stats仅在leisu失败时兜底, 情报单源leisu, 覆盖不稳
+    # 新版: leisu为主源, stats(近况/交锋/排名/火力)+xG(量化对比)按类别去重后
+    #       并入 — 每场情报从"一家叙述"变成"多源交叉验证"
+    n_merged = 0
     for key in matches:
-        if key not in results:
-            swot = build_stats_swot(data_map.get(key))
-            if swot:
-                results[key] = swot
-                print(f"  [SWOT] 📊 {key} stats备用 ({len(swot['home_strengths'])+len(swot['home_weaknesses'])+len(swot['away_strengths'])+len(swot['away_weaknesses'])}条)")
+        md = data_map.get(key) or {}
+        # 4a. 数据型条目 (stats + xg 独立构建)
+        stats_swot = build_stats_swot(md)
+        xg_swot = None
+        try:
+            xg_swot = build_xg_swot(md)
+        except Exception:
+            xg_swot = None
+
+        if key in results:
+            # 4b. leisu已有 → 类别去重合并 (leisu叙述覆盖的类别不叠加数字条目)
+            base = results[key]
+            _n0 = (len(base.get('home_strengths', [])) + len(base.get('home_weaknesses', [])) +
+                   len(base.get('away_strengths', [])) + len(base.get('away_weaknesses', [])))
+            if stats_swot:
+                merge_extra_swot(base, stats_swot)
+            if xg_swot:
+                merge_extra_swot(base, xg_swot)
+            _n1 = (len(base.get('home_strengths', [])) + len(base.get('home_weaknesses', [])) +
+                   len(base.get('away_strengths', [])) + len(base.get('away_weaknesses', [])))
+            if _n1 > _n0:
+                n_merged += 1
+                print(f"  [SWOT] 🔗 {key} 多源合并 {_n0}→{_n1}条 (source={base.get('source')})")
+        else:
+            # 4c. leisu缺失 → stats+xg 合成完整情报 (原兜底路径增强)
+            fused = None
+            if stats_swot:
+                fused = stats_swot
+            if xg_swot:
+                fused = merge_extra_swot(fused, xg_swot) if fused else xg_swot
+            if fused:
+                results[key] = fused
+                _n = (len(fused['home_strengths']) + len(fused['home_weaknesses']) +
+                      len(fused['away_strengths']) + len(fused['away_weaknesses']))
+                print(f"  [SWOT] 📊 {key} stats+xg合成 ({_n}条, source={fused.get('source')})")
 
     # 5. 合并写入 swot_data_refreshed.json (保留历史场次的SWOT)
     # 格式约定: {'refreshed_at', 'source', 'matches': {key: swot}} (swot_fusion_v3读matches键)
@@ -335,7 +515,7 @@ def fetch_swot_auto(matches, all_data=None):
     }
     with open(SWOT_DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
-    print(f"  [SWOT] 已写入 {SWOT_DATA_FILE} (本次{len(results)}场, 累计{len(matches_map)}场)")
+    print(f"  [SWOT] 已写入 {SWOT_DATA_FILE} (本次{len(results)}场, 累计{len(matches_map)}场, 多源合并{n_merged}场)")
 
     return results
 

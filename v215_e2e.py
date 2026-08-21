@@ -1782,6 +1782,24 @@ def compute_scores(lam_h, lam_a, goal_line=0, market_goal_line=2.5, top_n=5, use
         except Exception:
             pass
 
+    # Ultra 15.3 (2026-08-20): 净胜球条件形状 — HAD/HHAD同源对齐的结构基础
+    # 形状 = 给定胜/负前提下的净胜球分布(条件概率, 结构信息), 与HAD水平锚(校准概率)解耦。
+    # 对齐时: P(净胜球=k) = D(k=0) / W·shape_w[k] / L·shape_l[k], 再按盘口分组求和 → HHAD。
+    # 优先取比分矩阵口径(与 hhad_same_source 升级同源), 异常回退 Skellam margin_probs。
+    try:
+        _mp = {}
+        for _s, _p in probs.items():
+            _k = int(_s.split('-')[0]) - int(_s.split('-')[1])
+            _mp[_k] = _mp.get(_k, 0.0) + _p
+    except Exception:
+        _mp = dict(margin_probs)
+    _W_sum = sum(v for k, v in _mp.items() if k > 0)
+    _L_sum = sum(v for k, v in _mp.items() if k < 0)
+    margin_shape = {
+        'w': ({str(k): v / _W_sum for k, v in sorted(_mp.items()) if k > 0} if _W_sum > 0 else {}),
+        'l': ({str(k): v / _L_sum for k, v in sorted(_mp.items()) if k < 0} if _L_sum > 0 else {}),
+    }
+
     # ===== 盘口标签格式化 =====
     def fmt_gl(gl):
         """格式化盘口值: 2.5→2.5, 2.75→2.5/3, 3.0→3, 3.25→3/3.5"""
@@ -1818,6 +1836,7 @@ def compute_scores(lam_h, lam_a, goal_line=0, market_goal_line=2.5, top_n=5, use
         'main_dir': main_dir,
         'high_dir': high_dir,
         'hhad_wdl': [round(hw*100, 1), round(hd*100, 1), round(hl*100, 1)],
+        'margin_shape': margin_shape,  # Ultra 15.3: 净胜球条件形状(结构信息)
     }
 
 def compute_half_full(lam_h, lam_a, fused_wdl=None, league=None):
@@ -2177,7 +2196,9 @@ def compute_total_goals(lam_h, lam_a, ttg_odds=None, league=None, xg_cv_quality=
     # ===== Step 3: 体彩TTG池校准 (Ultra 10.3) =====
     # 基于历史数据: 小(0-2球)偏差+2.7pp, 大(4+球)偏差-3.1pp
     # 修正模型倾向: 适当上调小球, 下调大球
-    if _POOLS_CALIB:
+    # Ultra 14.3 (RULE-016): 偏差标定自旧四源模式模型输出闭环, 与模式强绑定 —
+    # 独立模式跳过 (TTG已含市场TTG赔率融合权重, 偏差对纯模型λ无代表性)
+    if _POOLS_CALIB and not INDEPENDENT_MODE:
         ttg_cal = _POOLS_CALIB.get('ttg', {}).get('direction_calibration', {})
         if ttg_cal:
             # 小(0-2球): 实际频率更高 → 上调
@@ -2206,10 +2227,11 @@ def compute_total_goals(lam_h, lam_a, ttg_odds=None, league=None, xg_cv_quality=
                     for k in goals_probs:
                         goals_probs[k] /= total
 
-    # ===== Step 4: 大小球方向偏差校准 (Ultra 10.4) =====
+    # ===== Step 4: 大小方向偏差校准 (Ultra 10.4) =====
     # 基于4412场历史数据: 大球偏差-0.6pp (轻微低估)
     # 同时按盘口区间做更精细校准
-    if _OVER_UNDER_CALIB:
+    # Ultra 14.3 (RULE-016): 偏差为旧模式模型输出 vs 实际闭环, 独立模式跳过
+    if _OVER_UNDER_CALIB and not INDEPENDENT_MODE:
         ou_overall = _OVER_UNDER_CALIB.get('overall', {})
         over_bias = ou_overall.get('over_bias_pp', 0)
         if abs(over_bias) > 0.3 and ou_overall.get('total_matches', 0) >= 1000:
@@ -3057,6 +3079,84 @@ def _get_drift_multipliers():
     return _DRIFT_MULT_CACHE['data']
 
 
+# Ultra 15.0 (进化三层-第二层): 学习版融合权重缓存 — learn_fusion_weights.py 产出
+_LEARNED_FW_CACHE = {'loaded': False, 'data': None}
+
+
+def _load_learned_fusion_weights():
+    """读取学习版独立模式融合权重 (predictions/indep_fusion_weights.json)
+
+    仅当 applied=true 且三源权重齐全为正时返回 (其余字段见 learn_fusion_weights):
+    冷启动(n<60)/无增益/无数据时 JSON 里 applied=false → 本函数返回 None,
+    独立分支自动回落启发式权重 — 学习器未就绪绝不阻断预测主链路。
+    """
+    if not _LEARNED_FW_CACHE['loaded']:
+        _LEARNED_FW_CACHE['loaded'] = True
+        try:
+            _p = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              'predictions', 'indep_fusion_weights.json')
+            if os.path.exists(_p):
+                with open(_p, encoding='utf-8') as _f:
+                    _d = json.load(_f)
+                _w = _d.get('weights') or {}
+                if (_d.get('applied')
+                        and all(isinstance(_w.get(k), (int, float)) and _w[k] > 0
+                                for k in ('poisson', 'elo', 'h2h'))):
+                    _LEARNED_FW_CACHE['data'] = _d
+        except Exception:
+            _LEARNED_FW_CACHE['data'] = None
+    return _LEARNED_FW_CACHE['data']
+
+
+# Ultra 15.0 (进化三层-第三层): 概率校准缓存 — calibrate_indep_probs.py 产出
+_INDEP_CAL_CACHE = {'loaded': False, 'data': None}
+
+
+def _load_indep_prob_calibration():
+    """读取独立模式概率校准参数 (predictions/indep_prob_calibration.json)
+
+    仅当 applied=true (n≥100 冷启动 + LL增益护栏) 且三类参数齐全时返回;
+    未就绪返回 None → 独立分支概率原样输出, 零行为变化。
+    """
+    if not _INDEP_CAL_CACHE['loaded']:
+        _INDEP_CAL_CACHE['loaded'] = True
+        try:
+            _p = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              'predictions', 'indep_prob_calibration.json')
+            if os.path.exists(_p):
+                with open(_p, encoding='utf-8') as _f:
+                    _d = json.load(_f)
+                _par = _d.get('params') or {}
+                if (_d.get('applied')
+                        and all(isinstance(_par.get(k), (list, tuple)) and len(_par[k]) == 2
+                                for k in ('胜', '平', '负'))):
+                    _INDEP_CAL_CACHE['data'] = _d
+        except Exception:
+            _INDEP_CAL_CACHE['data'] = None
+    return _INDEP_CAL_CACHE['data']
+
+
+def _apply_indep_prob_calibration(probs, params):
+    """逐类 Platt 校准: p' = sigmoid(a·logit(p) + b), 三类重归一; 异常时原样返回
+
+    a<1 压平过度自信, b>0 抬升系统性低估类 (三源几何融合典型病灶: 平局)。
+    """
+    import math as _m
+    try:
+        out = []
+        for i, cls in enumerate(('胜', '平', '负')):
+            a, b = params.get(cls, (1.0, 0.0))
+            p = min(max(float(probs[i]), 0.02), 0.98)
+            x = _m.log(p / (1.0 - p))
+            out.append(1.0 / (1.0 + _m.exp(-max(min(a * x + b, 30.0), -30.0))))
+        s = sum(out)
+        if s <= 0:
+            return list(probs)
+        return [v / s for v in out]
+    except Exception:
+        return list(probs)
+
+
 def infer_goal_line_from_had(had):
     """P4: HHAD让球盘口缺失/为0时, 从HAD赔率反推让球档
 
@@ -3278,6 +3378,132 @@ def _hhad_trap_note(option, handicap):
     return None
 
 
+# ===== Ultra 15.2 (2026-08-20 用户裁决): 陷阱侧概率降级参数 =====
+# 回测4412场实证: 深盘(|h|>=2)让球方穿盘率仅36% → 受让大方向侧历史命中率64%;
+# 需净胜/净负2+球侧历史EV-18%。模型在这两类位置系统性高估, 旧逻辑仅打标签不降概率,
+# "命中率优先"排序仍会把主推给到陷阱侧 — 标签形同虚设。
+TRAP_DEEP_PASS_RATE = 0.36   # 深盘让球方历史穿盘率 (回测 4412 场 2026-08)
+TRAP_NET2_EV = -0.18         # 需净2+球侧历史EV (同回测)
+TRAP_SHRINK = 0.5            # 收缩系数: 模型→历史基准收缩一半 (0=不调, 1=完全用历史)
+
+
+def hhad_trap_downgrade(hhad_probs, hhad_dict, handicap):
+    """Ultra 15.2: 陷阱侧概率降级 — 从"打标签"升级为"真收缩" (2026-08-20 用户裁决)
+
+    规则 (只降不升, 向历史基准收缩一半):
+      ① 深盘 |h|>=2: 受让大方向侧(h>0→受让胜idx0 / h<0→让负idx2)基准=1-穿盘率=64%
+      ② 需净2+球侧 (让胜且h<=-1 / 受让负且h>=1): 有赔率按EV反推基准 p_hist=(1+EV)/odds;
+         无赔率(防御性放开的纯模型候选)退化用 p-5pp 基准
+      让出的概率质量按比例还给其余两桶, 保持概率和恒为1。
+
+    Returns: (new_probs[3], note)  note=None 表示未触发 (非陷阱侧/模型未高估)
+    """
+    if not hhad_probs or handicap is None:
+        return hhad_probs, None
+    try:
+        h = float(handicap)
+    except (TypeError, ValueError):
+        return hhad_probs, None
+    probs = list(hhad_probs)
+    notes = []
+
+    def _shrink(probs, idx, bench, label):
+        """单侧向基准收缩: p → p - κ(p-bench), 差额按比例给其余两桶"""
+        p = probs[idx]
+        if p <= bench or p <= 0:
+            return None
+        new_p = p - TRAP_SHRINK * (p - bench)
+        delta = p - new_p
+        rest = [i for i in range(3) if i != idx]
+        rest_sum = probs[rest[0]] + probs[rest[1]]
+        if rest_sum > 0:
+            probs[rest[0]] += delta * probs[rest[0]] / rest_sum
+            probs[rest[1]] += delta * probs[rest[1]] / rest_sum
+        elif delta > 0:
+            probs[rest[0]] += delta / 2
+            probs[rest[1]] += delta / 2
+        probs[idx] = new_p
+        return f"{label}{p*100:.0f}%→{new_p*100:.0f}%"
+
+    # ① 深盘: 受让大方向侧向 64% 收缩 (模型高估时)
+    if abs(h) >= 2:
+        idx = 0 if h > 0 else 2
+        _n = _shrink(probs, idx, 1 - TRAP_DEEP_PASS_RATE,
+                     f"深盘校准(历史基准{int((1-TRAP_DEEP_PASS_RATE)*100)}%):")
+        if _n:
+            notes.append(_n)
+
+    # ② 需净2+球侧: EV反推基准 (让胜@h<=-1 → idx0; 受让负@h>=1 → idx2)
+    if (h <= -1) or (h >= 1):
+        idx = 0 if h <= -1 else 2
+        odds = None
+        if hhad_dict and 'h' in hhad_dict:
+            _side_odds = [hhad_dict.get('h'), hhad_dict.get('d'), hhad_dict.get('a')][idx]
+            if _side_odds and _side_odds > 0:
+                odds = float(_side_odds)
+        if odds:
+            bench = (1 + TRAP_NET2_EV) / odds
+            _lbl = f"净2+球侧校准(EV基准{bench*100:.0f}%):"
+        else:
+            bench = max(0.0, probs[idx] - 0.05)
+            _lbl = "净2+球侧校准(无赔率,-5pp基准):"
+        _n = _shrink(probs, idx, bench, _lbl)
+        if _n:
+            notes.append(_n)
+
+    if not notes:
+        return hhad_probs, None
+    _s = sum(probs)
+    if _s > 0:
+        probs = [p / _s for p in probs]
+    return probs, '; '.join(notes)
+
+
+def align_hhad_to_had(had_probs, hhad_probs, handicap, margin_shape):
+    """Ultra 15.3 (2026-08-20 用户裁决): HAD/HHAD同源对齐 — 一个体系铁律
+
+    根因: HAD走完整校准链(三源融合→独立校准→高级校准→OCA→平局校准),
+    HHAD走独立Poisson/市场管线, 两套体系各自演化 → 同一场比赛 HAD胜53.8% 与
+    HHAD 61%/23%/15% 口径可分裂; SWOT迁移又只改HAD不改HHAD, 展示成"两个世界"。
+
+    统一原则 (同一场比赛一个概率体系):
+      HAD三桶 [W,D,L] = 水平锚 (含全部校准智慧, 不再另起炉灶)
+      净胜球分布: P(k=0)=D; P(k>0)=W·shape_w[k]; P(k<0)=L·shape_l[k]
+      HHAD三桶 = 按 (净胜球 + 盘口h) 的 >0 / =0 / <0 分组求和
+    → 数学上与HAD严格自洽 (整数盘: 让负=平+负@-1 等), 半球盘让平桶自然为0。
+
+    Returns: (new_hhad_probs[3], aligned:bool)  未对齐时原样返回
+    """
+    if not margin_shape or not had_probs or handicap is None:
+        return hhad_probs, False
+    try:
+        h = float(handicap)
+        W, D, L = float(had_probs[0]), float(had_probs[1]), float(had_probs[2])
+    except (TypeError, ValueError, IndexError):
+        return hhad_probs, False
+    if W < 0 or D < 0 or L < 0 or (W + D + L) <= 0:
+        return hhad_probs, False
+    sw = margin_shape.get('w') or {}
+    sl = margin_shape.get('l') or {}
+    if not sw and not sl:
+        return hhad_probs, False
+    try:
+        md = {0: D}
+        for k, v in sw.items():
+            md[int(k)] = W * float(v)
+        for k, v in sl.items():
+            md[int(k)] = L * float(v)
+    except (TypeError, ValueError):
+        return hhad_probs, False
+    hp = sum(v for k, v in md.items() if k + h > 0)
+    dp = sum(v for k, v in md.items() if k + h == 0)
+    lp = sum(v for k, v in md.items() if k + h < 0)
+    total = hp + dp + lp
+    if total <= 0:
+        return hhad_probs, False
+    return [hp / total, dp / total, lp / total], True
+
+
 def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handicap, lam_h, lam_a, mode='prob', difficulty=None):
     """跨玩法价值分析 — 命中率优先, EV仅作参考
 
@@ -3322,14 +3548,23 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         if not is_integer_handicap:
             return ('真单选', f'让{["胜","平","负"][option_idx]}', None)
         # 整数盘口
-        if handicap > 0:  # 主队受让
-            if option_idx == 0:  # 让胜 = 胜+平
-                return ('伪单选', '胜+平', '2元覆盖HAD胜平双选(4元), 省一半成本')
+        # 15.8.1: 深整数盘(|h|≥2)的伪单选覆盖不止两结果 —
+        #   主让-2: 让负=平+负+胜1球; 受让+2: 让胜=胜+平+负1球 (n=1时与旧标签一致)
+        _n = abs(int(handicap))
+        if handicap > 0:  # 主队受让+n: 让胜=胜+平(±负≤n-1球)
+            if option_idx == 0:
+                if _n == 1:
+                    return ('伪单选', '胜+平', '2元覆盖HAD胜平双选(4元), 省一半成本')
+                return ('伪单选', f'胜+平+负≤{_n-1}球',
+                        f'覆盖超HAD胜平双选(还含负≤{_n-1}球), 概率天然高')
             else:
                 return ('真单选', f'让{["胜","平","负"][option_idx]}', None)
-        else:  # 主队让球
-            if option_idx == 2:  # 让负 = 平+负
-                return ('伪单选', '平+负', '2元覆盖HAD平负双选(4元), 省一半成本')
+        else:  # 主队让球-n: 让负=平+负(±胜≤n-1球)
+            if option_idx == 2:
+                if _n == 1:
+                    return ('伪单选', '平+负', '2元覆盖HAD平负双选(4元), 省一半成本')
+                return ('伪单选', f'平+负+胜≤{_n-1}球',
+                        f'覆盖超HAD平负双选(还含胜≤{_n-1}球), 概率天然高')
             else:
                 return ('真单选', f'让{["胜","平","负"][option_idx]}', None)
 
@@ -3360,27 +3595,51 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
             })
 
     # HHAD选项EV
-    if hhad_dict and 'h' in hhad_dict:
+    # ===== Ultra 15.1 (防御性放开, 用户裁决 2026-08-20): HHAD赔率缺失不再挡住单选候选 =====
+    # 独立模式定位"赔率零输入、纯模型意见", 但旧门控 'h' in hhad_dict 要求赔率存在,
+    # 赔率缺失时让胜/让平/让负完全没有机会成为主推 — 与独立模式自相矛盾。
+    # 改: 无赔率但 hhad_probs 有效时, 单选以纯模型概率入候选:
+    #     odds=None / ev_pct=None / kelly_pct=0 / value=False + odds_note 标注。
+    # 主推选择本就按概率排序(与赔率解耦); 渲染层 P1-4 已统一将 odds=None
+    # 显示为"以盘口为准"(SWOT翻转场景趟过路)。有赔率时行为完全不变。
+    _hhad_odds_ok = bool(hhad_dict and 'h' in hhad_dict)
+    hhad_odds_list = None
+    hhad_margin = 0
+    if _hhad_odds_ok:
         hhad_odds_list = [hhad_dict['h'], hhad_dict['d'], hhad_dict['a']]
         hhad_margin = pool_margin(hhad_odds_list)
+    elif hhad_probs and len(hhad_probs) == 3 and sum(hhad_probs) > 0:
+        hhad_odds_list = [None, None, None]  # 纯模型概率候选 (赔率未同步)
+    if hhad_odds_list:
         for i in range(3):
-            ev = hhad_probs[i] * hhad_odds_list[i] - 1
-            kelly = kelly_criterion(hhad_probs[i], hhad_odds_list[i], hhad_margin)
+            _ho = hhad_odds_list[i]
+            if _ho:
+                ev = hhad_probs[i] * _ho - 1
+                kelly = kelly_criterion(hhad_probs[i], _ho, hhad_margin)
+                _ev_pct, _kelly_pct, _value = round(ev * 100, 1), kelly['stake_pct'], kelly['value']
+                _odds_note = None
+            else:
+                # 赔率缺失: 概率仍有效, EV/Kelly无法计算 → 置 None/0, 不参与价值判定
+                _ev_pct, _kelly_pct, _value = None, 0, False
+                _odds_note = '赔率未同步,以体彩当前盘口为准'
             sel_type, coverage, cost_adv = get_selection_type('HHAD', i, handicap)
-            all_options.append({
+            _hhad_opt = {
                 'market': 'HHAD',
                 'option': hhad_labels[i],
                 'prob': round(hhad_probs[i] * 100, 1),
-                'odds': hhad_odds_list[i],
+                'odds': _ho,
                 'bets': 1,
                 'cost': 2,
-                'ev_pct': round(ev * 100, 1),
-                'kelly_pct': kelly['stake_pct'],
-                'value': kelly['value'],
+                'ev_pct': _ev_pct,
+                'kelly_pct': _kelly_pct,
+                'value': _value,
                 'selection_type': sel_type,
                 'coverage': coverage,
                 'cost_advantage': cost_adv,
-            })
+            }
+            if _odds_note:
+                _hhad_opt['odds_note'] = _odds_note
+            all_options.append(_hhad_opt)
 
     # HAD双选选项EV (Pro 3.3: 跨玩法双选对比)
     # 体彩规则: 双选=复式投注=2注=4元, 每注独立计算
@@ -3435,8 +3694,10 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     # 体彩规则同HAD双选: 2注=4元, ROI% = (P1×odds1 + P2×odds2 - 2)/2 × 100
     # 让球三结果: 让胜/让平/让负 (受让+1时依次=主不败/恰输1/输2+; 让球-1时=赢2+/恰赢1/平+负)
     # 作用: 让HHAD双选与HAD双选同台竞争, 主推在让球盘有价值时(double_recommend选型)可选让球双选
-    if hhad_dict and 'h' in hhad_dict:
-        hhad_odds_list_dbl = [hhad_dict['h'], hhad_dict['d'], hhad_dict['a']]
+    # Ultra 15.1: 与单选同步防御性放开 — 赔率缺失时双选以纯概率入候选
+    # (avg_odds=None/ev=None/value=False), 保持单选/双选对称;
+    # 达标池按赔率排序时 odds=None 项自动回退概率排序 (见下方 _qua_rankable)。
+    if hhad_odds_list:
         hhad_double_configs = [
             ('HHAD让胜让平双选', 0, 1),
             ('HHAD让胜让负双选', 0, 2),
@@ -3445,27 +3706,34 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         for label, idx1, idx2 in hhad_double_configs:
             p1 = hhad_probs[idx1]
             p2 = hhad_probs[idx2]
-            odds1 = hhad_odds_list_dbl[idx1]
-            odds2 = hhad_odds_list_dbl[idx2]
+            odds1 = hhad_odds_list[idx1]
+            odds2 = hhad_odds_list[idx2]
             combined_prob = p1 + p2
-            if combined_prob > 0:
-                avg_odds = round((p1 * odds1 + p2 * odds2) / combined_prob, 2)
+            if odds1 and odds2:
+                if combined_prob > 0:
+                    avg_odds = round((p1 * odds1 + p2 * odds2) / combined_prob, 2)
+                else:
+                    avg_odds = 0
+                roi = (p1 * odds1 + p2 * odds2 - 2) / 2
+                ev_pct = roi * 100
+                effective_odds = avg_odds / 2 if avg_odds > 0 else 0
+                kelly = kelly_criterion(combined_prob, effective_odds, hhad_margin) if effective_odds > 1 else {'stake_pct': 0}
+                double_value = roi > 0 and (roi * 100) >= hhad_margin / 2
+                _dbl_odds_detail = f'{odds1}/{odds2}'
             else:
-                avg_odds = 0
-            roi = (p1 * odds1 + p2 * odds2 - 2) / 2
-            ev_pct = roi * 100
-            effective_odds = avg_odds / 2 if avg_odds > 0 else 0
-            kelly = kelly_criterion(combined_prob, effective_odds, hhad_margin) if effective_odds > 1 else {'stake_pct': 0}
-            double_value = roi > 0 and (roi * 100) >= hhad_margin / 2
+                # 赔率缺失: 概率仍有效(P1+P2), 赔率类字段置 None
+                avg_odds, ev_pct = None, None
+                kelly, double_value = {'stake_pct': 0}, False
+                _dbl_odds_detail = '未同步'
             all_options.append({
                 'market': 'HHAD双选',
                 'option': label,
                 'prob': round(combined_prob * 100, 1),
                 'odds': avg_odds,
-                'odds_detail': f'{odds1}/{odds2}',
+                'odds_detail': _dbl_odds_detail,
                 'bets': 2,
                 'cost': 4,
-                'ev_pct': round(ev_pct, 1),
+                'ev_pct': round(ev_pct, 1) if ev_pct is not None else None,
                 'kelly_pct': kelly['stake_pct'],
                 'value': double_value,
             })
@@ -3484,6 +3752,57 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     single_options = [o for o in all_options if o['market'] in ('HAD', 'HHAD')]
     single_ranked = sorted(single_options, key=lambda x: x['prob'], reverse=True)
     primary_bet = single_ranked[0] if single_ranked else None
+
+    # ===== Ultra 15.8-B (2026-08-21): 主推同向性 — 不得押注模型自身argmax的对立面 =====
+    # 回测实证 (260820周四008): 模型HAD argmax=胜44%(方向对, 实际3-0), 但HHAD让负
+    # 伪单选(覆盖平+负, 概率天然膨胀)以57%抢走主推 — 主推押注了模型自己最看好
+    # 结果(胜)的对立面, 概率优先排序在"覆盖双选 vs 真单选"天然不对等。
+    # 规则: 主推为HHAD单选(伪单选或半球盘覆盖双选)且其覆盖集不含HAD argmax方向,
+    # 而argmax≥40%时, 在"包含argmax方向"的候选中重选概率最高者 (008: 让负57%→HAD胜44%)。
+    # 注: 门控不限定伪单选标签 — 半球盘让负@-0.5={平,负}同样是覆盖双选(引擎标签真单选);
+    # 整数盘真单选(让胜@-1={胜-2球+}等)是argmax的子集, 概率必低于HAD单选, 天然不触发。
+    _realign_note = None
+    try:
+        if (primary_bet and had_probs and len(had_probs) == 3
+                and primary_bet.get('market') == 'HHAD'
+                and max(had_probs) >= 0.40):
+            _am_dir = '胜平负'[had_probs.index(max(had_probs))]
+
+            def _opt_dirs(o):
+                """选项在胜/平/负层面的覆盖集"""
+                _opt = str(o.get('option') or '')
+                if _opt.startswith('HAD'):
+                    return {_opt[-1]}
+                _idx = ['让胜', '让平', '让负'].index(_opt.replace('HHAD', ''))
+                _h = float(handicap or 0)
+                if _h != int(_h):  # 半球盘: 无让平, 受让半球让胜=胜+平/让负=负; 让半球让胜=胜/让负=平+负
+                    if _h > 0:
+                        return {0: {'胜', '平'}, 2: {'负'}}.get(_idx, set())
+                    return {0: {'胜'}, 2: {'平', '负'}}.get(_idx, set())
+                _n = abs(int(_h))
+                if _h > 0:   # 受让整数盘: 让胜=胜/平(±负≤n-1球), 让平=负n球, 让负=负≥n+1球
+                    # n≥2 时让胜含"负≤n-1球"切片 — 覆盖集升为{胜,平,负}
+                    _ws = {'胜', '平'} if _n == 1 else {'胜', '平', '负'}
+                    return {0: _ws, 1: {'负'}, 2: {'负'}}[_idx]
+                # 主让整数盘: 让胜=胜≥n+1球, 让平=胜n球, 让负=胜≤n-1球/平/负
+                # 15.8.1修正: n≥2时让负含"胜≤n-1球"切片(260821周五010实证:
+                # 让负@-2.0=67.4%覆盖胜1球, 误映射{平,负}触发重选出让平18%荒谬主推)
+                _ls = {'平', '负'} if _n == 1 else {'胜', '平', '负'}
+                return {0: {'胜'}, 1: {'胜'}, 2: _ls}[_idx]
+            _pb_dirs = _opt_dirs(primary_bet)
+            if _am_dir not in _pb_dirs:
+                _aligned = [o for o in single_ranked if _am_dir in _opt_dirs(o)]
+                # 15.8.1修正: prob为百分数(18.0/67.4), 原写法">=0.30"实为">=0.3%" —
+                # 30%下限形同虚设, 010让平18%由此放行 (单位与had_probs小数混用之误)
+                if _aligned and _aligned[0]['prob'] >= 30:
+                    _old = primary_bet
+                    primary_bet = _aligned[0]
+                    _realign_note = (f"主推同向性: 原概率最高{_old.get('option','')}"
+                                     f"({_old.get('prob')}%)覆盖集不含模型argmax方向"
+                                     f"{_am_dir}({max(had_probs)*100:.0f}%), 重选含该方向的"
+                                     f"{primary_bet.get('option','')}({primary_bet.get('prob')}%)")
+    except Exception:
+        pass  # 同向性守卫失败保持纯概率排序
 
     # ===== HHAD独立主推 (Pro 3.5) =====
     # 问题: HAD双选概率天然高于HHAD单选, 概率优先模式下HHAD永远无法成为主推
@@ -3599,9 +3918,13 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                 # 概率≥DOUBLE_QUALIFY_PROB的双选均已满足"命中率第一"底线,
                 # 池内改按赔率(avg_odds)最高选 — 同稳度下取更优赔率
                 # 例003: HAD胜平90%@2.26 vs 让胜让平76%@2.41 → 均达标, 选赔率更高的让胜让平
+                # Ultra 15.1: odds=None(赔率未同步)项不参与赔率排序, 全None时回退概率排序
                 _qualified = [o for o in aligned if o['prob'] >= DOUBLE_QUALIFY_PROB]
-                if _qualified:
-                    double_recommend = sorted(_qualified, key=lambda x: x['odds'], reverse=True)[0]
+                _qua_rankable = [o for o in _qualified if o.get('odds')]
+                if _qua_rankable:
+                    double_recommend = sorted(_qua_rankable, key=lambda x: x['odds'], reverse=True)[0]
+                elif _qualified:
+                    double_recommend = sorted(_qualified, key=lambda x: x['prob'], reverse=True)[0]
                 else:
                     double_recommend = sorted(aligned, key=lambda x: x['prob'], reverse=True)[0]
                 # Ultra 11.9: 并列输出时, 双选为主推方向的并列保险(主推胜→胜平, 主推负→平负)
@@ -3610,9 +3933,13 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                     double_recommend['parallel'] = True
         if double_recommend is None:
             # 无主推 或 无法对齐时, 回退: 达标池内赔率最高, 否则命中率最高
+            # Ultra 15.1: odds=None 不参与赔率排序, 回退概率排序
             _qualified = [o for o in all_doubles if o['prob'] >= DOUBLE_QUALIFY_PROB]
-            if _qualified:
-                double_recommend = sorted(_qualified, key=lambda x: x['odds'], reverse=True)[0]
+            _qua_rankable = [o for o in _qualified if o.get('odds')]
+            if _qua_rankable:
+                double_recommend = sorted(_qua_rankable, key=lambda x: x['odds'], reverse=True)[0]
+            elif _qualified:
+                double_recommend = sorted(_qualified, key=lambda x: x['prob'], reverse=True)[0]
             else:
                 double_recommend = sorted(all_doubles, key=lambda x: x['prob'], reverse=True)[0]
 
@@ -3753,8 +4080,10 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     # ===== 风险评估 (命中率优先, EV仅作参考) =====
     if primary_bet:
         # Ultra 3.0: 按需计算EV最高选项 (EV不参与选推, 仅作对比提示)
-        ev_best = max(all_options, key=lambda x: x['ev_pct']) if all_options else None
-        if ev_best and ev_best != primary_bet:
+        # Ultra 15.1: ev_pct=None(赔率未同步)项不参与EV排序
+        _ev_cands = [o for o in all_options if o.get('ev_pct') is not None]
+        ev_best = max(_ev_cands, key=lambda x: x['ev_pct']) if _ev_cands else None
+        if ev_best and ev_best != primary_bet and primary_bet.get('ev_pct') is not None:
             ev_gap = ev_best['ev_pct'] - primary_bet['ev_pct']
             if ev_gap > 10:
                 risk_assessment += (
@@ -3763,7 +4092,8 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                 )
 
         # 低赔率薄利提示
-        if primary_bet['odds'] < 1.60:
+        # Ultra 15.1: 主推赔率未同步(None)时跳过, 不误报"赔率None偏低"
+        if primary_bet.get('odds') and primary_bet['odds'] < 1.60:
             if not risk_assessment:
                 risk_assessment = ''
             risk_assessment += (
@@ -3777,19 +4107,28 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     def fmt_bet(bet, prefix=''):
         if not bet:
             return ''
-        return f"{prefix}{bet['option']}@{bet['odds']}(P={bet['prob']}%,EV={bet['ev_pct']}%)"
+        # Ultra 15.1: odds/ev=None(赔率未同步) — "@盘口为准", EV段省略, 不渲染"@None"/"EV=None%"
+        _o = bet.get('odds')
+        _odds_s = f"@{_o}" if _o else "(盘口为准)"
+        _ev = bet.get('ev_pct')
+        _ev_s = f",EV={_ev}%" if _ev is not None else ""
+        return f"{prefix}{bet['option']}{_odds_s}(P={bet['prob']}%{_ev_s})"
 
     if primary_bet:
         insight_parts.append(f"[{mode_label}]主推{fmt_bet(primary_bet)}")
+        # Ultra 15.8-B: 主推同向性重选痕迹 — 审计/渲染层可追溯"为什么不是概率最高项"
+        if _realign_note:
+            insight_parts.append(f"⚠️ {_realign_note}")
     if hhad_primary_bet:
         insight_parts.append(f"HHAD主推{fmt_bet(hhad_primary_bet)}")
     if pure_direction_bet and pure_direction_bet['option'] != (primary_bet['option'] if primary_bet else ''):
         insight_parts.append(f"纯方向{fmt_bet(pure_direction_bet)}")
     if double_recommend:
+        # Ultra 15.1: 赔率未同步时经 fmt_bet 渲染"(盘口为准)", 不出现"@None"
         if double_recommend.get('parallel'):
-            insight_parts.append(f"双选并列主推{double_recommend['option']}@{double_recommend['odds']}(P={double_recommend['prob']}%,EV={double_recommend['ev_pct']}%,平局盲区覆盖)")
+            insight_parts.append(f"双选并列主推{fmt_bet(double_recommend)},平局盲区覆盖")
         else:
-            insight_parts.append(f"双选保险{double_recommend['option']}@{double_recommend['odds']}(P={double_recommend['prob']}%,EV={double_recommend['ev_pct']}%)")
+            insight_parts.append(f"双选保险{fmt_bet(double_recommend)}")
         if double_recommend.get('trap_risk'):
             insight_parts.append(f"⚠️ 让球陷阱: {double_recommend.get('trap_note', '深盘陷阱风险')}")
     if hhad_primary_bet and hhad_primary_bet.get('trap_risk'):
@@ -3808,12 +4147,14 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     # 让平高发窗口 = 受让/让球盘 + 恰好1球差>20% + 中等难度
     # 此时即使让平EV不为正, 也主动提示让平作为高发方向的覆盖选项
     if let_draw_opt:
+        # Ultra 15.1: 赔率未同步(odds=None)时渲染"盘口为准"; ev=None 不显示EV行
+        _ldo_s = f"@{let_draw_opt['odds']}" if let_draw_opt.get('odds') else "(盘口为准)"
         if let_draw_opt['value']:
-            insight_parts.append(f"让平正EV({let_draw_opt['ev_pct']}%)@{let_draw_opt['odds']},价值投注")
-        elif pass_risk_level == '高':
-            insight_parts.append(f"让平EV={let_draw_opt['ev_pct']}%@{let_draw_opt['odds']},穿盘高风险")
+            insight_parts.append(f"让平正EV({let_draw_opt['ev_pct']}%){_ldo_s},价值投注")
+        elif pass_risk_level == '高' and let_draw_opt.get('ev_pct') is not None:
+            insight_parts.append(f"让平EV={let_draw_opt['ev_pct']}%{_ldo_s},穿盘高风险")
         if let_draw_hotspot:
-            insight_parts.append(f"让平高发窗口(让平率高达44%,受让/中难度),建议覆盖让平@{let_draw_opt['odds']}")
+            insight_parts.append(f"让平高发窗口(让平率高达44%,受让/中难度),建议覆盖让平{_ldo_s}")
 
     # ===== Ultra 11.13: 让平覆盖双选 (LRN-20260809-004 深度因子/回归) =====
     # 背景: 用户被让平坑太多次, 要求"让平概率大时体现在胜平负(HAD)双选里, 不单推让平"
@@ -3884,8 +4225,8 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     let_draw_rec = None
     if let_draw_opt:
         _ldr_prob = let_draw_opt.get('prob', 0)   # 已为百分比(如26.1)
-        _ldr_ev = let_draw_opt.get('ev_pct', 0)   # 已为百分比(如+9.6)
-        _ldr_odds = let_draw_opt.get('odds', 0)
+        _ldr_ev = let_draw_opt.get('ev_pct')      # Ultra 15.1: 赔率未同步时为 None
+        _ldr_odds = let_draw_opt.get('odds')
         _ldr_already_primary = (hhad_primary_bet or {}).get('option') == 'HHAD让平'
         _ldr_trigger = (_ldr_prob >= 28) or (_ldr_prob >= 25 and let_draw_hotspot)
         if _ldr_trigger and not _ldr_already_primary:
@@ -3894,19 +4235,24 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
                 'option': 'HHAD让平',
                 'prob': round(_ldr_prob, 1),
                 'odds': _ldr_odds,
-                'odds_detail': str(_ldr_odds),
+                'odds_detail': (str(_ldr_odds) if _ldr_odds else '以盘口为准'),  # Ultra 15.1
                 'ev_pct': _ldr_ev,
                 'let_draw_direct': True,
                 'direction': '让平',
                 'desc': '让平直推: 模型对让平(恰好1球差)给出独立推荐',
             }
+            if not _ldr_odds:
+                let_draw_rec['odds_note'] = '赔率未同步,以体彩当前盘口为准'
             _ldr_reason = []
             if _ldr_prob >= 28:
                 _ldr_reason.append(f"P={_ldr_prob:.0f}%≥28%强信号")
             if let_draw_hotspot:
                 _ldr_reason.append("让平高发窗口")
+            # Ultra 15.1: odds=None → "@盘口为准"; ev=None → EV段省略 (原 EV={None:+.0f} 会崩溃)
+            _ldr_odds_s = f"@{_ldr_odds}" if _ldr_odds else "@盘口为准"
+            _ldr_ev_s = f",EV={_ldr_ev:+.0f}%" if _ldr_ev is not None else ""
             insight_parts.append(
-                f"让平直推@{_ldr_odds}(P={_ldr_prob:.0f}%,EV={_ldr_ev:+.0f}%,"
+                f"让平直推{_ldr_odds_s}(P={_ldr_prob:.0f}%{_ldr_ev_s},"
                 f"历史让平率≈25%{(';'+';'.join(_ldr_reason)) if _ldr_reason else ''})"
             )
 
@@ -3980,10 +4326,13 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
     if draw_attention is not None:
         draw_window_hhad_priority = True
         _hhad_dir_val = (hhad_primary_bet or {}).get('option', '')
-        _hhad_odds_val2 = (hhad_primary_bet or {}).get('odds', 0)
+        _hhad_odds_val2 = (hhad_primary_bet or {}).get('odds')
         # Ultra 11.19: HHAD主推缺失(未开盘)时, 给出通用让球盘优先提示, 避免"参考@0"
+        # Ultra 15.1 三档: 有赔率@odds / 有主推无赔率(盘口为准) / 无主推(通用提示)
         if _hhad_dir_val and _hhad_odds_val2 and _hhad_odds_val2 > 0:
             _dw_ref = f"HHAD参考{_hhad_dir_val}@{_hhad_odds_val2}"
+        elif _hhad_dir_val:
+            _dw_ref = f"HHAD参考{_hhad_dir_val}(盘口为准)"
         else:
             _dw_ref = ("让球盘方向优先参考HHAD" if (hhad_dict or {}).get('h', 0) > 0
                        else "让球盘未开盘, 平局概率偏高注意提防")
@@ -4072,6 +4421,18 @@ def compute_cross_market_value(had_probs, had_dict, hhad_probs, hhad_dict, handi
         'pass_risk': pass_risk,
         'margin_dist': margin_dist,
         'insight': insight,
+        # Ultra 15.7 (2026-08-20 用户裁决): SWOT迁移后主推同源重选上下文 —
+        # e2e选推发生在SWOT融合之前, 融合改写HAD/HHAD概率后, 主推仍是"旧概率世界"
+        # 产物 (实例260820周四005: 主推76.6% vs 迁移后展示72%, 同报告两套数)。
+        # 融合侧用同一个本函数以迁移后概率整体重算推荐, 此处持久化重算输入
+        # (两盘h/d/a赔率 + λ), 保证重选与e2e选推零逻辑分叉、可幂等重跑。
+        'resel_ctx': {
+            'had_odds': ({'h': had_dict['h'], 'd': had_dict['d'], 'a': had_dict['a']}
+                         if (isinstance(had_dict, dict) and 'h' in had_dict) else None),
+            'hhad_odds': ({'h': hhad_dict['h'], 'd': hhad_dict['d'], 'a': hhad_dict['a']}
+                          if (isinstance(hhad_dict, dict) and 'h' in hhad_dict) else None),
+            'lam': [lam_h, lam_a],
+        },
     }
 
 def assess_data_quality(data):
@@ -5887,7 +6248,7 @@ def apply_odds_free_calibration(probs, sp):
       C1 半全场平局粘性 — 联赛 HT=D→FT=D 转移率 vs 全局均值, 15%权重, ±4pp界
       C2 休息天数效应   — 主客休息差≥3天档 vs 联赛均值, 20%权重, ±5pp界
       C3 近期状态差异   — form_score差分档(±1) vs similar基准, 25%权重
-      C4 模型校准偏差   — 3290场闭环: 按置信区间向实际命中率修正, 50%强度
+      C4 模型校准偏差   — [Ultra 14.3 移除, RULE-016] 旧模式闭环偏差不作用于新模型
     排除 (赔率依赖): 球队×赔率区间偏差(模块3) / 跨市场一致性(模块4) / H2H先验(模块6, 已升格为融合源S3)
     """
     league = sp.get('league', '')
@@ -5952,36 +6313,10 @@ def apply_odds_free_calibration(probs, sp):
                         notes.append(f'状态差异: 主{home_form:.1f}/客{away_form:.1f}→主{h_shift * 100:+.0f}pp')
 
     # --- C4. 模型校准偏差修正 (同模块7, 3290场闭环) ---
-    if _MODEL_CALIB:
-        mc = _MODEL_CALIB.get('probability_correction', {})
-        if mc:
-            conf = max(pw, pd, pl)
-            bins = [(0.0, 0.25, '0-25%'), (0.25, 0.35, '25-35%'), (0.35, 0.45, '35-45%'),
-                    (0.45, 0.55, '45-55%'), (0.55, 0.65, '55-65%'), (0.65, 0.75, '65-75%'),
-                    (0.75, 0.85, '75-85%'), (0.85, 1.0, '85-100%')]
-            bin_label = None
-            for lo, hi, lbl in bins:
-                if lo <= conf < hi:
-                    bin_label = lbl
-                    break
-            if bin_label and bin_label in mc:
-                entry = mc[bin_label]
-                bias_pp = entry.get('bias_pp', 0)
-                if abs(bias_pp) > 2 and entry.get('n', 0) >= 8:
-                    correction = bias_pp / 100.0 * 0.5
-                    if conf == pw:
-                        pw += correction
-                        pl -= correction * 0.6
-                        pd -= correction * 0.4
-                    elif conf == pd:
-                        pd += correction
-                        pw -= correction * 0.5
-                        pl -= correction * 0.5
-                    else:
-                        pl += correction
-                        pw -= correction * 0.6
-                        pd -= correction * 0.4
-                    notes.append(f'模型校准: {bin_label}偏差{bias_pp:+.1f}pp→{correction * 100:+.1f}pp修正')
+    # Ultra 14.3 (RULE-016, 2026-08-20 用户裁决): C4 校准因子来自 model_calibration.json
+    # (旧四源含赔率融合模式的输出偏差闭环), 与预测模式强绑定 — 本函数为独立模式专用,
+    # 移除该校准。旧模式偏差对新模型无代表性, 待独立模式闭环场次积累后重标定。
+    # (C1-C3 来自联赛历史赛果客观规律统计, 与模式无关, 保留)
 
     # 归一化 + 边界保护 (同 apply_advanced_calibration 尾部)
     s = pw + pd + pl
@@ -7390,8 +7725,29 @@ def predict_match(match_num, data):
         lam_a /= home_adv
     else:
         # 降级: 从赔率隐含概率推算，总进球基数由市场盘口决定
-        total_goals_base = LEAGUE_AVG_GOALS_MAP.get(sp.get('league', ''), market_goal_line)
-        if had_min_idx == 0:
+        # Ultra 14.3 (RULE-016): 独立模式赔率零输入 — p1_w/p1_l 为赔率隐含概率,
+        # 盘口线为市场信号, 均不可用; 独立模式降级链: 历史Elo概率分配λ → 联赛均值
+        total_goals_base = LEAGUE_AVG_GOALS_MAP.get(sp.get('league', ''), 2.5)
+        if INDEPENDENT_MODE:
+            _degraded = 'league_avg'
+            if _hist_elo_h is not None and _hist_elo_a is not None:
+                # 优先: 历史库Elo概率分配 (独立模式合法源, λ总=联赛均值)
+                _elo_hfa = int((LEAGUE_HOME_ADV.get(sp.get('league', ''), 1.15) - 1.0) * 400)
+                _elo_p = elo_probabilities(None, None, 0.5, 0.5,
+                                           league_home_adv=_elo_hfa,
+                                           hist_elo_h=_hist_elo_h, hist_elo_a=_hist_elo_a)
+                if _elo_p:
+                    _h_share = _elo_p[0] + 0.5 * _elo_p[1]
+                    _a_share = _elo_p[2] + 0.5 * _elo_p[1]
+                    lam_h = max(0.3, min(4.0, total_goals_base * _h_share))
+                    lam_a = max(0.3, min(4.0, total_goals_base * _a_share))
+                    _degraded = 'elo'
+            if _degraded == 'league_avg':
+                lam_h = total_goals_base * 0.55
+                lam_a = total_goals_base * 0.45
+            print(f"  [λ降级] 独立模式无球队数据 → {'Elo概率分配' if _degraded == 'elo' else '联赛均值'}"
+                  f"λ {lam_h:.2f}/{lam_a:.2f} (赔率零输入)")
+        elif had_min_idx == 0:
             lam_h = total_goals_base * p1_w / (p1_w + p1_l) * 1.1
             lam_a = total_goals_base * p1_l / (p1_w + p1_l) * 0.9
         elif had_min_idx == 2:
@@ -7413,8 +7769,10 @@ def predict_match(match_num, data):
     # 贝叶斯收缩(k=10→向1.3收缩50%)系统性压低总进球;
     # 市场O/U盘口线是总进球期望的直接定价信号, 此前仅用于大小标签未参与λ。
     # 混合: target = 65%模型 + 35%市场, 等比缩放进而保持主客强弱比例不变
+    # Ultra 14.3 (2026-08-20): 独立模式赔率零输入 — 市场盘口校准λ属赔率输入残留,
+    # 独立模式跳过 (O/U盘口线仅保留大小球玩法定义与展示用途); λ偏差待新模式闭环重标定
     lam_market_calibrated = False
-    if market_goal_line and 1.5 <= market_goal_line <= 4.0:
+    if not INDEPENDENT_MODE and market_goal_line and 1.5 <= market_goal_line <= 4.0:
         lam_total_model = lam_h + lam_a
         # O/U盘口≈总进球中位数, 期望≈中位数+0.1 (右偏分布)
         lam_total_market = market_goal_line + 0.1
@@ -7548,9 +7906,11 @@ def predict_match(match_num, data):
     #   260815周六9场极端大球轮(实际均值3.78 vs λ均值2.57)进一步佐证
     # 修正: 总λ加性 +0.35 (保守, 略低于均值偏差0.44防过度), 主客等比缩放保持强弱比
     # 效果回测: TTG单选命中率 25.0% → 29.7% (128场), 且分布均值对齐(≥3球56%)
+    # Ultra 14.3 (RULE-016): 标定数据来自旧四源模式 (λ含市场盘口校准35%权重),
+    # 对独立模式纯模型λ无代表性 — 独立模式跳过, 待新模式闭环场次积累后重标定
     _TTG_BIAS_ADJ = 0.35
     _lam_total_pre = lam_h + lam_a
-    if 1.5 <= _lam_total_pre <= 4.0:
+    if not INDEPENDENT_MODE and 1.5 <= _lam_total_pre <= 4.0:
         _scale_ttg = min(1.30, (_lam_total_pre + _TTG_BIAS_ADJ) / _lam_total_pre)
         if _scale_ttg > 1.01:
             lam_h *= _scale_ttg
@@ -7568,12 +7928,15 @@ def predict_match(match_num, data):
     # 方向经实证支持(backtest_v611b 5A: 市场0-0赔率校准良好, 偏差±0.02内);
     # 调整幅度(max 0.5)未经实证, 分歧场景历史样本不足, 保持原值待验证
     # 需要在scores计算后进行, 修正比分概率分布
+    # Ultra 14.3 (RULE-016): 该校准读取体彩CRS赔率 (市场隐含0-0概率) — 属赔率输入,
+    # 独立模式赔率零输入 → 跳过, 0-0及低进球比分概率保持纯模型输出
     _sporttery_crs = {}
     _sb = sp.get('sporttery_bonus') or {}
     if isinstance(_sb, dict) and 'crs' in _sb:
         _sporttery_crs = _sb['crs']
     _scores_probs = scores.get('all_probs', {})
-    _00_mispriced, _00_adj, _model_00, _market_00 = detect_zero_zero_mispricing(_scores_probs, _sporttery_crs)
+    _00_mispriced, _00_adj, _model_00, _market_00 = detect_zero_zero_mispricing(
+        _scores_probs, {} if INDEPENDENT_MODE else _sporttery_crs)
     if _00_mispriced:
         # 上调0-0和1-0/0-1等低进球比分概率
         low_scores = ['0-0', '0-1', '1-0', '1-1']
@@ -7651,18 +8014,37 @@ def predict_match(match_num, data):
                                       league_home_adv=elo_hfa,
                                       hist_elo_h=_hist_elo_h, hist_elo_a=_hist_elo_a)
         # 两源权重: 真实xG→Poisson主导; proxy xG→Elo主导; 历史Elo高精度加权
-        _pw_indep = 0.8 if _xg_is_proxy else 1.2
-        _ew_indep = 1.0
+        # ===== Ultra 15.0 (L2-接入): 学习版权重优先, 启发式降级为冷启动先验 =====
+        # learn_fusion_weights.py 用带赛果独立场次回放学习 (单纯形网格搜索+收缩护栏),
+        # 过冷启动(n≥60)+增益(≥0.002)双护栏才 applied=true; 学习器未就绪自动回落启发式。
+        # proxy降权/历史Elo加权/漂移乘数三个结构保留, 作用在学习后的基准权重之上。
+        _lw_data = _load_learned_fusion_weights()
+        if _lw_data:
+            _lw = _lw_data['weights']
+            # 学习权重归一和=1, 放大到启发式量纲 (先验 1.2+1.0+0.2=2.4) 保持乘数结构量级
+            _lw_scale = 2.4
+            _pw_indep = _lw['poisson'] * _lw_scale
+            _ew_indep = _lw['elo'] * _lw_scale
+            if _xg_is_proxy:
+                _pw_indep *= (0.8 / 1.2)  # 保留启发式proxy降权比 (2/3)
+            _lw_h2h_base = _lw['h2h'] * _lw_scale  # 学习版H2H基准 (替代公式典型值0.20)
+        else:
+            _pw_indep = 0.8 if _xg_is_proxy else 1.2
+            _ew_indep = 1.0
+            _lw_h2h_base = 0.20
         if _hist_elo_h is not None and _hist_elo_a is not None:
-            _ew_indep = min(1.3, _ew_indep * 1.3)
+            _ew_indep *= 1.3  # 历史Elo高精度加权 (启发式1.0×1.3=1.3上限; 学习量纲下按比例同步放大)
         # 漂移乘数照常作用于存留的两源
         _drift_m = _get_drift_multipliers()
         if _drift_m:
             _pw_indep *= _drift_m.get('poisson', 1.0)
             _ew_indep *= _drift_m.get('elo', 1.0)
         # ===== Ultra 14.0: H2H独立融合源S3 (时间衰减交锋, 原始n≥2启用) =====
-        # 权重 w = 0.10+0.05×n (上限0.35), 联赛先验平滑防小样本极端
+        # 权重 w = 0.10+0.05×n (上限0.35), 联赛先验平滑防小样本极端;
+        # 学习版: 公式整体 × (_lw_h2h_base/0.20) — 保留n递增结构, 采纳学习到的H2H真实预测力标度
         h2h_probs, h2h_w, h2h_note = _build_h2h_independent_source(sp, league)
+        if h2h_probs and h2h_w > 0:
+            h2h_w = min(0.35, h2h_w) * (_lw_h2h_base / 0.20)
         _src_list = [poisson_calibrated, elo_probs]
         _w_list = [_pw_indep, _ew_indep]
         if h2h_probs:
@@ -7680,9 +8062,9 @@ def predict_match(match_num, data):
             _ex = p1_l - 0.85; p1_l = 0.85; p1_d += _ex*0.5; p1_w += _ex*0.5
         _s = p1_w + p1_d + p1_l
         p1_w, p1_d, p1_l = p1_w/_s, p1_d/_s, p1_l/_s
-        # ===== Ultra 14.0: 非赔率历史校准 C1-C4 =====
-        # C1半全场平局粘性 / C2休息天数 / C3状态差异 / C4模型偏差闭环(3290场)
-        # (拆自apply_advanced_calibration的纯历史赛果模块, 赔率依赖模块全排除)
+        # ===== Ultra 14.0: 非赔率历史校准 C1-C3 (C4 已按 RULE-016 移除) =====
+        # C1半全场平局粘性 / C2休息天数 / C3状态差异 (联赛历史赛果客观规律, 与模式无关)
+        # C4模型偏差闭环 — Ultra 14.3 移除: 旧四源模式偏差对新模型无代表性 (RULE-016)
         try:
             _cal_probs, _cal_notes = apply_odds_free_calibration([p1_w, p1_d, p1_l], sp)
             if _cal_notes:
@@ -7690,12 +8072,33 @@ def predict_match(match_num, data):
                 _adv_notes.extend(_cal_notes)
         except Exception:
             pass  # 校准异常不阻断主链路
+        # ===== Ultra 15.0 (L3-接入): 概率校准闭环 — 逐类Platt对齐实际频率 =====
+        # calibrate_indep_probs.py 用独立模式历史 (模型概率 vs 实际赛果) 学习,
+        # n≥100过冷启动+增益护栏才applied; 未就绪时概率原样输出 (零行为变化)。
+        # "52%的概率真的命中52%" — 校准后才进入方向判定/置信度/半全场推导。
+        _cal3 = _load_indep_prob_calibration()
+        if _cal3:
+            try:
+                p1_w, p1_d, p1_l = _apply_indep_prob_calibration(
+                    [p1_w, p1_d, p1_l], _cal3['params'])
+                _m3r = _cal3.get('metrics_raw') or {}
+                _m3c = _cal3.get('metrics_cal') or {}
+                _adv_notes.append(
+                    f"[L3校准] 概率已对齐实际频率 (n={_cal3.get('n_matches')}, "
+                    f"λ={_cal3.get('lambda')}, LL {_m3r.get('log_loss')}→{_m3c.get('log_loss')})")
+            except Exception:
+                pass  # 校准异常不阻断主链路
         fused_probs = [p1_w, p1_d, p1_l]
         v611_flags['independent_mode'] = True
         _src_desc = (f"xG-Poisson(w={_pw_indep:.2f}) + Elo(w={_ew_indep:.2f})"
                      + (f" + H2H(w={h2h_w:.2f})" if h2h_probs else ""))
+        _lw_tag = ''
+        if _lw_data:
+            _lw_m = _lw_data.get('metrics') or {}
+            _lw_tag = (f" [L2学习版权重 n={_lw_data.get('n_matches')},"
+                       f" LL {_lw_m.get('log_loss_prior')}→{_lw_m.get('log_loss_learned')}]")
         v611_notes.append(
-            f"独立模式: 赔率零输入, {_src_desc} 对数融合, 一致度{model_agreement:.0%}")
+            f"独立模式: 赔率零输入, {_src_desc} 对数融合{_lw_tag}, 一致度{model_agreement:.0%}")
         if h2h_note:
             v611_notes.append(h2h_note)
     else:
@@ -7962,6 +8365,35 @@ def predict_match(match_num, data):
     except Exception as _e:
         pass  # 惩罚模块失败不影响主预测流程
 
+    # ===== Ultra 15.8-A (2026-08-21): λ离散度校准 — 悬殊场次强队火力恢复 =====
+    # 回测实证 (260820周四 9场): λ链向联赛均值过度收缩 — 9场λ全部落在0.9~1.7,
+    # 实际7-0的悬殊场(007)λ仅1.5/1.2, 客胜3球的001甚至λ=1.3/1.4(判主强)。
+    # 后果: 净胜球尾部过窄 → 受让胜/让负覆盖侧虚高(001/008/009三场主推全败),
+    # 深盘强队覆盖概率~27-34% vs 4412场历史基准36%。半全场5/9方向全对证明
+    # 结构无误, 纯量级问题 → 放大离散度而非改结构。
+    # 校准: |λh-λa|≥0.25(模型自认非均势)时, 以中点μ放大离散度 k=1.5
+    # (总量守恒: λ' = μ ± k·(λ-μ)), 强队λ上调/弱队下调 → 净胜球尾部变厚,
+    # 深盘覆盖向36%基准靠拢。HAD锚不受影响(三源融合已在上游完成)。
+    _lam_disp_note = None
+    try:
+        _mu = (lam_h + lam_a) / 2.0
+        _half_gap = abs(lam_h - lam_a) / 2.0
+        if _half_gap >= 0.125:  # |λh-λa| ≥ 0.25
+            _k = 1.5
+            _lh_n = max(0.3, min(4.0, _mu + _k * (lam_h - _mu)))
+            _la_n = max(0.3, min(4.0, _mu + _k * (lam_a - _mu)))
+            if abs(_lh_n - lam_h) >= 0.05 or abs(_la_n - lam_a) >= 0.05:
+                _lam_before = f"{lam_h:.1f}/{lam_a:.1f}"
+                lam_h, lam_a = _lh_n, _la_n
+                _lam_disp_note = (f"λ离散度校准: {_lam_before}→{lam_h:.1f}/{lam_a:.1f}"
+                                  f"(λ差{2*_half_gap:.1f}≥0.25, 悬殊场强队火力恢复)")
+                lam_calib_note = (lam_calib_note + '; ' + _lam_disp_note) if lam_calib_note else _lam_disp_note
+                # 离散度改变λ → 比分矩阵/HHAD形状/半全场/总进球全部重算
+                scores = compute_scores(lam_h, lam_a, goal_line=handicap,
+                                        market_goal_line=market_goal_line)
+    except Exception:
+        pass  # 离散度校准失败保持原λ
+
     # ===== 半全场胜平负 (体彩第五种玩法) =====
     # Ultra 9.3: 联赛特定半场比例 + 联赛特定r + 8×8矩阵 + HTL效应
     half_full = compute_half_full(lam_h, lam_a, fused_wdl=[p1_w, p1_d, p1_l],
@@ -7969,7 +8401,10 @@ def predict_match(match_num, data):
 
     # ===== 总进球数 (体彩第三种玩法) =====
     # Ultra 9.3: 10×10矩阵聚合 + 自适应TTG融合权重 + 7+残差校正
-    _ttg_odds = sp.get('sporttery_bonus', {}).get('ttg') if sp.get('sporttery_bonus') else None
+    # Ultra 14.3 (RULE-016): 独立模式赔率零输入 — TTG赔率融合属赔率输入, 传None跳过市场融合
+    _ttg_odds = None
+    if not INDEPENDENT_MODE:
+        _ttg_odds = sp.get('sporttery_bonus', {}).get('ttg') if sp.get('sporttery_bonus') else None
     _xg_quality = _xg_data['cv_quality_avg'] if _xg_data else None
     total_goals_pred = compute_total_goals(lam_h, lam_a, ttg_odds=_ttg_odds,
                                            league=sp.get('league', ''),
@@ -8109,6 +8544,31 @@ def predict_match(match_num, data):
         except Exception as _e:
             pass  # 矛盾信号校准失败时跳过, 不影响原有逻辑
 
+    # ===== Ultra 15.3 (2026-08-20 用户裁决): HAD/HHAD同源统一 — 一个体系铁律 =====
+    # 同一场比赛只允许一个概率体系: HHAD不再走独立管线, 而是从"校准HAD锚×净胜球
+    # 条件形状"重导出。此前 HAD=完整校准链产物 / HHAD=独立Poisson管线, 口径可分裂
+    # (实例: HAD胜53.8% vs HHAD受让胜76% 互相矛盾; SWOT又只改HAD不改HHAD)。
+    _hhad_align_note = None
+    _hhad_aligned, _align_ok = align_hhad_to_had(
+        had_probs, hhad_final_probs, handicap, scores.get('margin_shape'))
+    if _align_ok:
+        _old_top = max(hhad_final_probs)
+        hhad_final_probs = list(_hhad_aligned)
+        _hhad_align_note = (
+            f"同源对齐: 顶概率{_old_top*100:.0f}%→{max(hhad_final_probs)*100:.0f}%")
+        print(f'  [15.3同源] HHAD已按HAD锚重导出(顶概率{_old_top*100:.0f}%→{max(hhad_final_probs)*100:.0f}%)')
+
+    # ===== Ultra 15.2 (2026-08-20 用户裁决): 陷阱侧概率降级 — 标记→真收缩 =====
+    # 深盘受让侧历史仅64%(穿盘率36%)、需净2+球侧EV-18%(4412场回测): 模型高估区。
+    # 概率向历史基准收缩一半(只降不升), 在主推排序前生效, 让排序诚实;
+    # trap_risk标签保留(提示文案), 概率校准与之双轨并行。
+    _hhad_trap_cal_note = None
+    _tgd_probs, _tgd_note = hhad_trap_downgrade(hhad_final_probs, hhad, handicap)
+    if _tgd_note:
+        hhad_final_probs = list(_tgd_probs)
+        _hhad_trap_cal_note = _tgd_note
+        print(f'  [15.2陷阱校准] {_tgd_note}')
+
     hhad_final_idx = hhad_final_probs.index(max(hhad_final_probs))
     if hhad and 'h' in hhad:
         hhad_dir = hhad_dirs[hhad_final_idx]
@@ -8137,11 +8597,15 @@ def predict_match(match_num, data):
     # 校准系数来源(LRN-20260809-002 深度因子分析83场分档实测):
     #   p60-70%档: 预测64% 实际42% (高估22pp) → ×0.66
     #   p50-60%档: 预测52% 实际55% (校准良好) → ×1.00
-    #   p40-50%档: 轻度低估 → ×1.15
+    #   p40-50%档:  轻度低估 → ×1.15
     #   p<40%档:  预测34% 实际55% (低估) → ×1.30
     # 注: regression.db(verify_history)积累后可切换 isotonic 连续校准(升级10 conf_ece)
+    # Ultra 14.3 (RULE-016): 分段系数为旧四源模式83场输出偏差闭环, 与模式强绑定 —
+    # 独立模式用恒等校准 (模型概率直接映射星级), 待新模式闭环积累后重标定
     def calibrate_hit_rate(p):
         """模型概率 → 校准命中率 (经验分段, 修正高概率系统性高估)"""
+        if INDEPENDENT_MODE:
+            return p  # 独立模式: 旧模式分段系数不适用, 恒等映射
         if p >= 0.60: return p * 0.66
         if p >= 0.50: return p * 1.00
         if p >= 0.40: return p * 1.15
@@ -8461,6 +8925,26 @@ def predict_match(match_num, data):
         mode=RECOMMEND_MODE, difficulty=difficulty
     )
 
+    # ===== Ultra 15.8-C (2026-08-21): EV未校准标注 =====
+    # 回测实证 (260820周四): 概率校准闭环 n=8/100 未启动, ECE=0.205 高估 —
+    # EV=模型概率×赔率-1 由未校准概率算出, 概率高估必然制造假价值单
+    # (001 EV+51.6%/005 EV+56.3% 双双全损)。闭环达标前 EV 一律标注"未校准",
+    # 渲染层降级价值单为观察口径。
+    try:
+        _calib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   'predictions', 'indep_prob_calibration.json')
+        _cal_n, _cal_min = 0, 100
+        if os.path.exists(_calib_path):
+            with open(_calib_path, encoding='utf-8') as _cf:
+                _cd = json.load(_cf)
+            _cal_n = int(_cd.get('n_matches') or 0)
+            _cal_min = int(_cd.get('min_n') or 100)
+        cross_market['ev_uncalibrated'] = _cal_n < _cal_min
+        cross_market['ev_calib_n'] = _cal_n
+    except Exception:
+        cross_market['ev_uncalibrated'] = True
+        cross_market['ev_calib_n'] = 0
+
     # ===== Ultra 6.5: 竞彩固定奖金 EV 价值分析 =====
     # 用竞彩官方赔率(实际投注赔率)对模型概率做EV检验
     # EV = 模型概率 × 官方赔率 - 1; EV>0 才有长期价值
@@ -8597,6 +9081,11 @@ def predict_match(match_num, data):
             'conf_hit_rate': round(hhad_hit_rate * 100, 1),  # Ultra 12.1: 校准命中率%
             'p': f"{hhad_final_probs[0]:.0%}/{hhad_final_probs[1]:.0%}/{hhad_final_probs[2]:.0%}",
             'poisson': hhad_wdl_str,
+            # Ultra 15.2/15.3 (2026-08-20): 同源体系痕迹
+            'same_source': _align_ok,                       # HHAD=HAD锚×净胜球形状 重导出
+            'align_note': _hhad_align_note,                 # 对齐前后顶概率
+            'trap_cal_note': _hhad_trap_cal_note,           # 陷阱侧概率收缩明细
+            'margin_shape': scores.get('margin_shape'),     # SWOT迁移传导复用(结构不变)
         },
         'kelly': {
             # P1-4: odds=None(SWOT翻转/档位停售)时不进kelly计算, 避免误报EV
@@ -8652,6 +9141,13 @@ def predict_match(match_num, data):
         'historical_feedback': historical_feedback,
         'sporttery_pools': sporttery_pools,  # Ultra 6.5: 竞彩固定奖金EV分析
         'v611_flags': v611_flags,  # Ultra 6.11: 五大场景修正标记
+        # Ultra 15.0 (进化三层-第二层): 融合源逐源概率存档 — 验证入库后供 learn_fusion_weights
+        # 回放各源真实预测力 (仅独立模式有源结构; verify 侧格式化为 '55.0/28.0/17.0' 入库)
+        **({} if not INDEPENDENT_MODE else {'src_probs': {
+            'poisson': [round(x, 4) for x in poisson_calibrated] if poisson_calibrated else None,
+            'elo': [round(x, 4) for x in elo_probs] if elo_probs else None,
+            'h2h': [round(x, 4) for x in h2h_probs] if h2h_probs else None,
+        }}),
         'market_divergence': market_divergence,  # 优化③ (Ultra 13.11): 模型-市场分歧≥15pp时非空
         'bookmaker_intent': bookmaker_intent,  # Ultra 13.12: 庄家意图五档 (初→即时赔资金动量×模型方向)
         'cup_leg_penalty': cup_leg_penalty_info,  # Ultra 7.4: 杯赛首回合惩罚信息
@@ -9395,26 +9891,33 @@ def main():
     # ===== Phase 6: 自动生成PDF报告 (Ultra 11.2 — 保证PDF与预测场次一致) =====
     # PDF 输出到工作区根目录 (SPORTTERY_WORKSPACE 优先, 无则脚本目录), 便于手机端直接访问
     _pdf_out_dir = os.path.dirname(os.path.abspath(__file__))  # 交付物落地脚本目录(/workspace/sporttery, 用户可见可打开)
-    _pdf_basename = os.path.basename(pred_file).replace('.json', '.pdf')
+    _pdf_basename = os.path.basename(pred_file).replace('.json', '.pdf').replace('pred_', 'pred_report_')
     pdf_path = os.path.join(_pdf_out_dir, _pdf_basename)
     try:
-        # 字体由 pdf_fonts 统一回退 (霞鹜文楷→本地fonts/→系统CJK), 无需硬编码/usr/share路径
+        # Ultra 15.6 (2026-08-20 用户裁决): 杂志版 gen_pred_pdf 退役, 换统一主推卡片版
+        # (与 bet_guide / pred_report HTML 同口径同版式); 字体由 pdf_fonts 统一回退
         import importlib
-        gen_pdf = importlib.import_module('gen_pred_pdf')
-        gen_pdf.generate_pdf(pred_data, pdf_path)
-        print(f"  [PDF] 已自动生成: {pdf_path} ({len(results)}场)")
+        gen_pdf = importlib.import_module('gen_pred_pdf_unified')
+        gen_pdf.generate(pred_file)
+        print(f"  [PDF] 已自动生成(统一主推版): {pdf_path} ({len(results)}场)")
     except Exception as ex:
-        print(f"  [PDF] 自动生成失败 (不影响预测结果, 可手动运行 `python3 gen_pred_pdf.py {pred_file} {pdf_path}`): {ex}")
+        print(f"  [PDF] 自动生成失败 (不影响预测结果, 可手动运行 `python3 gen_pred_pdf_unified.py {pred_file}`): {ex}")
 
-    # ===== Phase 7: 投注选择显性化指南 (三档: ✅单选/⚠️双选兜底/🚫避开) =====
-    # 源自 260811 用户实测复盘(彩票6中2根因): 平局窗口场须改买HHAD覆盖项, 强主场误判场须避开
+    # ===== Phase 7: 投注选择指南 + 预测报告HTML (Ultra 15.6 统一主推口径) =====
     try:
         from gen_bet_guide_html import generate as _gen_bet_guide
         _guide = _gen_bet_guide(pred_file)
         if _guide:
-            print(f"  [指南] 投注选择指南: {_guide}")
+            print(f"  [指南] 投注选择指南(统一主推): {_guide}")
     except Exception as _ge:
         print(f"  [指南] 生成失败(不影响预测): {_ge}")
+    try:
+        from gen_pred_html import generate as _gen_pred_html
+        _rep = _gen_pred_html(pred_file)
+        if _rep:
+            print(f"  [报告] 预测报告HTML(统一主推): {_rep}")
+    except Exception as _re:
+        print(f"  [报告] 生成失败(不影响预测): {_re}")
 
 if __name__ == '__main__':
     main()
