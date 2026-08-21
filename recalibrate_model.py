@@ -12,19 +12,32 @@
   2. 方向修正 (direction_correction): 各方向漂移后命中率
   3. 联赛修正 (league_correction): 各联赛漂移后表现 vs 总体
 
-输出: predictions/model_calibration.json (覆盖)
+输出: predictions/model_calibration.json (覆盖, 旧模式/legacy 用)
+
+改进#4 (2026-08-21, RULE-016 管辖): C4 双文件隔离
+  - 默认(legacy)输出 model_calibration.json, 仅供 --legacy-market 旧模式消费
+  - --indep 输出 model_calibration_indep.json, 只消费 independent_mode=1 场次,
+    带护栏 (n<100 不生效 / 100→200 向"无修正"收缩), applied 标记
+  v215_e2e 独立模式只读 _indep 文件且 applied=true 才应用; 旧模式文件在
+  独立模式下被加载护栏拒绝 (旧模式偏差不得作用于新模型)。
 """
 
 import json
 import os
 import re
 import sqlite3
+import sys
 from datetime import datetime
 
 WORKSPACE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(WORKSPACE, 'predictions', 'regression.db')
 OUT = os.path.join(WORKSPACE, 'predictions', 'model_calibration.json')
+OUT_INDEP = os.path.join(WORKSPACE, 'predictions', 'model_calibration_indep.json')
 DRIFT_STATE_FILE = os.path.join(WORKSPACE, 'predictions', 'drift_state.json')
+
+# 改进#4: 独立模式护栏 (与 calibrate_indep_probs 同量级)
+INDEP_MIN_N = 100    # 冷启动: 独立模式验证场次 <100 → applied=false (恒等, 不修正)
+INDEP_FULL_N = 200   # 100→200 向"无修正"线性收缩
 
 # Ultra 13.5: 漂移点改为从 drift_state.json 读取 (与 CUSUM 检出/gen_drift_state 一致)
 DRIFT_POINT = '2026-08-09'   # 兜底值 (drift_state.json 缺失/损坏时)
@@ -57,17 +70,31 @@ def parse_probs(s):
 
 
 def main():
+    indep = '--indep' in sys.argv  # 改进#4: 独立模式 C4 (RULE-016 隔离)
     conn = sqlite3.connect(DB)
-    rows = conn.execute('''
-        SELECT match_date, pred_had_probs, pred_had_dir, actual_had, had_hit, league
-        FROM verify_history
-        WHERE pred_had_probs IS NOT NULL AND actual_had IN ('胜','平','负')
-    ''').fetchall()
-    print(f'[重标定] 加载 {len(rows)} 场验证数据')
+    if indep:
+        cols = [r[1] for r in conn.execute('PRAGMA table_info(verify_history)')]
+        mode_filter = ('independent_mode = 1' if 'independent_mode' in cols
+                       else "pred_file LIKE '%_indep%'")
+        rows = conn.execute(f'''
+            SELECT match_date, pred_had_probs, pred_had_dir, actual_had, had_hit, league
+            FROM verify_history
+            WHERE pred_had_probs IS NOT NULL AND actual_had IN ('胜','平','负')
+              AND {mode_filter}
+        ''').fetchall()
+        print(f'[重标定·独立模式] 加载 {len(rows)} 场独立模式验证数据 (旧模式永久隔离)')
+    else:
+        rows = conn.execute('''
+            SELECT match_date, pred_had_probs, pred_had_dir, actual_had, had_hit, league
+            FROM verify_history
+            WHERE pred_had_probs IS NOT NULL AND actual_had IN ('胜','平','负')
+        ''').fetchall()
+        print(f'[重标定] 加载 {len(rows)} 场验证数据')
 
+    out_path = OUT_INDEP if indep else OUT
     old = {}
-    if os.path.exists(OUT):
-        with open(OUT, encoding='utf-8') as f:
+    if os.path.exists(out_path):
+        with open(out_path, encoding='utf-8') as f:
             old = json.load(f)
 
     # ===== 1. 概率修正 (置信度区间) =====
@@ -154,8 +181,26 @@ def main():
 
     # ===== 汇总 =====
     all_hits = sum(1 for _, _, _, _, h, _ in rows if h)
+
+    # 改进#4: 独立模式护栏 — n<100 不生效; 100→200 偏差向0收缩 (恒等起步)
+    applied = True
+    shrink_lambda = 1.0
+    if indep:
+        n = len(rows)
+        if n < INDEP_MIN_N:
+            applied = False
+            shrink_lambda = 0.0
+        elif n < INDEP_FULL_N:
+            shrink_lambda = (n - INDEP_MIN_N) / (INDEP_FULL_N - INDEP_MIN_N)
+        if shrink_lambda < 1.0:
+            for lbl, v in prob_corr.items():
+                v['bias_pp'] = round(v['bias_pp'] * shrink_lambda, 1)
+                v['correction_factor'] = round(1.0 + (v.get('correction_factor', 1.0) - 1.0) * shrink_lambda, 3)
+
     out = {
         'version': 'Ultra 13.5',
+        'mode': 'independent' if indep else 'legacy_market',   # 改进#4: 模式标记 (加载护栏依据)
+        'applied': applied,   # 改进#4: 独立模式 applied=false 时消费端零行为变化
         'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'description': ('模型校准偏差修正因子 — 漂移重标定版(清洁数据)。'
                         f'基于{len(rows)}场验证数据, {DRIFT_POINT}起样本×{RECENT_WEIGHT}权重。'
@@ -174,10 +219,17 @@ def main():
         'direction_correction': dir_corr,
         'league_correction': league_corr,
     }
+    if indep:
+        out['indep_guard'] = {
+            'min_n': INDEP_MIN_N, 'full_n': INDEP_FULL_N,
+            'shrink_lambda': round(shrink_lambda, 3),
+            'note': ('RULE-016: 仅 independent_mode=1 场次; n<100 恒等不修正; '
+                     '100→200 偏差向0收缩'),
+        }
 
-    with open(OUT, 'w', encoding='utf-8') as f:
+    with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
-    print(f'[重标定] 已写入 {OUT}')
+    print(f'[重标定] 已写入 {out_path}' + ('' if applied else ' (applied=false: 冷启动恒等, 不修正)'))
     print(f"  总体命中率: {out['overall']['model_hit_rate']}%")
     print('\n  概率修正 (置信度区间):')
     for lbl, v in prob_corr.items():

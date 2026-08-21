@@ -1,0 +1,32 @@
+# CI — 改进#2/#8 (2026-08-21)
+#
+# 范围说明 (为什么只有单测, 不是全管线云端调度):
+#   采集层依赖本地设施, 无法上云 —
+#     ① nowscore WebBridge 守护进程 (127.0.0.1:10086, 驱动用户真实浏览器)
+#     ② 雷速 WAF 求解的 jsdom (需 npm install jsdom, 云端可装但挑战与IP绑定)
+#     ③ 全部训练/验证数据 (predictions/*.db, *.json 账本) 按仓库政策不入 git
+#   因此云端可做的只有"无采集/无数据依赖"的环节 = 单测 + 语法编译检查。
+#   全管线云端无人值守若未来重启, 需先解决: WebBridge headless 化改造 +
+#   数据资产云端同步策略 (与"仅代码入库"裁决冲突, 需用户新裁决)。
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # 单测只依赖标准库 (swot_fusion_v3/learn_swot_shift 均纯 stdlib)
+      - name: 语法编译检查 (全部改动面)
+        run: python -m py_compile swot_fusion_v3.py learn_swot_shift.py recalibrate_model.py nowscore_fetch.py v215_e2e.py v215_verify.py scripts/swot_calibration_analysis.py scripts/migrate_nowscore_aliases.py
+      - name: 单元测试
+        run: python -m unittest discover -s tests -v

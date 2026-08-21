@@ -4,6 +4,16 @@
 > **更新规则**: 每次修复 bug 或做出重要架构决策后, 立即追加一条记录
 > **格式**: `LRN-YYYYMMDD-XXX` (学习) / `ERR-YYYYMMDD-XXX` (错误)
 
+### LRN-20260821-004: 八条架构改进落地 — SWOT学习闭环/C4双文件隔离/队名单一来源/CI/拆分起步 (2026-08-21 批量)
+- **触发**: 代码库深度分析产出的 8 条改进点, 用户裁决全部实施; #5 以《SWOT量化校准分析报告(审视版v1)》审阅结论为准 (该报告翻转评估测错对象: 92场中|diff|≥6仅2场, 6场"翻转"全是常规迁移/draw-boost的argmax顺带穿越; 且方向对比用了迁移后字段构成循环比较)。
+- **#5 SWOT学习闭环 (重点)**: ①`apply_swot_prob_shift` 常规迁移加 **argmax不穿越上限** (追平也不允许, SWOT_TIE_EPS=0.001; 穿越权只留给|diff|≥6强信号分支 — 止血方案A的正确版: 不删从未触发的分支, 改约束真正产生穿越的常规迁移); ②`learn_swot_shift.py` 学习 k/max_shift/主客不对称因子, 直接import生产函数+覆写模块常量回放 (杜绝复刻漂移), 三道护栏 (n<60不产出/60→150收缩/增益≥0.002); ③消费端 `_load_swot_shift_params` applied=false零行为变化; ④已挂载 v215_verify 自动retrain; ⑤`scripts/swot_calibration_analysis.py` 修正版测量入库 (翻转三分解/model_dir_orig对比/反事实三方对照/分主客倾向侧胜率)。**教训: 评估报告必须先审测量口径再动手 — "6场翻转全败"的翻转定义与系统设计语义不一致时, 结论会把方案引向删除从未触发的机制。**
+- **#4 C4双文件隔离**: recalibrate_model.py --indep → model_calibration_indep.json (仅independent_mode=1, n<100 applied=false恒等, 100→200收缩); e2e消费时护栏 `not INDEPENDENT_MODE` (消费时判断而非加载时 — 加载在CLI模式切换前, 加载时判断会误伤--legacy-market); 旧文件已备份 predictions/archive/。
+- **#6 队名单一来源**: nowscore_fetch 234标准名/281别名经 scripts/migrate_nowscore_aliases.py 迁移, 实测自学习早已吸收 (新增0条); 硬编码表删除, 改 `_aliases_of()` 走 team_names 统一库。
+- **#2/#8**: .github/workflows/ci.yml (编译检查+unittest discover); 全管线不能上云的根因: WebBridge守护进程+数据资产不入库, 已在workflow注释固化。
+- **#1**: engine/decision.py 第一增量 (4纯函数原样迁移+import绑定, 行为断言验证); docs/engine-split-plan.md 边界图。**纪律: 无全量测试网时拆分只做行为不变增量。**
+- **#7**: 遗留目录本就已未跟踪, 补.gitignore缺口 (.npm-cache/NVIDIA Corporation/work_progress_backup/*.bak)。
+- **验证**: tests/ 14单测全过 (含合成数据学习路径: 不对称识别/冷启动/增益护栏)。
+
 ### LRN-20260821-003: 单源情报升级多源的三条铁律 — 类别去重/中性过滤/小样本护栏 (Ultra 15.9)
 - **触发1 (重复计分)**: 直接把 stats 条目 append 进 leisu 条目列表会让 `determine_swot_lean_v3` 的"每条+1"重复计同一信号 — leisu 写"状态出色"叙述 + stats 写"近况出色: 5胜"数字 = 同一信号两份分。**教训: 多源合并必须按语义类别去重**(form/h2h/rank/firepower五类), 一类一票; 量化源(xG)与定性叙述天然无重叠可豁免。
 - **触发2 (中性噪音)**: stats 的 else 分支会生成"近况: 3胜2平1负"这类**无方向中性条目** — 它在独用兜底时提供上下文, 但并入主源时只贡献+1计分噪音。**教训: 合并路径要过滤无方向信号**(方向关键词白名单), 独用路径保留完整上下文 — 同一生成器两种消费场景两种过滤策略。

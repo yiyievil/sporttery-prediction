@@ -420,32 +420,8 @@ from cup_leg_penalty import get_cup_leg_penalty, clear_cache as clear_leg_cache,
 # ============================================================
 # Pro 3.1: 5星制置信度系统 (含半星)
 # ============================================================
-def format_stars(score):
-    """将1.0-5.0的分数转为5星制字符串(含半星)
-    
-    例如:
-      5.0 → ★★★★★    4.5 → ★★★★½
-      4.0 → ★★★★      3.5 → ★★★½
-      3.0 → ★★★        2.5 → ★★½
-      2.0 → ★★          1.5 → ★½
-      1.0 → ★
-    """
-    score = round(score * 2) / 2  # 取最近的0.5
-    score = max(1.0, min(5.0, score))
-    full = int(score)
-    half = 1 if (score - full) >= 0.5 else 0
-    return '★' * full + ('½' if half else '')
-
-def stars_to_score(stars_str):
-    """将星级字符串转回分数 (用于对比/校准)
-    
-    ★★★★★ → 5.0, ★★★★½ → 4.5, ★★★ → 3.0, ★ → 1.0
-    """
-    if not stars_str:
-        return 0.0
-    full_count = stars_str.count('★')
-    has_half = '½' in stars_str
-    return full_count + (0.5 if has_half else 0.0)
+# 改进#1 (2026-08-21): 以下四函数原样迁移至 engine/decision.py (行为不变), 此处 import 绑定
+from engine.decision import format_stars, stars_to_score, kelly_criterion, _hhad_display_label
 
 # ============================================================
 # Phase 1: sporttery.cn API — 体彩核心: 获取场次+赔率+队名+开赛时间 (预测基准)
@@ -3313,36 +3289,10 @@ def pool_margin(odds_list):
     return max(0.0, 1.0 - 1.0 / s) if s > 0 else 0.0
 
 
-def kelly_criterion(prob, odds, margin=0.0):
-    """四分之一Kelly投注比例 + margin加权value判定
-    f* = (bp - q) / b, 实际使用 f* / 4
-    value: f>0 且 EV >= margin/2 (抽水越深的玩法要求越高边际, 默认margin=0保持旧行为)
-    返回: {'stake_pct': float, 'ev': float, 'value': bool}
-    """
-    b = odds - 1
-    if b <= 0:
-        return {'stake_pct': 0, 'ev': 0, 'value': False}
-    f = (b * prob - (1 - prob)) / b
-    ev = prob * odds - 1  # EV = P×赔率 - 1
-    stake = max(0, f * 0.25) * 100
-    # Optimize: margin/2 阈值偏保守, 改为 margin*0.3
-    # 实证: 比分玩法margin高达30-40%, margin/2=15-20%阈值过高,
-    # 很多略高于0的正EV被忽略; margin*0.3在保守和敏感之间折中
-    value_threshold = margin * 0.3
-    return {'stake_pct': round(stake, 1), 'ev': round(ev * 100, 1),
-            'value': f > 0 and ev >= value_threshold}
+# (kelly_criterion → engine/decision.py, 见上方 import)
 
 
-def _hhad_display_label(option, handicap):
-    """HHAD选项/洞察文案术语规范化 (Ultra 11.10 铁律, 与 gen_pred_pdf._hhad_option_label 一致)
-
-    - 负盘(≤-1)=让球: 让胜/让负/让平 不变
-    - 正盘(≥+1)=受让: 让胜→受让胜, 让负→受让负, 让平→受让平
-    - 0=平盘: 保持让X不变
-    只处理含 '让胜'/'让负'/'让平' 的文本, 其余原样返回。
-    """
-    if not option:
-        return option
+# (_hhad_display_label → engine/decision.py, 见上方 import)
     try:
         hcap = float(handicap)
     except (TypeError, ValueError):
@@ -5347,6 +5297,28 @@ def _load_model_calibration():
 
 _MODEL_CALIB = _load_model_calibration()
 
+# 改进#4 (2026-08-21, RULE-016): C4-独立版加载器 — 仅 applied=true 且
+# mode='independent' 的文件才生效; 旧模式 model_calibration.json 永不进独立路径
+_MODEL_CALIB_INDEP_PATH = os.path.join(
+    os.environ.get('SPORTTERY_WORKSPACE', os.path.dirname(os.path.abspath(__file__))),
+    'predictions', 'model_calibration_indep.json'
+)
+
+def _load_model_calibration_indep():
+    if not os.path.exists(_MODEL_CALIB_INDEP_PATH):
+        return None
+    try:
+        with open(_MODEL_CALIB_INDEP_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if data.get('mode') != 'independent' or not data.get('applied'):
+            return None
+        print(f'  [模型校准·独立版] 加载偏差修正 (n={data.get("drift_recalibration",{}).get("samples_total","?")})')
+        return data
+    except Exception:
+        return None
+
+_MODEL_CALIB_INDEP = _load_model_calibration_indep()
+
 # Ultra 10.3: 体彩各玩法赔率偏差校准因子
 # 数据源: predictions/sporttery_pools_calibration.json
 _POOLS_CALIB_PATH = os.path.join(
@@ -6134,7 +6106,9 @@ def apply_advanced_calibration(probs, sp, had, hhad):
     # 基于3290场历史数据的闭环验证:
     #   模型在所有置信度区间系统性高估概率 (偏差-4.5~-6.8pp)
     #   修正方式: 按置信度区间将预测概率向实际校准概率调整
-    if _MODEL_CALIB:
+    # 改进#4 (RULE-016 消费时护栏): 旧模式校准只允许作用于旧模式 — 独立模式下
+    # 即使本函数被意外调用, 旧偏差也不得进入 (双重防护; 独立模式C4走 _MODEL_CALIB_INDEP)
+    if _MODEL_CALIB and not INDEPENDENT_MODE:
         mc = _MODEL_CALIB.get('probability_correction', {})
         if mc:
             conf = max(pw, pd, pl)
@@ -6312,11 +6286,42 @@ def apply_odds_free_calibration(probs, sp):
                     if abs(h_shift) > 0.05:
                         notes.append(f'状态差异: 主{home_form:.1f}/客{away_form:.1f}→主{h_shift * 100:+.0f}pp')
 
-    # --- C4. 模型校准偏差修正 (同模块7, 3290场闭环) ---
-    # Ultra 14.3 (RULE-016, 2026-08-20 用户裁决): C4 校准因子来自 model_calibration.json
-    # (旧四源含赔率融合模式的输出偏差闭环), 与预测模式强绑定 — 本函数为独立模式专用,
-    # 移除该校准。旧模式偏差对新模型无代表性, 待独立模式闭环场次积累后重标定。
-    # (C1-C3 来自联赛历史赛果客观规律统计, 与模式无关, 保留)
+    # --- C4. 模型校准偏差修正 ---
+    # Ultra 14.3 (RULE-016, 2026-08-20 用户裁决): 旧模式 model_calibration.json
+    # (旧四源含赔率融合模式的输出偏差闭环) 与预测模式强绑定, 不得作用于独立模式。
+    # 改进#4 (2026-08-21): C4-独立版回归 — 由 recalibrate_model.py --indep 产出
+    # model_calibration_indep.json (仅 independent_mode=1 场次, n<100 冷启动
+    # applied=false, 100→200 收缩); 此处仅 applied=true 才应用, 否则零行为变化。
+    if _MODEL_CALIB_INDEP:
+        mc = _MODEL_CALIB_INDEP.get('probability_correction', {})
+        if mc:
+            conf = max(pw, pd, pl)
+            bins = [(0.0, 0.25, '0-25%'), (0.25, 0.35, '25-35%'), (0.35, 0.45, '35-45%'),
+                    (0.45, 0.55, '45-55%'), (0.55, 0.65, '55-65%'), (0.65, 0.75, '65-75%'),
+                    (0.75, 0.85, '75-85%'), (0.85, 1.0, '85-100%')]
+            bin_label = None
+            for lo, hi, lbl in bins:
+                if lo <= conf < hi:
+                    bin_label = lbl
+                    break
+            if bin_label and bin_label in mc:
+                entry = mc[bin_label]
+                bias_pp = entry.get('bias_pp', 0)
+                if abs(bias_pp) > 2 and entry.get('n', 0) >= 8:
+                    correction = bias_pp / 100.0 * 0.5
+                    if conf == pw:
+                        pw += correction
+                        pl -= correction * 0.6
+                        pd -= correction * 0.4
+                    elif conf == pd:
+                        pd += correction
+                        pw -= correction * 0.5
+                        pl -= correction * 0.5
+                    else:
+                        pl += correction
+                        pw -= correction * 0.6
+                        pd -= correction * 0.4
+                    notes.append(f'模型校准(独立版): {bin_label}偏差{bias_pp:+.1f}pp→{correction * 100:+.1f}pp修正')
 
     # 归一化 + 边界保护 (同 apply_advanced_calibration 尾部)
     s = pw + pd + pl

@@ -1,0 +1,13 @@
+{
+  "applied": false,
+  "n_matches": 0,
+  "min_n_required": 60,
+  "generated_at": "2026-08-22 00:13:09",
+  "current": {
+    "k": 0.01,
+    "max_shift": 0.2,
+    "home_factor": 1.0,
+    "away_factor": 1.0
+  },
+  "note": "冷启动: 独立模式SWOT账本场次 0<60, 不产出, 维持现值"
+}

@@ -34,6 +34,41 @@ SWOT_FLIP_MAX = 0.35     # 翻转迁移上限 35pp (防止过度极端)
 SWOT_LAMBDA_BOOST_PER_POINT = 0.04  # 镜像后方向仍不符时, 每评分点迁移λ 4%
 SWOT_LAMBDA_BOOST_MAX = 0.25        # λ迁移上限 25% (防过度极端)
 
+# ===== 改进#5 (2026-08-21): SWOT迁移参数化 + argmax不穿越 =====
+# 依据: swot_calibration_analysis 审视版v1复盘 — 常规迁移(2≤|diff|<6)穿越argmax的
+# 场次全部未命中, 且穿越使主推在非强信号下被动翻转。穿越权只保留给强信号分支。
+SWOT_TIE_EPS = 0.001  # 常规迁移上限 = 当前argmax − 受益侧 − 此余量 (严格不追平)
+
+# 学习版迁移参数 (learn_swot_shift.py 产出, 三道护栏; applied=false 时零行为变化)
+def _load_swot_shift_params():
+    """加载学习版迁移参数。仅 applied=true 才覆盖常量, 否则返回None(行为不变)。"""
+    p = os.path.join(PREDICTIONS_DIR, 'swot_shift_params.json')
+    if not os.path.exists(p):
+        return None
+    try:
+        with open(p, encoding='utf-8') as f:
+            d = json.load(f)
+        if not d.get('applied'):
+            return None
+        # 完整性校验: 缺一不用 (LRN-20260821-002: 防御坏文件)
+        if not all(isinstance(d.get(k), (int, float)) for k in
+                   ('k', 'max_shift', 'home_factor', 'away_factor')):
+            return None
+        return d
+    except Exception:
+        return None
+
+
+_SHIFT_PARAMS = _load_swot_shift_params()
+if _SHIFT_PARAMS:
+    SWOT_SHIFT_PER_POINT = float(_SHIFT_PARAMS['k'])
+    SWOT_MAX_SHIFT = float(_SHIFT_PARAMS['max_shift'])
+    _SHIFT_HOME_FACTOR = float(_SHIFT_PARAMS['home_factor'])
+    _SHIFT_AWAY_FACTOR = float(_SHIFT_PARAMS['away_factor'])
+else:
+    _SHIFT_HOME_FACTOR = 1.0   # 主客不对称因子 (学习版生效前恒等)
+    _SHIFT_AWAY_FACTOR = 1.0
+
 
 def _parse_pct(v):
     """健壮解析百分比字符串(如 '33%' / '33.5%'), 失败返回0"""
@@ -181,6 +216,8 @@ def apply_swot_prob_shift(wdl, home_score, away_score):
         直接覆盖常规模型(xG/排名)的方向判断, "该翻转时就翻转"
       - 评分差小(<MIN_DIFF): SWOT指向平局, 从胜/负各抽一半概率给平局
       - 有界(常规±20pp/翻转±35pp)、方向恒正确、概率和恒为1
+      - 改进#5: 常规迁移不得穿越argmax(追平也不允许, 留1‰余量) — 方向翻转
+        只由强信号分支触发; 常规迁移仅加强/削弱既有方向
 
     参数: wdl = [p_win, p_draw, p_lose]
     返回: (new_wdl, shift, applied)
@@ -223,19 +260,31 @@ def apply_swot_prob_shift(wdl, home_score, away_score):
             return list(wdl), 0.0, False
 
     # 常规迁移 (评分差在 MIN_DIFF~FLIP_DIFF 之间, 或方向一致时)
-    shift = max(-SWOT_MAX_SHIFT, min(SWOT_MAX_SHIFT, diff * SWOT_SHIFT_PER_POINT))
+    # 改进#5: 主客不对称因子 (学习版, 默认1.0恒等) — 审视版v1发现客队评分有信号、
+    # 主队评分近乎无信号(主队优势疑被Elo HFA/λ主场项双重计数), 因子由学习器标定
+    _factor = _SHIFT_HOME_FACTOR if diff > 0 else _SHIFT_AWAY_FACTOR
+    shift = max(-SWOT_MAX_SHIFT, min(SWOT_MAX_SHIFT, diff * _factor * SWOT_SHIFT_PER_POINT))
     # 边界保护: 任一侧概率不低于2%
     # 注意: max(0.0, ...) 防止 w/l 已低于2% 时 -(w-0.02) 为正导致方向翻转 (M19)
     if shift > 0:
         # 上迁移: 从负(lose)侧取概率, 负侧概率不低于2%
         max_shift_up = max(0.0, l - 0.02)
         shift = min(shift, max_shift_up)
+        # 改进#5: argmax不穿越上限 — 胜侧未主导时, 迁至严格低于当前最大侧即止
+        # (穿越权只属强信号分支 |diff|>=SWOT_FLIP_DIFF; 常规穿越历史0/6命中)
+        cur_max = max(w, d, l)
+        if w < cur_max:
+            shift = min(shift, max(0.0, cur_max - w - SWOT_TIE_EPS))
         if abs(shift) < 0.005:
             return list(wdl), 0.0, False
     else:
         # 下迁移: 从胜(win)侧取概率, 胜侧概率不低于2%
         max_shift_down = max(0.0, w - 0.02)
         shift = max(shift, -max_shift_down)
+        # 改进#5: argmax不穿越上限 (负侧对称)
+        cur_max = max(w, d, l)
+        if l < cur_max:
+            shift = max(shift, -(max(0.0, cur_max - l - SWOT_TIE_EPS)))
         if abs(shift) < 0.005:
             return list(wdl), 0.0, False
     return [w + shift, d, l - shift], shift, True

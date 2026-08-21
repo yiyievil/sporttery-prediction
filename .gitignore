@@ -101,3 +101,12 @@ predictions/compare_*.md
 .trae-html-share-packages/
 code-review-sporttery/
 deep-factor-analysis/
+
+# --- 历史归档遗留 (改进#7, 2026-08-21): 本地保留, 永不入库 ---
+# 注: sporttery_ultra_6.5_*/ *.zip 已在上方覆盖; 以下为补漏
+work_progress_backup/
+work_progress_backup.zip
+NVIDIA Corporation/
+.npm-cache/
+incoming_*.jpg
+*.bak

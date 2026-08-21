@@ -4065,8 +4065,10 @@ def main():
               f" | HHAD {_evo_cum['hhad_hit']}/{_evo_cum['hhad_n']}({_evo_cum.get('hhad_rate')}%)"
               f"{_evo_diff}")
     # Ultra 15.0 (进化三层-第二/三层): 验证后自动重训学习权重 + 概率校准 (冷启动护栏在各自脚本内)
+    # 改进#5 (2026-08-21): + learn_swot_shift (SWOT迁移系数, 同三道护栏范式)
     for _mod, _label in (('learn_fusion_weights', '融合权重'),
-                         ('calibrate_indep_probs', '概率校准')):
+                         ('calibrate_indep_probs', '概率校准'),
+                         ('learn_swot_shift', 'SWOT迁移')):
         try:
             _m = __import__(_mod)
             _msg = _m.retrain()
